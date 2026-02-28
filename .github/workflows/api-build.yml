@@ -1,0 +1,36 @@
+name: api-build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build shared package
+        run: pnpm --filter @mvl/shared build
+
+      - name: Generate Prisma client
+        run: pnpm --filter @mvl/api prisma:generate
+
+      - name: Build API
+        run: pnpm --filter @mvl/api build

@@ -1,0 +1,70 @@
+{
+  "items": [
+    {
+      "url": "https://cdn.modrinth.com/data/Wq5SjeWM/versions/rbcf4ifM/fancymenu_fabric_3.8.4_MC_1.21.11.jar",
+      "kind": "mod",
+      "name": "FancyMenu",
+      "side": "client",
+      "sha256": "ef006d649fc2d8a8333516d89f60938085854fdf2bcfb0611f8c65bfa561b97e",
+      "provider": "modrinth",
+      "projectId": "Wq5SjeWM",
+      "versionId": "rbcf4ifM"
+    },
+    {
+      "url": "https://cdn.modrinth.com/data/YL57xq9U/versions/TSXvi2yD/iris-fabric-1.10.6%2Bmc1.21.11.jar",
+      "kind": "mod",
+      "name": "Iris Shaders",
+      "side": "client",
+      "sha256": "2f2f59bba72f73e544b7dc3380bd3927ca2889f796caaf347254df2f242fd88c",
+      "provider": "modrinth",
+      "projectId": "YL57xq9U",
+      "versionId": "TSXvi2yD"
+    },
+    {
+      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/ZPWbiWXz/sodium-fabric-0.8.6%2Bmc1.21.11.jar",
+      "kind": "mod",
+      "name": "Sodium",
+      "side": "client",
+      "sha256": "31b731cfe583cd8787152ee8affc90b763592b0056c9b15b1343e52438dc198a",
+      "provider": "modrinth",
+      "projectId": "AANobbMI",
+      "versionId": "ZPWbiWXz"
+    },
+    {
+      "url": "https://cdn.modrinth.com/data/P7dR8mSH/versions/i5tSkVBH/fabric-api-0.141.3%2B1.21.11.jar",
+      "kind": "mod",
+      "name": "Fabric API",
+      "side": "client",
+      "sha256": "86c453a86139662e775697d03b0ca7867f547374868c0cb3e3dc06f98dbfeef5",
+      "provider": "modrinth",
+      "projectId": "P7dR8mSH",
+      "versionId": "i5tSkVBH"
+    }
+  ],
+  "loader": "fabric",
+  "configs": [],
+  "shaders": [],
+  "version": 1,
+  "branding": {
+    "logoUrl": "https://images.unsplash.com/photo-1579546929662-711aa81148cf?auto=format&fit=crop&w=320&q=80",
+    "newsUrl": "https://example.com/news",
+    "serverName": "Negris Bro",
+    "backgroundUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1400&q=80"
+  },
+  "profileId": "negris-bro",
+  "resources": [],
+  "runtimeHints": { "javaMajor": 17, "maxMemoryMb": 8192, "minMemoryMb": 4096 },
+  "fancyMenu": {
+    "enabled": true,
+    "playButtonLabel": "Play",
+    "hideSingleplayer": true,
+    "hideMultiplayer": true,
+    "hideRealms": true
+  },
+  "defaultServer": {
+    "name": "Negris Bro",
+    "address": "negrisbros.exaroton.me"
+  },
+  "loaderVersion": "0.18.4",
+  "minecraftVersion": "1.21.11"
+}

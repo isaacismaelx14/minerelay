@@ -1,0 +1,26 @@
+{
+  "name": "@mvl/infra-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/publish-profile.ts src/compute-sha256.ts src/release-notes.ts --format esm --dts --clean",
+    "publish-profile": "tsx src/publish-profile.ts",
+    "sha256": "tsx src/compute-sha256.ts",
+    "release-notes": "tsx src/release-notes.ts",
+    "lint": "echo 'no lint configured for infra scripts'",
+    "test": "echo 'no tests configured'",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@mvl/shared": "workspace:*",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "serverId": "mvl",
+  "profileId": "mvl-main",
+  "version": 2,
+  "minecraftVersion": "1.20.1",
+  "loader": "fabric",
+  "loaderVersion": "0.16.14",
+  "serverName": "MVL",
+  "serverAddress": "play.example.com:25565",
+  "allowedMinecraftVersions": [
+    "1.20.1"
+  ],
+  "lockUrl": "http://localhost:3000/v1/locks/mvl-main/2"
+}

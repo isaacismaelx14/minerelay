@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.turbo/
+
+# Rust/Tauri
+**/target/
+**/*.rs.bk
+
+# Java/Gradle
+.gradle/
+.gradle-local/
+**/build/
+
+# Local runtime and launcher data
+instances/
+runtimes/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store

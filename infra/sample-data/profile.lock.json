@@ -1,0 +1,64 @@
+{
+  "profileId": "mvl-main",
+  "version": 2,
+  "minecraftVersion": "1.20.1",
+  "loader": "fabric",
+  "loaderVersion": "0.16.14",
+  "defaultServer": {
+    "name": "MVL",
+    "address": "play.example.com:25565"
+  },
+  "items": [
+    {
+      "kind": "mod",
+      "name": "Fabric API",
+      "provider": "modrinth",
+      "projectId": "P7dR8mSH",
+      "versionId": "L6LGItxd",
+      "url": "https://cdn.modrinth.com/data/P7dR8mSH/versions/L6LGItxd/fabric-api-0.92.7%2B1.20.1.jar",
+      "sha256": "d5e7750a599ee23d1e8ce1716f27c4761f4e7a84e8a08d5eb8f0ad8c155c8cb1",
+      "side": "client"
+    },
+    {
+      "kind": "mod",
+      "name": "Sodium",
+      "provider": "modrinth",
+      "projectId": "AANobbMI",
+      "versionId": "OihdIimA",
+      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/OihdIimA/sodium-fabric-0.5.13%2Bmc1.20.1.jar",
+      "sha256": "688c26029ce69f0b1f7cf936866656ca6723228ac46c4aef5b5f793b1e6abd22",
+      "side": "client"
+    },
+    {
+      "kind": "mod",
+      "name": "Iris",
+      "provider": "modrinth",
+      "projectId": "YL57xq9U",
+      "versionId": "s5eFLITc",
+      "url": "https://cdn.modrinth.com/data/YL57xq9U/versions/s5eFLITc/iris-1.7.6%2Bmc1.20.1.jar",
+      "sha256": "9eb15e563e0c9ae6eff15b7863f8432dd290cf9f724c7373e9b15b14aa829ed5",
+      "side": "client"
+    }
+  ],
+  "resources": [],
+  "shaders": [],
+  "configs": [],
+  "runtimeHints": {
+    "javaMajor": 17,
+    "minMemoryMb": 4096,
+    "maxMemoryMb": 8192
+  },
+  "fancyMenu": {
+    "enabled": false,
+    "playButtonLabel": "Play",
+    "hideSingleplayer": true,
+    "hideMultiplayer": true,
+    "hideRealms": true
+  },
+  "branding": {
+    "serverName": "MVL",
+    "logoUrl": "https://images.unsplash.com/photo-1579546929662-711aa81148cf?auto=format&fit=crop&w=320&q=80",
+    "backgroundUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1400&q=80",
+    "newsUrl": "https://example.com/news"
+  }
+}

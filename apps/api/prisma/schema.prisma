@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Server {
+  id                      String           @id
+  name                    String
+  address                 String
+  allowedMinecraftVersions String[]
+  fancyMenuEnabled        Boolean          @default(false)
+  fancyMenuSettings       Json?
+  profileId               String
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  versions                ProfileVersion[]
+}
+
+model ProfileVersion {
+  id                   Int      @id @default(autoincrement())
+  serverId             String
+  profileId            String
+  version              Int
+  minecraftVersion     String
+  loader               String
+  loaderVersion        String
+  defaultServerName    String
+  defaultServerAddress String
+  fancyMenuEnabled     Boolean  @default(false)
+  fancyMenuSettings    Json?
+  lockUrl              String
+  signature            String?
+  summaryAdd           Int      @default(0)
+  summaryRemove        Int      @default(0)
+  summaryUpdate        Int      @default(0)
+  summaryKeep          Int      @default(0)
+  lockJson             Json
+  createdAt            DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, version])
+  @@index([profileId, version])
+}

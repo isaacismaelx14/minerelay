@@ -1,0 +1,26 @@
+{
+  "name": "@mvl/shared",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "lint": "echo 'no lint configured for shared'",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "vitest": "^3.2.4"
+  }
+}

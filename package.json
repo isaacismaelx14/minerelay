@@ -1,0 +1,18 @@
+{
+  "name": "mc-client-center",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.2"
+  }
+}
