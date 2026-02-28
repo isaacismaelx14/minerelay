@@ -9,6 +9,7 @@ use crate::{
   launcher_apps,
   profile,
   runtime,
+  session,
   settings,
   state::AppState,
   sync,
@@ -16,6 +17,7 @@ use crate::{
     AppSettings, CatalogSnapshot, FabricRuntimeStatus, InstanceState, LauncherBootstrapResult,
     LauncherCandidate, LauncherDetectionResult, MinecraftRootStatus, OpenLauncherResponse,
     ProfileMetadataResponse, SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
+    GameSessionStatus,
   },
 };
 
@@ -81,18 +83,38 @@ pub fn minecraft_root_detect(state: State<'_, Arc<AppState>>) -> Result<Minecraf
 }
 
 #[tauri::command]
+pub fn session_status_get(state: State<'_, Arc<AppState>>) -> GameSessionStatus {
+  session::get_status(state.inner())
+}
+
+#[tauri::command]
+pub async fn session_restore_now(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+) -> Result<GameSessionStatus, String> {
+  session::restore_active_session(&app, Arc::clone(state.inner()))
+    .await
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn launcher_open(
+  app: AppHandle,
   state: State<'_, Arc<AppState>>,
   server_id: String,
 ) -> Result<OpenLauncherResponse, String> {
   let settings = state.settings.lock().clone();
   let detected = launcher_apps::detect_installed_launchers();
   let selected_id = selected_launcher_id(&settings, &detected);
+  let selected_launcher = selected_id
+    .clone()
+    .unwrap_or_else(|| "unknown".to_string());
+  let effective_server = effective_server_id(state.inner(), &server_id);
+  let (minecraft_root, _) = resolve_launcher_minecraft_root(&settings).map_err(|error| error.to_string())?;
 
   let mut pending_bootstrap: Option<LauncherBootstrapResult> = None;
 
   if selected_id.as_deref() == Some("prism") || selected_id.as_deref() == Some("official") {
-    let effective_server = effective_server_id(state.inner(), &server_id);
     let paths = InstancePaths::new(
       &state.config,
       &effective_server,
@@ -105,8 +127,6 @@ pub async fn launcher_open(
     let lock = load_local_lock(&paths)
       .map_err(|error| error.to_string())?
       .or(profile::fetch_remote_lock(state.inner(), &effective_server).await.ok());
-
-    let (minecraft_root, _) = resolve_launcher_minecraft_root(&settings).map_err(|error| error.to_string())?;
 
     if let Some(remote) = lock.as_ref() {
       if remote.loader == "fabric" {
@@ -123,12 +143,12 @@ pub async fn launcher_open(
 
     pending_bootstrap = Some(match (selected_id.as_deref(), lock) {
       (Some("prism"), Some(lock)) => {
-        launcher_apps::bootstrap_prism_instance(&lock, &paths.minecraft_dir).map_err(|error| error.to_string())?
+        launcher_apps::bootstrap_prism_instance(&lock, &minecraft_root).map_err(|error| error.to_string())?
       }
       (Some("official"), Some(lock)) => launcher_apps::bootstrap_official_version(
         &lock,
         &minecraft_root,
-        &paths.minecraft_dir,
+        &minecraft_root,
       )
       .map_err(|error| error.to_string())?,
       (Some(id), None) => LauncherBootstrapResult {
@@ -146,8 +166,30 @@ pub async fn launcher_open(
     });
   }
 
-  let mut response = launcher_apps::open_from_settings(&settings, &detected).map_err(|error| error.to_string())?;
+  let session = session::start_or_get_session(
+    &app,
+    Arc::clone(state.inner()),
+    &effective_server,
+    &selected_launcher,
+    &minecraft_root,
+  )
+  .await
+  .map_err(|error| error.to_string())?;
+
+  let mut response = match launcher_apps::open_from_settings(&settings, &detected) {
+    Ok(value) => value,
+    Err(error) => {
+      let _ = session::restore_active_session(&app, Arc::clone(state.inner())).await;
+      return Err(error.to_string());
+    }
+  };
   response.bootstrap = pending_bootstrap;
+  response.session = Some(session.clone());
+
+  if !response.opened {
+    let _ = session::restore_active_session(&app, Arc::clone(state.inner())).await;
+    response.session = Some(session::get_status(state.inner()));
+  }
 
   Ok(response)
 }
@@ -199,14 +241,27 @@ pub async fn profile_catalog_snapshot(
     .map_err(|error| error.to_string())?;
 
   let allowed_minecraft_versions = allowed_versions(metadata.as_ref(), &remote.minecraft_version);
-  let server_name = metadata
+  let metadata_server_name = metadata
     .as_ref()
-    .map(|value| value.server_name.clone())
-    .unwrap_or_else(|| remote.branding.server_name.clone());
-  let server_address = metadata
+    .map(|value| value.server_name.trim().to_string())
+    .filter(|value| !value.is_empty());
+  let metadata_server_address = metadata
     .as_ref()
-    .map(|value| value.server_address.clone())
-    .unwrap_or_else(|| remote.default_server.address.clone());
+    .map(|value| value.server_address.trim().to_string())
+    .filter(|value| !value.is_empty());
+  let lock_server_name = remote.branding.server_name.trim().to_string();
+  let lock_server_address = remote.default_server.address.trim().to_string();
+
+  let server_name = if !lock_server_name.is_empty() {
+    lock_server_name
+  } else {
+    metadata_server_name.unwrap_or_else(|| "Managed Server".to_string())
+  };
+  let server_address = if !lock_server_address.is_empty() {
+    lock_server_address
+  } else {
+    metadata_server_address.unwrap_or_else(|| "--".to_string())
+  };
   let fancy_menu_enabled = metadata
     .as_ref()
     .map(|value| value.fancy_menu_enabled)
@@ -226,6 +281,8 @@ pub async fn profile_catalog_snapshot(
     server_id: effective_server,
     server_name,
     server_address,
+    logo_url: remote.branding.logo_url.clone(),
+    background_url: remote.branding.background_url.clone(),
     profile_version: remote.version,
     local_version,
     minecraft_version: remote.minecraft_version,
@@ -264,6 +321,8 @@ pub async fn sync_apply(
   state: State<'_, Arc<AppState>>,
   server_id: String,
 ) -> Result<SyncApplyResponse, String> {
+  session::sync_allowed(state.inner()).map_err(|error| error.to_string())?;
+
   let effective_server = effective_server_id(state.inner(), &server_id);
   let remote = profile::fetch_remote_lock(state.inner(), &effective_server)
     .await
@@ -323,6 +382,15 @@ pub async fn instance_check_version_readiness(
     .iter()
     .any(|value| value == &remote.minecraft_version);
 
+  let paths = InstancePaths::new(
+    &state.config,
+    &effective_server,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )
+  .map_err(|error| error.to_string())?;
+  ensure_layout(&paths).map_err(|error| error.to_string())?;
+
   let (minecraft_root, using_override_root) =
     resolve_launcher_minecraft_root(&settings).map_err(|error| error.to_string())?;
   let versions_dir = minecraft_root.join("versions");
@@ -362,7 +430,7 @@ pub async fn instance_check_version_readiness(
       expected_managed
     )
   } else {
-    "Fabric runtime and managed launcher version look available. You can continue with sync and launch."
+    "Fabric runtime and managed launcher version look available. Sync stays in app-managed storage; live Minecraft files are swapped only while playing."
       .to_string()
   };
 
@@ -370,6 +438,8 @@ pub async fn instance_check_version_readiness(
     minecraft_version: remote.minecraft_version,
     loader: remote.loader,
     loader_version: remote.loader_version,
+    managed_minecraft_dir: paths.minecraft_dir.to_string_lossy().to_string(),
+    live_minecraft_root: minecraft_root.to_string_lossy().to_string(),
     minecraft_root: minecraft_root.to_string_lossy().to_string(),
     found_in_minecraft_root_dir: found,
     using_override_root,
@@ -421,10 +491,10 @@ pub async fn runtime_ensure_fabric(
   let managed_version_id = launcher_apps::server_release_version_id(&remote);
 
   let bootstrap = if selected_id.as_deref() == Some("prism") {
-    launcher_apps::bootstrap_prism_instance(&remote, &paths.minecraft_dir)
+    launcher_apps::bootstrap_prism_instance(&remote, &minecraft_root)
       .map_err(|error| error.to_string())?
   } else {
-    launcher_apps::bootstrap_official_version(&remote, &minecraft_root, &paths.minecraft_dir)
+    launcher_apps::bootstrap_official_version(&remote, &minecraft_root, &minecraft_root)
       .map_err(|error| error.to_string())?
   };
 

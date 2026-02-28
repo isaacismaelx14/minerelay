@@ -39,6 +39,22 @@ pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
         ],
       ),
       (
+        "tlauncher",
+        "TLauncher",
+        [
+          r"C:\\Program Files\\TLauncher\\TLauncher.exe",
+          r"C:\\Program Files (x86)\\TLauncher\\TLauncher.exe",
+        ],
+      ),
+      (
+        "lunar",
+        "Lunar Client",
+        [
+          r"C:\\Program Files\\Lunar Client\\Lunar Client.exe",
+          r"C:\\Program Files (x86)\\Lunar Client\\Lunar Client.exe",
+        ],
+      ),
+      (
         "multimc",
         "MultiMC",
         [
@@ -53,6 +69,30 @@ pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
         push_candidate_if_exists(&mut candidates, id, name, Path::new(path));
       }
     }
+
+    if let Some(local_data) = dirs::data_local_dir() {
+      push_candidate_if_exists(
+        &mut candidates,
+        "tlauncher",
+        "TLauncher",
+        &local_data.join("Programs").join("TLauncher").join("TLauncher.exe"),
+      );
+      push_candidate_if_exists(
+        &mut candidates,
+        "lunar",
+        "Lunar Client",
+        &local_data
+          .join("Programs")
+          .join("lunarclient")
+          .join("Lunar Client.exe"),
+      );
+      push_candidate_if_exists(
+        &mut candidates,
+        "lunar",
+        "Lunar Client",
+        &local_data.join("LunarClient").join("Lunar Client.exe"),
+      );
+    }
   }
 
   #[cfg(target_os = "macos")]
@@ -61,6 +101,8 @@ pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
       ("official", "Minecraft Launcher", "/Applications/Minecraft.app"),
       ("official", "Minecraft Launcher", "/Applications/Minecraft Launcher.app"),
       ("prism", "Prism Launcher", "/Applications/Prism Launcher.app"),
+      ("tlauncher", "TLauncher", "/Applications/TLauncher.app"),
+      ("lunar", "Lunar Client", "/Applications/Lunar Client.app"),
       ("multimc", "MultiMC", "/Applications/MultiMC.app"),
     ];
 
@@ -145,6 +187,7 @@ pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]
       opened: false,
       path: None,
       bootstrap: None,
+      session: None,
     });
   };
 
@@ -154,6 +197,7 @@ pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]
     opened: true,
     path: Some(path),
     bootstrap: None,
+    session: None,
   })
 }
 
@@ -198,7 +242,7 @@ pub fn bootstrap_prism_instance(lock: &ProfileLock, minecraft_dir: &Path) -> Lau
     launcher_id: "prism".to_string(),
     instance_name,
     instance_path: Some(instance_dir.to_string_lossy().to_string()),
-    message: "Prism instance created/updated and linked to managed minecraft_dir.".to_string(),
+    message: "Prism instance created/updated and linked to your live Minecraft game directory.".to_string(),
   })
 }
 
@@ -250,7 +294,7 @@ pub fn bootstrap_official_version(
     launcher_id: "official".to_string(),
     instance_name: display_name,
     instance_path: Some(version_json_path.to_string_lossy().to_string()),
-    message: "Official custom version + launcher profile entry created and linked to the managed game directory."
+    message: "Official custom version + launcher profile entry created and linked to your live game directory."
       .to_string(),
   })
 }

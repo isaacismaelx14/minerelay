@@ -29,14 +29,11 @@ impl InstancePaths {
   pub fn new(
     config: &LauncherConfig,
     server_id: &str,
-    mode: &InstallMode,
-    minecraft_root_override: Option<&str>,
+    _mode: &InstallMode,
+    _minecraft_root_override: Option<&str>,
   ) -> LauncherResult<Self> {
     let root = config.instances_dir().join(server_id);
-    let minecraft_dir = match mode {
-      InstallMode::Dedicated => root.join("minecraft_dir"),
-      InstallMode::Global => resolve_minecraft_root_with_override(minecraft_root_override)?,
-    };
+    let minecraft_dir = root.join("minecraft_dir");
 
     Ok(Self {
       root: root.clone(),
@@ -62,17 +59,6 @@ pub fn resolve_launcher_minecraft_root(settings: &AppSettings) -> LauncherResult
   }
 
   Ok((default_minecraft_dir()?, false))
-}
-
-pub fn resolve_minecraft_root_with_override(minecraft_root_override: Option<&str>) -> LauncherResult<PathBuf> {
-  if let Some(path) = minecraft_root_override {
-    let trimmed = path.trim();
-    if !trimmed.is_empty() {
-      return Ok(PathBuf::from(trimmed));
-    }
-  }
-
-  default_minecraft_dir()
 }
 
 pub fn default_minecraft_dir() -> LauncherResult<PathBuf> {

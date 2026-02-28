@@ -309,6 +309,49 @@ pub struct OpenLauncherResponse {
   pub opened: bool,
   pub path: Option<String>,
   pub bootstrap: Option<LauncherBootstrapResult>,
+  #[serde(default)]
+  pub session: Option<GameSessionStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GameSessionPhase {
+  Idle,
+  AwaitingGameStart,
+  Playing,
+  Restoring,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameSessionStatus {
+  pub phase: GameSessionPhase,
+  #[serde(default)]
+  pub live_minecraft_dir: Option<String>,
+  #[serde(default)]
+  pub launcher_id: Option<String>,
+  #[serde(default)]
+  pub session_id: Option<String>,
+  #[serde(default)]
+  pub started_at: Option<i64>,
+}
+
+impl Default for GameSessionStatus {
+  fn default() -> Self {
+    Self {
+      phase: GameSessionPhase::Idle,
+      live_minecraft_dir: None,
+      launcher_id: None,
+      session_id: None,
+      started_at: None,
+    }
+  }
+}
+
+impl GameSessionStatus {
+  pub fn is_active(&self) -> bool {
+    self.phase != GameSessionPhase::Idle
+  }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -327,6 +370,8 @@ pub struct VersionReadiness {
   pub minecraft_version: String,
   pub loader: String,
   pub loader_version: String,
+  pub managed_minecraft_dir: String,
+  pub live_minecraft_root: String,
   pub minecraft_root: String,
   pub found_in_minecraft_root_dir: bool,
   pub using_override_root: bool,
@@ -365,6 +410,8 @@ pub struct CatalogSnapshot {
   pub server_id: String,
   pub server_name: String,
   pub server_address: String,
+  pub logo_url: Option<String>,
+  pub background_url: Option<String>,
   pub profile_version: i64,
   pub local_version: Option<i64>,
   pub minecraft_version: String,

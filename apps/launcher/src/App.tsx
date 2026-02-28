@@ -11,6 +11,11 @@ const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 type ScreenState = "booting" | "syncing" | "ready";
 type InstallMode = "dedicated" | "global";
 type OnboardingStep = "source" | "paths" | "runtime" | "sync";
+type GameSessionPhase =
+  | "idle"
+  | "awaiting_game_start"
+  | "playing"
+  | "restoring";
 type WorkspaceView =
   | "overview"
   | "onboarding"
@@ -70,6 +75,8 @@ interface VersionReadiness {
   minecraftVersion: string;
   loader: string;
   loaderVersion: string;
+  managedMinecraftDir: string;
+  liveMinecraftRoot: string;
   minecraftRoot: string;
   foundInMinecraftRootDir: boolean;
   usingOverrideRoot: boolean;
@@ -85,6 +92,15 @@ interface OpenLauncherResponse {
   opened: boolean;
   path: string | null;
   bootstrap: LauncherBootstrapResult | null;
+  session: GameSessionStatus | null;
+}
+
+interface GameSessionStatus {
+  phase: GameSessionPhase;
+  liveMinecraftDir: string | null;
+  launcherId: string | null;
+  sessionId: string | null;
+  startedAt: number | null;
 }
 
 interface MinecraftRootStatus {
@@ -114,6 +130,8 @@ interface CatalogSnapshot {
   serverId: string;
   serverName: string;
   serverAddress: string;
+  logoUrl?: string;
+  backgroundUrl?: string;
   profileVersion: number;
   localVersion: number | null;
   minecraftVersion: string;
@@ -201,6 +219,13 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [launchers, setLaunchers] = useState<LauncherCandidate[]>([]);
   const [instance, setInstance] = useState<InstanceState | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<GameSessionStatus>({
+    phase: "idle",
+    liveMinecraftDir: null,
+    launcherId: null,
+    sessionId: null,
+    startedAt: null,
+  });
   const [versionReadiness, setVersionReadiness] =
     useState<VersionReadiness | null>(null);
   const [catalog, setCatalog] = useState<CatalogSnapshot | null>(null);
@@ -252,6 +277,7 @@ export default function App() {
   const hasFancyMenuMod = catalog?.fancyMenuPresent ?? false;
   const fancyMenuRequiresAssets = catalog?.fancyMenuRequiresAssets ?? false;
   const hasFancyMenuConfig = catalog?.fancyMenuConfigured ?? false;
+  const sessionActive = sessionStatus.phase !== "idle";
 
   const saveSettings = useCallback(async (next: AppSettings) => {
     const persisted = await invoke<AppSettings>("settings_set", {
@@ -292,6 +318,12 @@ export default function App() {
     setLaunchers(detected);
     return { settings: merged, launchers: detected };
   }, [saveSettings]);
+
+  const refreshSessionStatus = useCallback(async () => {
+    const status = await invoke<GameSessionStatus>("session_status_get");
+    setSessionStatus(status);
+    return status;
+  }, []);
 
   const refreshVersionReadiness = useCallback(async () => {
     const readiness = await invoke<VersionReadiness>(
@@ -334,6 +366,10 @@ export default function App() {
   }, []);
 
   const executeSyncApply = useCallback(async () => {
+    if (sessionActive) {
+      throw new Error("Cannot sync during active play session.");
+    }
+
     setScreen("syncing");
     setSync({
       phase: "planning",
@@ -355,7 +391,7 @@ export default function App() {
     }
 
     return response;
-  }, []);
+  }, [sessionActive]);
 
   const runSyncCycle = useCallback(
     async (autoApply: boolean) => {
@@ -370,7 +406,11 @@ export default function App() {
       try {
         const snapshot = await refreshDashboardState();
 
-        if (autoApply && (snapshot.hasUpdates || snapshot.fancyMenuEnabled)) {
+        if (
+          autoApply &&
+          !sessionActive &&
+          (snapshot.hasUpdates || snapshot.fancyMenuEnabled)
+        ) {
           await executeSyncApply();
           await refreshDashboardState();
         }
@@ -384,7 +424,7 @@ export default function App() {
         cycleInFlight.current = false;
       }
     },
-    [executeSyncApply, refreshDashboardState],
+    [executeSyncApply, refreshDashboardState, sessionActive],
   );
 
   const startWizardDetection = useCallback(async () => {
@@ -433,6 +473,7 @@ export default function App() {
     try {
       setError(null);
       const loaded = await loadSettingsAndLaunchers();
+      await refreshSessionStatus();
 
       if (onboardingRequired(loaded.settings)) {
         setWizardActive(true);
@@ -447,7 +488,7 @@ export default function App() {
       setError(cause instanceof Error ? cause.message : String(cause));
       setScreen("ready");
     }
-  }, [loadSettingsAndLaunchers, runSyncCycle]);
+  }, [loadSettingsAndLaunchers, refreshSessionStatus, runSyncCycle]);
 
   useEffect(() => {
     void bootstrap();
@@ -456,6 +497,7 @@ export default function App() {
   useEffect(() => {
     let stopSyncListener: UnlistenFn | undefined;
     let stopErrorListener: UnlistenFn | undefined;
+    let stopSessionListener: UnlistenFn | undefined;
 
     void listen<SyncProgressEvent>("sync://progress", (event) => {
       setSync(event.payload);
@@ -474,14 +516,21 @@ export default function App() {
       stopErrorListener = off;
     });
 
+    void listen<GameSessionStatus>("session://status", (event) => {
+      setSessionStatus(event.payload);
+    }).then((off) => {
+      stopSessionListener = off;
+    });
+
     return () => {
       stopSyncListener?.();
       stopErrorListener?.();
+      stopSessionListener?.();
     };
   }, []);
 
   useEffect(() => {
-    if (wizardActive || !settings) {
+    if (wizardActive || !settings || sessionActive) {
       return;
     }
 
@@ -492,7 +541,7 @@ export default function App() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [runSyncCycle, settings, wizardActive]);
+  }, [runSyncCycle, sessionActive, settings, wizardActive]);
 
   useEffect(() => {
     if (wizardActive) {
@@ -670,6 +719,9 @@ export default function App() {
       const result = await invoke<OpenLauncherResponse>("launcher_open", {
         serverId: SERVER_ID,
       });
+      if (result.session) {
+        setSessionStatus(result.session);
+      }
       if (!result.opened) {
         setHint(
           "No launcher executable was selected. Choose one in settings or set a custom path.",
@@ -688,6 +740,18 @@ export default function App() {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }, []);
+
+  const restoreSessionNow = useCallback(async () => {
+    try {
+      setError(null);
+      const status = await invoke<GameSessionStatus>("session_restore_now");
+      setSessionStatus(status);
+      setHint("Session restored. Managed files moved back from live Minecraft dir.");
+      await refreshDashboardState();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [refreshDashboardState]);
 
   const updateLauncherSelection = useCallback(
     async (value: string) => {
@@ -964,7 +1028,10 @@ export default function App() {
               {versionReadiness?.loaderVersion ?? "--"}
             </p>
             <p className="wizard-meta">
-              Minecraft dir: {versionReadiness?.minecraftRoot ?? "--"}
+              Live minecraft dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
+            </p>
+            <p className="wizard-meta">
+              Managed sync dir: {versionReadiness?.managedMinecraftDir ?? "--"}
             </p>
             <p className="wizard-meta">
               Allowlisted versions:{" "}
@@ -1050,6 +1117,13 @@ export default function App() {
 
         {wizardStep === "sync" ? (
           <div className="wizard-panel">
+            {catalog?.logoUrl ? (
+              <img
+                className="wizard-logo"
+                src={catalog.logoUrl}
+                alt={`${catalog.serverName ?? SERVER_ID} logo`}
+              />
+            ) : null}
             <h2>Step 4: Initial Sync</h2>
             <p>
               Server: {catalog?.serverName ?? SERVER_ID} (
@@ -1145,10 +1219,16 @@ export default function App() {
     return (
       <div className="status-block">
         <h2>
-          {catalog?.hasUpdates ? "Updates Detected" : "Instance Up to Date"}
+          {sessionStatus.phase === "playing"
+            ? "Playing"
+            : catalog?.hasUpdates
+              ? "Updates Detected"
+              : "Instance Up to Date"}
         </h2>
         <p>
-          {catalog?.hasUpdates
+          {sessionActive
+            ? `Live session active in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}.`
+            : catalog?.hasUpdates
             ? "New server changes were detected. Auto-sync runs every 30 minutes while this app is open."
             : "All mods/resourcepacks/shaders/configs match server profile."}
         </p>
@@ -1200,7 +1280,7 @@ export default function App() {
           <button
             className="btn ghost"
             onClick={() => void runSyncCycle(true)}
-            disabled={isChecking}
+            disabled={isChecking || sessionActive}
           >
             Check + Auto Apply
           </button>
@@ -1210,9 +1290,17 @@ export default function App() {
               onClick={() =>
                 void executeSyncApply().then(() => runSyncCycle(false))
               }
-              disabled={isChecking}
+              disabled={isChecking || sessionActive}
             >
               Apply Updates Now
+            </button>
+          ) : null}
+          {sessionActive ? (
+            <button
+              className="btn ghost"
+              onClick={() => void restoreSessionNow()}
+            >
+              Restore Session Now
             </button>
           ) : null}
         </div>
@@ -1226,7 +1314,7 @@ export default function App() {
         <div className="pane-head">
           <h2>Source & Paths</h2>
           <p className="pane-subtitle">
-            Configure profile source, launcher executable, and Minecraft root.
+            Configure profile source, launcher executable, and live Minecraft root.
           </p>
         </div>
 
@@ -1302,7 +1390,7 @@ export default function App() {
           </section>
 
           <section className="panel-card">
-            <h3>Minecraft Root</h3>
+            <h3>Live Minecraft Root</h3>
             <input
               className="input"
               type="text"
@@ -1342,10 +1430,12 @@ export default function App() {
           <section className="panel-card">
             <h3>Instance Paths</h3>
             <p className="small-dark">Root: {instance?.instanceRoot ?? "--"}</p>
-            <p className="small-dark">Game dir: {instance?.minecraftDir ?? "--"}</p>
-            <p className="small-dark">MC root: {versionReadiness?.minecraftRoot ?? "--"}</p>
+            <p className="small-dark">Managed game dir: {instance?.minecraftDir ?? "--"}</p>
             <p className="small-dark">
-              Global mode is enforced. Sync files are written to your launcher directory.
+              Live game dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
+            </p>
+            <p className="small-dark">
+              Sync writes only to managed game dir. Live Minecraft files are swapped only after Open Launcher.
             </p>
           </section>
         </div>
@@ -1430,9 +1520,23 @@ export default function App() {
             </p>
             <p className="small-dark">Last check: {formatTime(lastCheckAt)}</p>
             <p className="small-dark">Next check: {formatTime(nextCheckAt)}</p>
-            <button className="btn ghost" onClick={() => void runSyncCycle(true)}>
+            <button
+              className="btn ghost"
+              onClick={() => void runSyncCycle(true)}
+              disabled={sessionActive}
+            >
               Run Check + Auto Apply
             </button>
+          </section>
+
+          <section className="panel-card">
+            <h3>Current Session</h3>
+            <p className="small-dark">
+              Phase: {sessionStatus.phase.replaceAll("_", " ")}
+            </p>
+            <p className="small-dark">
+              Live dir: {sessionStatus.liveMinecraftDir ?? "--"}
+            </p>
           </section>
 
           <section className="panel-card">
@@ -1545,14 +1649,34 @@ export default function App() {
           <p className="small-dark">
             Lock drift: {catalog?.hasUpdates ? "detected" : "none"}
           </p>
+          <p className="small-dark">
+            Session: {sessionStatus.phase.replaceAll("_", " ")}
+          </p>
+          {sessionStatus.liveMinecraftDir ? (
+            <p className="small-dark">Playing dir: {sessionStatus.liveMinecraftDir}</p>
+          ) : null}
         </section>
       </aside>
 
       <section className="desktop-workspace">
         <header className="workspace-header">
-          <div>
+          <div className="workspace-title">
+            {catalog?.logoUrl ? (
+              <img
+                className="server-logo"
+                src={catalog.logoUrl}
+                alt={`${catalog.serverName ?? SERVER_ID} logo`}
+              />
+            ) : null}
+            <div>
             <span className="eyebrow">Minecraft Java Server Client Center</span>
             <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
+            {sessionStatus.phase === "playing" ? (
+              <p className="playing-status">
+                Playing in {sessionStatus.liveMinecraftDir ?? "Minecraft directory"}
+              </p>
+            ) : null}
+            </div>
           </div>
           <div className="version-pill">
             {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}

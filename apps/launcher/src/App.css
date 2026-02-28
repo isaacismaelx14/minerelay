@@ -151,6 +151,36 @@ ul {
   line-height: 1.1;
 }
 
+.workspace-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.server-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+  background: #0f1a27;
+}
+
+.wizard-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+  background: #0f1a27;
+}
+
+.playing-status {
+  margin-top: 8px;
+  color: #9ed2ff;
+  font-size: 0.85rem;
+}
+
 .version-pill {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
