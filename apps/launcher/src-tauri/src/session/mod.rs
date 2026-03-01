@@ -7,6 +7,9 @@ use std::{
   time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
 use tauri::AppHandle;
@@ -540,7 +543,10 @@ fn game_running_macos_fallback(live_minecraft_dir: &str, launcher_id: &str) -> b
 #[cfg(target_os = "windows")]
 fn game_running_windows_fallback(live_minecraft_dir: &str, launcher_id: &str) -> bool {
   let command = "Get-CimInstance Win32_Process | Select-Object -ExpandProperty CommandLine";
+  const CREATE_NO_WINDOW: u32 = 0x08000000;
+
   let output = Command::new("powershell")
+    .creation_flags(CREATE_NO_WINDOW)
     .args(["-NoProfile", "-Command", command])
     .output();
 

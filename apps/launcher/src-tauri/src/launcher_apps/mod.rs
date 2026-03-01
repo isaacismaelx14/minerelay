@@ -93,6 +93,15 @@ pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
         &local_data.join("LunarClient").join("Lunar Client.exe"),
       );
     }
+
+    if let Some(roaming_data) = dirs::data_dir() {
+      push_candidate_if_exists(
+        &mut candidates,
+        "tlauncher",
+        "TLauncher",
+        &roaming_data.join(".minecraft").join("TLauncher.exe"),
+      );
+    }
   }
 
   #[cfg(target_os = "macos")]
