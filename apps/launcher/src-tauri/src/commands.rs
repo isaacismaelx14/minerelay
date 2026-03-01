@@ -515,16 +515,23 @@ pub async fn profile_catalog_snapshot(
     .as_ref()
     .map(|value| value.fancy_menu_enabled)
     .unwrap_or(remote.fancy_menu.enabled);
+  let fancy_menu_mode = if remote.fancy_menu.mode.trim().eq_ignore_ascii_case("custom") {
+    "custom".to_string()
+  } else {
+    "simple".to_string()
+  };
   let fancy_menu_present = remote
     .items
     .iter()
     .any(|entry| entry.name.to_lowercase().contains("fancymenu"));
-  let fancy_menu_requires_assets =
-    remote.fancy_menu.config_url.is_some() || remote.fancy_menu.assets_url.is_some();
-  let fancy_menu_configured = remote
-    .configs
-    .iter()
-    .any(|entry| entry.name.to_lowercase().contains("fancymenu"));
+  let fancy_menu_custom_bundle_present = remote.configs.iter().any(|entry| {
+    entry.name == "FancyMenu Custom Bundle"
+      || remote
+        .fancy_menu
+        .custom_layout_url
+        .as_ref()
+        .is_some_and(|url| url == &entry.url)
+  });
 
   Ok(CatalogSnapshot {
     server_id: effective_server,
@@ -541,9 +548,9 @@ pub async fn profile_catalog_snapshot(
     has_updates: updates.has_updates,
     summary: updates.summary,
     fancy_menu_enabled,
+    fancy_menu_mode,
     fancy_menu_present,
-    fancy_menu_requires_assets,
-    fancy_menu_configured,
+    fancy_menu_custom_bundle_present,
     mods: remote.items.into_iter().map(|entry| entry.name).collect(),
     resourcepacks: remote.resources.into_iter().map(|entry| entry.name).collect(),
     shaderpacks: remote.shaders.into_iter().map(|entry| entry.name).collect(),

@@ -15,10 +15,11 @@ import {
   scrypt as scryptCb,
   timingSafeEqual,
 } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, extname, resolve } from 'node:path';
+import { basename, extname, posix, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import * as yauzl from 'yauzl';
 import {
   BrandingSchema,
   FancyMenuSettingsSchema,
@@ -44,6 +45,11 @@ const APP_SETTING_ID = 'global';
 const ACCESS_COOKIE = 'mvl_admin_access';
 const REFRESH_COOKIE = 'mvl_admin_refresh';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
+const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
+const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_FANCY_BUNDLE_ENTRIES = 2000;
+const MAX_FANCY_BUNDLE_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
+const FANCY_MENU_ROOT = 'config/fancymenu';
 
 interface ModrinthSearchResponse {
   hits: Array<{
@@ -110,6 +116,11 @@ interface SemverParts {
   major: number;
   minor: number;
   patch: number;
+}
+
+interface FancyMenuBundleValidation {
+  entryCount: number;
+  totalUncompressedBytes: number;
 }
 
 @Injectable()
@@ -336,20 +347,7 @@ export class AdminService implements OnModuleInit {
     const serverAddress = input.serverAddress.trim();
     const profileId = input.profileId?.trim();
 
-    const fancyMenu = FancyMenuSettingsSchema.parse({
-      enabled: input.fancyMenu?.enabled ?? true,
-      playButtonLabel: input.fancyMenu?.playButtonLabel ?? 'Play',
-      hideSingleplayer: input.fancyMenu?.hideSingleplayer ?? true,
-      hideMultiplayer: input.fancyMenu?.hideMultiplayer ?? true,
-      hideRealms: input.fancyMenu?.hideRealms ?? true,
-      titleText: input.fancyMenu?.titleText?.trim() || undefined,
-      subtitleText: input.fancyMenu?.subtitleText?.trim() || undefined,
-      logoUrl: input.fancyMenu?.logoUrl?.trim() || undefined,
-      configUrl: input.fancyMenu?.configUrl?.trim() || undefined,
-      configSha256: input.fancyMenu?.configSha256?.trim() || undefined,
-      assetsUrl: input.fancyMenu?.assetsUrl?.trim() || undefined,
-      assetsSha256: input.fancyMenu?.assetsSha256?.trim() || undefined,
-    });
+    const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
 
     const branding = BrandingSchema.parse({
       serverName,
@@ -553,25 +551,13 @@ export class AdminService implements OnModuleInit {
       minecraftVersion: input.minecraftVersion,
       loaderVersion: input.loaderVersion,
       mods: input.mods,
-      fancyMenu: {
-        enabled: input.includeFancyMenu ?? true,
-        playButtonLabel: input.playButtonLabel?.trim() || 'Play',
-        hideSingleplayer: input.hideSingleplayer ?? true,
-        hideMultiplayer: input.hideMultiplayer ?? true,
-        hideRealms: input.hideRealms ?? true,
-        titleText: input.titleText?.trim() || undefined,
-        subtitleText: input.subtitleText?.trim() || undefined,
-        logoUrl: input.logoUrl?.trim() || undefined,
-        configUrl: input.fancyMenuConfigUrl?.trim() || undefined,
-        configSha256: input.fancyMenuConfigSha256?.trim() || undefined,
-        assetsUrl: input.fancyMenuAssetsUrl?.trim() || undefined,
-        assetsSha256: input.fancyMenuAssetsSha256?.trim() || undefined,
-      },
+      fancyMenu: input.fancyMenu ?? {},
     });
   }
 
   async publishProfile(input: PublishProfileDto, requestOrigin: string) {
     const serverId = this.getServerId();
+    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
 
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const [server, latest] = await Promise.all([
@@ -591,20 +577,7 @@ export class AdminService implements OnModuleInit {
       const nextVersion = latest.version + 1;
       const profileId =
         input.profileId?.trim() || server.profileId || latest.profileId;
-      const fancyMenu = FancyMenuSettingsSchema.parse({
-        enabled: input.fancyMenu?.enabled ?? true,
-        playButtonLabel: input.fancyMenu?.playButtonLabel ?? 'Play',
-        hideSingleplayer: input.fancyMenu?.hideSingleplayer ?? true,
-        hideMultiplayer: input.fancyMenu?.hideMultiplayer ?? true,
-        hideRealms: input.fancyMenu?.hideRealms ?? true,
-        titleText: input.fancyMenu?.titleText?.trim() || undefined,
-        subtitleText: input.fancyMenu?.subtitleText?.trim() || undefined,
-        logoUrl: input.fancyMenu?.logoUrl?.trim() || undefined,
-        configUrl: input.fancyMenu?.configUrl?.trim() || undefined,
-        configSha256: input.fancyMenu?.configSha256?.trim() || undefined,
-        assetsUrl: input.fancyMenu?.assetsUrl?.trim() || undefined,
-        assetsSha256: input.fancyMenu?.assetsSha256?.trim() || undefined,
-      });
+      const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
 
       const generated = await this.buildLockPayload({
         profileId,
@@ -623,7 +596,7 @@ export class AdminService implements OnModuleInit {
         previousLockJson: latest.lockJson,
       });
 
-      const lockUrl = `${requestOrigin}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
+      const lockUrl = `${publicBase}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
       const summary = this.computeDiffSummary(latest.lockJson, generated);
       const allowedVersions = Array.from(
         new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
@@ -749,12 +722,57 @@ export class AdminService implements OnModuleInit {
     const fileName = `admin-image-${stamp}-${token}${ext}`;
     const target = resolve(root, basename(fileName));
     await writeFile(target, file.buffer);
+    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
 
     return {
       fileName,
-      url: `${requestOrigin}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      url: `${publicBase}/v1/artifacts/${encodeURIComponent(fileName)}`,
       size: file.size,
       contentType: file.mimetype,
+    };
+  }
+
+  async uploadFancyMenuBundle(
+    file: {
+      originalname: string;
+      mimetype: string;
+      size: number;
+      buffer: Buffer;
+    },
+    requestOrigin: string,
+  ) {
+    if (!file || !file.buffer || file.size <= 0) {
+      throw new BadGatewayException('No file uploaded');
+    }
+
+    if (file.size > MAX_FANCY_BUNDLE_UPLOAD_BYTES) {
+      throw new BadGatewayException('FancyMenu bundle must be 50MB or smaller');
+    }
+
+    const fileExt = extname(file.originalname || '').toLowerCase();
+    if (fileExt !== '.zip') {
+      throw new BadGatewayException('FancyMenu bundle must be a .zip file');
+    }
+
+    const validation = await this.validateFancyMenuBundleBuffer(file.buffer);
+    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+
+    const root = this.getArtifactsRoot();
+    await mkdir(root, { recursive: true });
+
+    const stamp = Date.now().toString(36);
+    const token = randomBytes(6).toString('hex');
+    const fileName = `fancymenu-bundle-${stamp}-${token}.zip`;
+    const target = resolve(root, basename(fileName));
+    await writeFile(target, file.buffer);
+    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
+
+    return {
+      fileName,
+      url: `${publicBase}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      sha256,
+      size: file.size,
+      entryCount: validation.entryCount,
     };
   }
 
@@ -1364,17 +1382,13 @@ export class AdminService implements OnModuleInit {
     }>;
     fancyMenu: {
       enabled?: boolean;
+      mode?: 'simple' | 'custom';
       playButtonLabel?: string;
       hideSingleplayer?: boolean;
       hideMultiplayer?: boolean;
       hideRealms?: boolean;
-      titleText?: string;
-      subtitleText?: string;
-      logoUrl?: string;
-      configUrl?: string;
-      configSha256?: string;
-      assetsUrl?: string;
-      assetsSha256?: string;
+      customLayoutUrl?: string;
+      customLayoutSha256?: string;
     };
     branding?: {
       logoUrl?: string;
@@ -1391,22 +1405,8 @@ export class AdminService implements OnModuleInit {
     const profileId =
       input.profileId?.trim() ||
       this.slugify(cleanServerName || 'server-profile');
-    const includeFancyMenu = input.fancyMenu.enabled ?? true;
-
-    const fancyMenuSettings = FancyMenuSettingsSchema.parse({
-      enabled: includeFancyMenu,
-      playButtonLabel: input.fancyMenu.playButtonLabel?.trim() || 'Play',
-      hideSingleplayer: input.fancyMenu.hideSingleplayer ?? true,
-      hideMultiplayer: input.fancyMenu.hideMultiplayer ?? true,
-      hideRealms: input.fancyMenu.hideRealms ?? true,
-      titleText: input.fancyMenu.titleText?.trim() || undefined,
-      subtitleText: input.fancyMenu.subtitleText?.trim() || undefined,
-      logoUrl: input.fancyMenu.logoUrl?.trim() || undefined,
-      configUrl: input.fancyMenu.configUrl?.trim() || undefined,
-      configSha256: input.fancyMenu.configSha256?.trim() || undefined,
-      assetsUrl: input.fancyMenu.assetsUrl?.trim() || undefined,
-      assetsSha256: input.fancyMenu.assetsSha256?.trim() || undefined,
-    });
+    const fancyMenuSettings = this.normalizeFancyMenuSettings(input.fancyMenu);
+    const includeFancyMenu = fancyMenuSettings.enabled;
 
     const mods = input.mods.filter(
       (entry) =>
@@ -1431,21 +1431,24 @@ export class AdminService implements OnModuleInit {
     }
 
     const configs = [];
-    if (fancyMenuSettings.configUrl && fancyMenuSettings.configSha256) {
+    if (includeFancyMenu && fancyMenuSettings.mode === 'custom') {
+      if (
+        !fancyMenuSettings.customLayoutUrl ||
+        !fancyMenuSettings.customLayoutSha256
+      ) {
+        throw new BadGatewayException(
+          'FancyMenu custom mode requires customLayoutUrl and customLayoutSha256',
+        );
+      }
+      await this.revalidateFancyMenuBundleArtifact(
+        fancyMenuSettings.customLayoutUrl,
+        fancyMenuSettings.customLayoutSha256,
+      );
       configs.push({
         kind: 'config' as const,
-        name: 'FancyMenu UI Config',
-        url: fancyMenuSettings.configUrl,
-        sha256: fancyMenuSettings.configSha256,
-      });
-    }
-
-    if (fancyMenuSettings.assetsUrl && fancyMenuSettings.assetsSha256) {
-      configs.push({
-        kind: 'config' as const,
-        name: 'FancyMenu Assets',
-        url: fancyMenuSettings.assetsUrl,
-        sha256: fancyMenuSettings.assetsSha256,
+        name: FANCY_MENU_BUNDLE_CONFIG_NAME,
+        url: fancyMenuSettings.customLayoutUrl,
+        sha256: fancyMenuSettings.customLayoutSha256,
       });
     }
 
@@ -1495,6 +1498,383 @@ export class AdminService implements OnModuleInit {
     });
   }
 
+  private normalizeFancyMenuSettings(input?: {
+    enabled?: boolean;
+    mode?: 'simple' | 'custom';
+    playButtonLabel?: string;
+    hideSingleplayer?: boolean;
+    hideMultiplayer?: boolean;
+    hideRealms?: boolean;
+    customLayoutUrl?: string;
+    customLayoutSha256?: string;
+  }) {
+    const settings = FancyMenuSettingsSchema.parse({
+      enabled: input?.enabled ?? true,
+      mode: input?.mode ?? 'simple',
+      playButtonLabel: input?.playButtonLabel?.trim() || 'Play',
+      hideSingleplayer: input?.hideSingleplayer ?? true,
+      hideMultiplayer: input?.hideMultiplayer ?? true,
+      hideRealms: input?.hideRealms ?? true,
+      customLayoutUrl: input?.customLayoutUrl?.trim() || undefined,
+      customLayoutSha256: input?.customLayoutSha256?.trim() || undefined,
+    });
+
+    if (!settings.enabled) {
+      return {
+        ...settings,
+        mode: 'simple' as const,
+        customLayoutUrl: undefined,
+        customLayoutSha256: undefined,
+      };
+    }
+
+    if (settings.mode !== 'custom') {
+      return {
+        ...settings,
+        mode: 'simple' as const,
+        customLayoutUrl: undefined,
+        customLayoutSha256: undefined,
+      };
+    }
+
+    return settings;
+  }
+
+  private async revalidateFancyMenuBundleArtifact(
+    bundleUrl: string,
+    expectedSha256: string,
+  ): Promise<FancyMenuBundleValidation> {
+    const filePath = this.resolveArtifactPathFromUrl(bundleUrl);
+    const payload = await readFile(filePath).catch(() => null);
+    if (!payload || payload.length === 0) {
+      throw new BadGatewayException(
+        'FancyMenu bundle artifact is missing or unreadable',
+      );
+    }
+
+    if (payload.length > MAX_FANCY_BUNDLE_UPLOAD_BYTES) {
+      throw new BadGatewayException('FancyMenu bundle must be 50MB or smaller');
+    }
+
+    if (extname(filePath).toLowerCase() !== '.zip') {
+      throw new BadGatewayException(
+        'FancyMenu bundle artifact must be a .zip file',
+      );
+    }
+
+    const actualSha = createHash('sha256').update(payload).digest('hex');
+    if (actualSha.toLowerCase() !== expectedSha256.toLowerCase()) {
+      throw new BadGatewayException(
+        'FancyMenu bundle SHA-256 does not match artifact content',
+      );
+    }
+
+    return this.validateFancyMenuBundleBuffer(payload);
+  }
+
+  private resolveArtifactPathFromUrl(url: string): string {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new BadGatewayException('Invalid FancyMenu customLayoutUrl');
+    }
+
+    const marker = '/v1/artifacts/';
+    const idx = parsed.pathname.indexOf(marker);
+    if (idx < 0) {
+      throw new BadGatewayException(
+        'FancyMenu customLayoutUrl must reference /v1/artifacts/',
+      );
+    }
+
+    const rawFileName = parsed.pathname.slice(idx + marker.length);
+    const decodedFileName = decodeURIComponent(rawFileName);
+    const safeFileName = basename(decodedFileName);
+    if (!safeFileName || safeFileName !== decodedFileName) {
+      throw new BadGatewayException('Invalid FancyMenu bundle artifact path');
+    }
+
+    return resolve(this.getArtifactsRoot(), safeFileName);
+  }
+
+  private async validateFancyMenuBundleBuffer(
+    payload: Buffer,
+  ): Promise<FancyMenuBundleValidation> {
+    return new Promise((resolveValidation, rejectValidation) => {
+      yauzl.fromBuffer(
+        payload,
+        {
+          lazyEntries: true,
+          validateEntrySizes: true,
+          decodeStrings: true,
+        },
+        (error, zipFile) => {
+          if (error || !zipFile) {
+            rejectValidation(new BadGatewayException('Invalid ZIP archive'));
+            return;
+          }
+
+          let done = false;
+          let entryCount = 0;
+          let totalUncompressedBytes = 0;
+          let hasCustomizableMenus = false;
+          let hasCustomizationTxt = false;
+          let hasCustomizationMainTxt = false;
+          const fileEntries = new Set<string>();
+          const textFiles = new Map<string, string>();
+
+          const fail = (message: string) => {
+            if (done) {
+              return;
+            }
+            done = true;
+            zipFile.close();
+            rejectValidation(new BadGatewayException(message));
+          };
+
+          zipFile.on('error', () => fail('Invalid ZIP archive'));
+
+          zipFile.on('entry', (entry: yauzl.Entry) => {
+            if (done) {
+              return;
+            }
+
+            entryCount += 1;
+            if (entryCount > MAX_FANCY_BUNDLE_ENTRIES) {
+              fail(
+                `FancyMenu bundle exceeds ${MAX_FANCY_BUNDLE_ENTRIES} entries`,
+              );
+              return;
+            }
+
+            const normalizedPath = this.normalizeFancyMenuPath(
+              entry.fileName,
+              true,
+            );
+            if (!normalizedPath.startsWith(`${FANCY_MENU_ROOT}/`)) {
+              fail(
+                `FancyMenu bundle entry is outside ${FANCY_MENU_ROOT}: ${entry.fileName}`,
+              );
+              return;
+            }
+
+            const isDirectory = entry.fileName.endsWith('/');
+            if (isDirectory) {
+              zipFile.readEntry();
+              return;
+            }
+
+            totalUncompressedBytes += entry.uncompressedSize;
+            if (totalUncompressedBytes > MAX_FANCY_BUNDLE_UNCOMPRESSED_BYTES) {
+              fail(
+                `FancyMenu bundle uncompressed size exceeds ${MAX_FANCY_BUNDLE_UNCOMPRESSED_BYTES} bytes`,
+              );
+              return;
+            }
+
+            fileEntries.add(normalizedPath);
+            if (normalizedPath === `${FANCY_MENU_ROOT}/customizablemenus.txt`) {
+              hasCustomizableMenus = true;
+            }
+            if (normalizedPath === `${FANCY_MENU_ROOT}/customization.txt`) {
+              hasCustomizationTxt = true;
+            }
+            if (
+              normalizedPath.toLowerCase() ===
+              `${FANCY_MENU_ROOT}/customization/main.txt`
+            ) {
+              hasCustomizationMainTxt = true;
+            }
+
+            if (!normalizedPath.toLowerCase().endsWith('.txt')) {
+              zipFile.readEntry();
+              return;
+            }
+
+            zipFile.openReadStream(entry, (streamError, stream) => {
+              if (streamError || !stream) {
+                fail(`Failed to read ZIP entry ${entry.fileName}`);
+                return;
+              }
+
+              const chunks: Buffer[] = [];
+              stream.on('data', (chunk: Buffer | string) => {
+                if (Buffer.isBuffer(chunk)) {
+                  chunks.push(chunk);
+                } else {
+                  chunks.push(Buffer.from(chunk, 'utf8'));
+                }
+              });
+              stream.on('error', () =>
+                fail(`Failed to read ZIP entry ${entry.fileName}`),
+              );
+              stream.on('end', () => {
+                if (done) {
+                  return;
+                }
+                textFiles.set(
+                  normalizedPath,
+                  Buffer.concat(chunks).toString('utf8'),
+                );
+                zipFile.readEntry();
+              });
+            });
+          });
+
+          zipFile.on('end', () => {
+            if (done) {
+              return;
+            }
+
+            if (!hasCustomizableMenus) {
+              fail(
+                `FancyMenu bundle is missing ${FANCY_MENU_ROOT}/customizablemenus.txt`,
+              );
+              return;
+            }
+
+            if (hasCustomizationTxt && hasCustomizationMainTxt) {
+              fail(
+                `FancyMenu bundle must not include both ${FANCY_MENU_ROOT}/customization.txt and ${FANCY_MENU_ROOT}/customization/main.txt`,
+              );
+              return;
+            }
+
+            if (!hasCustomizationTxt && !hasCustomizationMainTxt) {
+              fail(
+                `FancyMenu bundle must include ${FANCY_MENU_ROOT}/customization.txt or ${FANCY_MENU_ROOT}/customization/main.txt`,
+              );
+              return;
+            }
+
+            for (const [sourcePath, content] of textFiles.entries()) {
+              const pattern = /\[source:file\]([^\s\r\n]+)/gi;
+              let match = pattern.exec(content);
+              while (match) {
+                const rawReference = match[1]?.trim() ?? '';
+                const resolvedPath = this.resolveFancyMenuSourceFilePath(
+                  sourcePath,
+                  rawReference,
+                );
+                if (!fileEntries.has(resolvedPath)) {
+                  fail(
+                    `FancyMenu reference not found: ${rawReference} (from ${sourcePath})`,
+                  );
+                  return;
+                }
+                match = pattern.exec(content);
+              }
+            }
+
+            done = true;
+            resolveValidation({
+              entryCount,
+              totalUncompressedBytes,
+            });
+          });
+
+          zipFile.readEntry();
+        },
+      );
+    });
+  }
+
+  private resolveFancyMenuSourceFilePath(
+    sourcePath: string,
+    rawReference: string,
+  ): string {
+    const trimmed = rawReference
+      .trim()
+      .replace(/^["']+/, '')
+      .replace(/["']+$/, '');
+    const normalizedReference = trimmed.replace(/\\/g, '/');
+    if (!normalizedReference) {
+      throw new BadGatewayException(
+        `Invalid FancyMenu source:file reference in ${sourcePath}`,
+      );
+    }
+
+    if (normalizedReference.includes('://')) {
+      throw new BadGatewayException(
+        `FancyMenu source:file must be local path, got URL '${rawReference}'`,
+      );
+    }
+
+    const candidate = normalizedReference.startsWith('/')
+      ? normalizedReference.slice(1)
+      : normalizedReference.startsWith('config/') ||
+          normalizedReference.startsWith('fancymenu/')
+        ? normalizedReference
+        : posix.join(posix.dirname(sourcePath), normalizedReference);
+
+    const resolved = this.normalizeFancyMenuPath(candidate, false);
+    if (!resolved.startsWith(`${FANCY_MENU_ROOT}/`)) {
+      throw new BadGatewayException(
+        `FancyMenu source:file reference escapes ${FANCY_MENU_ROOT}: ${rawReference}`,
+      );
+    }
+
+    return resolved;
+  }
+
+  private normalizeFancyMenuPath(value: string, fromZipEntry: boolean): string {
+    const forward = value.replace(/\\/g, '/').trim();
+    const cleaned = forward.endsWith('/') ? forward.slice(0, -1) : forward;
+    if (!cleaned || cleaned.startsWith('/')) {
+      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
+    }
+
+    if (this.containsControlChar(cleaned)) {
+      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
+    }
+    if (cleaned.includes(':')) {
+      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
+    }
+
+    const normalized = posix.normalize(cleaned);
+    if (
+      normalized === '.' ||
+      normalized === '..' ||
+      normalized.startsWith('../') ||
+      normalized.includes('/../')
+    ) {
+      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
+    }
+
+    if (normalized.startsWith(`${FANCY_MENU_ROOT}/`)) {
+      return normalized;
+    }
+
+    if (normalized === 'config/fancymenu') {
+      return FANCY_MENU_ROOT;
+    }
+
+    if (normalized.startsWith('fancymenu/')) {
+      return `${FANCY_MENU_ROOT}/${normalized.slice('fancymenu/'.length)}`;
+    }
+
+    if (normalized === 'fancymenu') {
+      return FANCY_MENU_ROOT;
+    }
+
+    if (fromZipEntry) {
+      return `${FANCY_MENU_ROOT}/${normalized}`;
+    }
+
+    return posix.join(FANCY_MENU_ROOT, normalized);
+  }
+
+  private containsControlChar(value: string): boolean {
+    for (let i = 0; i < value.length; i += 1) {
+      const code = value.charCodeAt(i);
+      if (code <= 31 || code === 127) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private extractFancyMenu(value: unknown) {
     const parsed = FancyMenuSettingsSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
@@ -1542,17 +1922,21 @@ export class AdminService implements OnModuleInit {
     };
   }): BumpType {
     const minecraftChanged =
-      input.latest.minecraftVersion.trim() !== input.input.minecraftVersion.trim();
+      input.latest.minecraftVersion.trim() !==
+      input.input.minecraftVersion.trim();
     const loaderVersionChanged =
       input.latest.loaderVersion.trim() !== input.input.loaderVersion.trim();
-    const loaderChanged =
-      input.latest.loader.trim().toLowerCase() !== 'fabric';
+    const loaderChanged = input.latest.loader.trim().toLowerCase() !== 'fabric';
 
     if (minecraftChanged || loaderVersionChanged || loaderChanged) {
       return 'major';
     }
 
-    if (input.summary.add > 0 || input.summary.remove > 0 || input.summary.update > 0) {
+    if (
+      input.summary.add > 0 ||
+      input.summary.remove > 0 ||
+      input.summary.update > 0
+    ) {
       return 'minor';
     }
 
@@ -1568,7 +1952,11 @@ export class AdminService implements OnModuleInit {
       return { major: current.major, minor: current.minor + 1, patch: 0 };
     }
 
-    return { major: current.major, minor: current.minor, patch: current.patch + 1 };
+    return {
+      major: current.major,
+      minor: current.minor,
+      patch: current.patch + 1,
+    };
   }
 
   private formatSemver(parts: SemverParts): string {
@@ -1581,11 +1969,15 @@ export class AdminService implements OnModuleInit {
       return resolve(configured);
     }
 
-    return resolve(
-      homedir(),
-      '.mss-client',
-      'artifacts',
-    );
+    return resolve(homedir(), '.mss-client', 'artifacts');
+  }
+
+  private resolvePublicBaseUrl(fallbackOrigin: string): string {
+    const configured = this.config.get<string>('PUBLIC_BASE_URL')?.trim();
+    if (configured) {
+      return configured.replace(/\/+$/, '');
+    }
+    return fallbackOrigin;
   }
 
   private getServerId() {

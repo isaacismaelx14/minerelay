@@ -484,7 +484,6 @@ export function renderAdminPage(): string {
         <a class="nav-item" href="#mods">Mod Workbench</a>
         <a class="nav-item" href="#publish">Publish</a>
       </nav>
-      <a class="nav-item" href="/admin/legacy">Legacy Builder</a>
     </aside>
 
     <section class="main">
@@ -590,7 +589,7 @@ export function renderAdminPage(): string {
 
         <article class="panel publish" id="publish">
           <h2>Publish Profile</h2>
-          <p class="hint">Publishes next release with semantic versioning and full FancyMenu + branding payload.</p>
+          <p class="hint">Publishes next release with semantic versioning, simple FancyMenu controls, and optional full custom layout bundle.</p>
           <div class="fields">
             <label>FancyMenu Enabled
               <select id="fancyMenuEnabled">
@@ -598,17 +597,14 @@ export function renderAdminPage(): string {
                 <option value="false">false</option>
               </select>
             </label>
+            <label>FancyMenu Mode
+              <select id="fancyMenuMode">
+                <option value="simple">simple</option>
+                <option value="custom">custom</option>
+              </select>
+            </label>
             <label>Play Button Label
               <input id="playButtonLabel" value="Play" />
-            </label>
-            <label>Menu Title
-              <input id="titleText" placeholder="Title shown in FancyMenu" />
-            </label>
-            <label>Menu Subtitle
-              <input id="subtitleText" placeholder="Subtitle shown in FancyMenu" />
-            </label>
-            <label>FancyMenu Logo URL
-              <input id="fancyMenuLogoUrl" placeholder="https://.../fancy-logo.png" />
             </label>
             <label>Hide Singleplayer
               <select id="hideSingleplayer">
@@ -628,22 +624,16 @@ export function renderAdminPage(): string {
                 <option value="false">false</option>
               </select>
             </label>
-            <label>FancyMenu Config URL
-              <input id="fancyMenuConfigUrl" placeholder="https://.../fancymenu-config.zip" />
+            <label>Custom Layout Bundle URL
+              <input id="fancyMenuCustomLayoutUrl" placeholder="https://.../fancymenu-bundle.zip" readonly />
             </label>
-            <label>FancyMenu Config SHA-256
-              <input id="fancyMenuConfigSha256" placeholder="64-hex sha256" />
-            </label>
-            <label>FancyMenu Assets URL
-              <input id="fancyMenuAssetsUrl" placeholder="https://.../fancymenu-assets.zip" />
-            </label>
-            <label>FancyMenu Assets SHA-256
-              <input id="fancyMenuAssetsSha256" placeholder="64-hex sha256" />
+            <label>Custom Layout Bundle SHA-256
+              <input id="fancyMenuCustomLayoutSha256" placeholder="64-hex sha256" readonly />
             </label>
           </div>
           <div class="row">
-            <button id="uploadFancyLogoBtn" class="btn btn-ghost">Upload FancyMenu Logo</button>
-            <input id="fancyLogoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            <button id="uploadFancyBundleBtn" class="btn btn-ghost">Upload FancyMenu Bundle (.zip)</button>
+            <input id="fancyBundleFile" type="file" accept=".zip,application/zip" hidden />
           </div>
           <div class="row">
             <button id="publishBtn" class="btn btn-amber">Publish Next Version</button>

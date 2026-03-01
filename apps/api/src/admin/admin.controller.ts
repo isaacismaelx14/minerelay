@@ -24,8 +24,6 @@ import {
 } from './admin.dto';
 import { renderAdminPage, renderAdminLoginPage } from './admin.page';
 import { renderAdminScript, renderLoginScript } from './admin.script';
-import { renderLegacyAdminPage } from './admin.legacy.page';
-import { renderLegacyAdminScript } from './admin.legacy.script';
 import { AdminPublic } from './admin-auth.decorator';
 import { AdminSessionGuard } from './admin.guard';
 import { AdminService } from './admin.service';
@@ -99,25 +97,6 @@ export class AdminController {
   @UseGuards(AdminSessionGuard)
   getAdminScript(@Res() response: Response) {
     response.type('application/javascript').send(renderAdminScript());
-  }
-
-  @Get('/admin/legacy')
-  @AdminPublic()
-  async getLegacyAdminPage(@Req() request: Request, @Res() response: Response) {
-    const isAuthenticated =
-      await this.adminService.authenticateRequest(request);
-    if (!isAuthenticated) {
-      response.redirect('/admin/login');
-      return;
-    }
-
-    response.type('html').send(renderLegacyAdminPage());
-  }
-
-  @Get('/admin/legacy/app.js')
-  @UseGuards(AdminSessionGuard)
-  getLegacyAdminScript(@Res() response: Response) {
-    response.type('application/javascript').send(renderLegacyAdminScript());
   }
 
   @Get('/v1/admin/bootstrap')
@@ -211,7 +190,8 @@ export class AdminController {
   @UseGuards(AdminSessionGuard)
   @UseInterceptors(FileInterceptor('file'))
   uploadMedia(
-    @UploadedFile() file: {
+    @UploadedFile()
+    file: {
       originalname: string;
       mimetype: string;
       size: number;
@@ -231,5 +211,32 @@ export class AdminController {
         : request.protocol;
     const origin = `${protocol}://${host}`;
     return this.adminService.uploadMedia(file, origin);
+  }
+
+  @Post('/v1/admin/fancymenu/bundle/upload')
+  @UseGuards(AdminSessionGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFancyMenuBundle(
+    @UploadedFile()
+    file: {
+      originalname: string;
+      mimetype: string;
+      size: number;
+      buffer: Buffer;
+    },
+    @Req() request: Request,
+  ) {
+    const host = request.get('host') ?? 'localhost:3000';
+    const forwardedProto = request
+      .get('x-forwarded-proto')
+      ?.split(',')[0]
+      ?.trim()
+      ?.toLowerCase();
+    const protocol =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? forwardedProto
+        : request.protocol;
+    const origin = `${protocol}://${host}`;
+    return this.adminService.uploadFancyMenuBundle(file, origin);
   }
 }

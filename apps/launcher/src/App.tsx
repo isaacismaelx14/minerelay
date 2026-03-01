@@ -175,9 +175,9 @@ interface CatalogSnapshot {
   hasUpdates: boolean;
   summary: UpdateSummary;
   fancyMenuEnabled: boolean;
+  fancyMenuMode: "simple" | "custom";
   fancyMenuPresent: boolean;
-  fancyMenuRequiresAssets: boolean;
-  fancyMenuConfigured: boolean;
+  fancyMenuCustomBundlePresent: boolean;
   mods: string[];
   resourcepacks: string[];
   shaderpacks: string[];
@@ -351,6 +351,7 @@ export default function App() {
   });
   const [probePlaying, setProbePlaying] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [brokenLogoUrls, setBrokenLogoUrls] = useState<Record<string, true>>({});
 
   const cycleInFlight = useRef(false);
   const checkingLauncherUpdateRef = useRef(false);
@@ -378,11 +379,29 @@ export default function App() {
       : "0 B / --";
 
   const hasFancyMenuMod = catalog?.fancyMenuPresent ?? false;
-  const fancyMenuRequiresAssets = catalog?.fancyMenuRequiresAssets ?? false;
-  const hasFancyMenuConfig = catalog?.fancyMenuConfigured ?? false;
+  const fancyMenuMode = catalog?.fancyMenuMode ?? "simple";
+  const hasFancyMenuCustomBundle = catalog?.fancyMenuCustomBundlePresent ?? false;
   const sessionActive = sessionStatus.phase !== "idle";
   const isPlaying = sessionStatus.phase === "playing";
   const compactPlaying = isPlaying || probePlaying;
+  const serverInitial = (catalog?.serverName ?? SERVER_ID).trim().charAt(0).toUpperCase() || "S";
+
+  const markLogoAsBroken = useCallback((url?: string) => {
+    if (!url) {
+      return;
+    }
+    setBrokenLogoUrls((current) => {
+      if (current[url]) {
+        return current;
+      }
+      return {
+        ...current,
+        [url]: true,
+      };
+    });
+  }, []);
+
+  const canRenderLogo = !!catalog?.logoUrl && !brokenLogoUrls[catalog.logoUrl];
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -1459,7 +1478,7 @@ export default function App() {
             </p>
             <p className="wizard-meta">
               Note: menu customization appears after Step 4 sync installs
-              FancyMenu/menu customization assets.
+              FancyMenu files (simple managed layout or custom bundle).
             </p>
             {catalog?.fancyMenuEnabled && !hasFancyMenuMod ? (
               <p className="wizard-meta" style={{ color: "#b84e4e" }}>
@@ -1469,11 +1488,11 @@ export default function App() {
             ) : null}
             {catalog?.fancyMenuEnabled &&
             hasFancyMenuMod &&
-            fancyMenuRequiresAssets &&
-            !hasFancyMenuConfig ? (
+            fancyMenuMode === "custom" &&
+            !hasFancyMenuCustomBundle ? (
               <p className="wizard-meta" style={{ color: "#b84e4e" }}>
-                FancyMenu is present but no FancyMenu config/assets were found
-                in profile configs.
+                FancyMenu is in custom mode, but the custom bundle is missing in
+                profile configs.
               </p>
             ) : null}
 
@@ -1524,13 +1543,18 @@ export default function App() {
 
         {wizardStep === "sync" ? (
           <div className="wizard-panel">
-            {catalog?.logoUrl ? (
+            {canRenderLogo ? (
               <img
                 className="wizard-logo"
                 src={catalog.logoUrl}
                 alt={`${catalog.serverName ?? SERVER_ID} logo`}
+                onError={() => markLogoAsBroken(catalog.logoUrl)}
               />
-            ) : null}
+            ) : (
+              <div className="wizard-logo logo-fallback" aria-hidden="true">
+                {serverInitial}
+              </div>
+            )}
             <h2>Step 4: Initial Sync</h2>
             <p>
               Server: {catalog?.serverName ?? SERVER_ID} (
@@ -1681,10 +1705,10 @@ export default function App() {
         ) : null}
         {catalog?.fancyMenuEnabled &&
         hasFancyMenuMod &&
-        fancyMenuRequiresAssets &&
-        !hasFancyMenuConfig ? (
+        fancyMenuMode === "custom" &&
+        !hasFancyMenuCustomBundle ? (
           <p className="wizard-meta" style={{ color: "#b84e4e" }}>
-            FancyMenu mod exists, but FancyMenu config/assets are missing.
+            FancyMenu custom mode is enabled, but the custom bundle is missing.
           </p>
         ) : null}
         {isChecking ? (
@@ -2125,13 +2149,18 @@ export default function App() {
         <div className="compact-frame">
           <header className="compact-head">
             <div className="compact-server-row">
-              {catalog?.logoUrl ? (
+              {canRenderLogo ? (
                 <img
                   className="compact-server-logo"
                   src={catalog.logoUrl}
                   alt={`${catalog.serverName ?? SERVER_ID} logo`}
+                  onError={() => markLogoAsBroken(catalog.logoUrl)}
                 />
-              ) : null}
+              ) : (
+                <div className="compact-server-logo logo-fallback" aria-hidden="true">
+                  {serverInitial}
+                </div>
+              )}
               <div className="compact-server-meta">
                 <p className="compact-app">{APP_NAME}</p>
                 <p className="compact-server">{catalog?.serverName ?? `Server ${SERVER_ID}`}</p>
@@ -2308,13 +2337,18 @@ export default function App() {
       <section className="desktop-workspace">
         <header className="workspace-header">
           <div className="workspace-title">
-            {catalog?.logoUrl ? (
+            {canRenderLogo ? (
               <img
                 className="server-logo"
                 src={catalog.logoUrl}
                 alt={`${catalog.serverName ?? SERVER_ID} logo`}
+                onError={() => markLogoAsBroken(catalog.logoUrl)}
               />
-            ) : null}
+            ) : (
+              <div className="server-logo logo-fallback" aria-hidden="true">
+                {serverInitial}
+              </div>
+            )}
             <div>
             <span className="eyebrow">MSS+ Client Center</span>
             <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>

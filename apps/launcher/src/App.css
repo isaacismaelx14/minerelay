@@ -181,6 +181,17 @@ ul {
   background: #0f1a27;
 }
 
+.logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 700;
+  color: #d6e8fb;
+  background: linear-gradient(180deg, #16304c 0%, #11253d 100%);
+  text-transform: uppercase;
+}
+
 .playing-status {
   margin-top: 8px;
   color: #9ed2ff;

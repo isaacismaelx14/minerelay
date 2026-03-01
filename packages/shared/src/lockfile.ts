@@ -62,17 +62,13 @@ export type Branding = z.infer<typeof BrandingSchema>;
 
 export const FancyMenuSettingsSchema = z.object({
   enabled: z.boolean().default(false),
+  mode: z.enum(['simple', 'custom']).default('simple'),
   playButtonLabel: z.string().min(1).default('Play'),
   hideSingleplayer: z.boolean().default(true),
   hideMultiplayer: z.boolean().default(true),
   hideRealms: z.boolean().default(true),
-  titleText: z.string().min(1).optional(),
-  subtitleText: z.string().min(1).optional(),
-  logoUrl: z.url().optional(),
-  configUrl: z.url().optional(),
-  configSha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
-  assetsUrl: z.url().optional(),
-  assetsSha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
+  customLayoutUrl: z.url().optional(),
+  customLayoutSha256: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
 });
 export type FancyMenuSettings = z.infer<typeof FancyMenuSettingsSchema>;
 
@@ -91,6 +87,7 @@ export const ProfileLockSchema = z.object({
   branding: BrandingSchema,
   fancyMenu: FancyMenuSettingsSchema.default({
     enabled: false,
+    mode: 'simple',
     playButtonLabel: 'Play',
     hideSingleplayer: true,
     hideMultiplayer: true,

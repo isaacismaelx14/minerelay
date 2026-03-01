@@ -363,19 +363,20 @@ export function renderAdminScript(): string {
   }
 
   function collectFancyMenuPayload() {
+    var mode = byId('fancyMenuMode').value === 'custom' ? 'custom' : 'simple';
     return {
       enabled: byId('fancyMenuEnabled').value === 'true',
+      mode: mode,
       playButtonLabel: (byId('playButtonLabel').value || '').trim() || 'Play',
       hideSingleplayer: byId('hideSingleplayer').value === 'true',
       hideMultiplayer: byId('hideMultiplayer').value === 'true',
       hideRealms: byId('hideRealms').value === 'true',
-      titleText: (byId('titleText').value || '').trim() || undefined,
-      subtitleText: (byId('subtitleText').value || '').trim() || undefined,
-      logoUrl: (byId('fancyMenuLogoUrl').value || '').trim() || undefined,
-      configUrl: (byId('fancyMenuConfigUrl').value || '').trim() || undefined,
-      configSha256: (byId('fancyMenuConfigSha256').value || '').trim() || undefined,
-      assetsUrl: (byId('fancyMenuAssetsUrl').value || '').trim() || undefined,
-      assetsSha256: (byId('fancyMenuAssetsSha256').value || '').trim() || undefined
+      customLayoutUrl: mode === 'custom'
+        ? (byId('fancyMenuCustomLayoutUrl').value || '').trim() || undefined
+        : undefined,
+      customLayoutSha256: mode === 'custom'
+        ? (byId('fancyMenuCustomLayoutSha256').value || '').trim() || undefined
+        : undefined
     };
   }
 
@@ -524,6 +525,32 @@ export function renderAdminScript(): string {
       });
   }
 
+  function uploadFancyMenuBundle(file, statusId) {
+    if (!file) return Promise.resolve();
+    var form = new FormData();
+    form.append('file', file);
+    setStatus(statusId, 'Uploading FancyMenu bundle...');
+
+    return authFetch('/v1/admin/fancymenu/bundle/upload', { method: 'POST', body: form })
+      .then(function (response) {
+        if (response.ok) return response.json();
+        return readError(response, 'Bundle upload failed').then(function (text) { throw new Error(text); });
+      })
+      .then(function (uploaded) {
+        byId('fancyMenuMode').value = 'custom';
+        byId('fancyMenuCustomLayoutUrl').value = uploaded.url || '';
+        byId('fancyMenuCustomLayoutSha256').value = uploaded.sha256 || '';
+        setStatus(
+          statusId,
+          'FancyMenu bundle uploaded (' + String(uploaded.entryCount || 0) + ' entries).',
+          'ok'
+        );
+      })
+      .catch(function (error) {
+        setStatus(statusId, error.message || 'Bundle upload failed.', 'error');
+      });
+  }
+
   function attachUpload(buttonId, inputId, targetId, statusId) {
     var button = byId(buttonId);
     var input = byId(inputId);
@@ -543,17 +570,13 @@ export function renderAdminScript(): string {
   function applyFancyMenu(fancyMenu) {
     var fm = fancyMenu || {};
     byId('fancyMenuEnabled').value = fm.enabled === false ? 'false' : 'true';
+    byId('fancyMenuMode').value = fm.mode === 'custom' ? 'custom' : 'simple';
     byId('playButtonLabel').value = fm.playButtonLabel || 'Play';
-    byId('titleText').value = fm.titleText || '';
-    byId('subtitleText').value = fm.subtitleText || '';
-    byId('fancyMenuLogoUrl').value = fm.logoUrl || '';
     byId('hideSingleplayer').value = fm.hideSingleplayer === false ? 'false' : 'true';
     byId('hideMultiplayer').value = fm.hideMultiplayer === false ? 'false' : 'true';
     byId('hideRealms').value = fm.hideRealms === false ? 'false' : 'true';
-    byId('fancyMenuConfigUrl').value = fm.configUrl || '';
-    byId('fancyMenuConfigSha256').value = fm.configSha256 || '';
-    byId('fancyMenuAssetsUrl').value = fm.assetsUrl || '';
-    byId('fancyMenuAssetsSha256').value = fm.assetsSha256 || '';
+    byId('fancyMenuCustomLayoutUrl').value = fm.customLayoutUrl || '';
+    byId('fancyMenuCustomLayoutSha256').value = fm.customLayoutSha256 || '';
   }
 
   function applyBranding(branding) {
@@ -636,10 +659,24 @@ export function renderAdminScript(): string {
   byId('minecraftVersion').addEventListener('change', updateRail);
   byId('loaderVersion').addEventListener('change', updateRail);
   byId('fancyMenuEnabled').addEventListener('change', updateRail);
+  byId('fancyMenuMode').addEventListener('change', updateRail);
 
   attachUpload('uploadBrandLogoBtn', 'brandLogoFile', 'brandingLogoUrl', 'draftStatus');
   attachUpload('uploadBrandBackgroundBtn', 'brandBackgroundFile', 'brandingBackgroundUrl', 'draftStatus');
-  attachUpload('uploadFancyLogoBtn', 'fancyLogoFile', 'fancyMenuLogoUrl', 'publishStatus');
+
+  var bundleButton = byId('uploadFancyBundleBtn');
+  var bundleInput = byId('fancyBundleFile');
+  if (bundleButton && bundleInput) {
+    bundleButton.addEventListener('click', function () {
+      bundleInput.value = '';
+      bundleInput.click();
+    });
+
+    bundleInput.addEventListener('change', function () {
+      var file = bundleInput.files && bundleInput.files[0];
+      uploadFancyMenuBundle(file, 'publishStatus');
+    });
+  }
 
   loadBootstrap();
 })();`;

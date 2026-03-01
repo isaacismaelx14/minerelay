@@ -29,6 +29,14 @@ const SESSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const RESTORE_GRACE: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
+const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct FancyMenuBundleManifest {
+  bundle_sha256: String,
+  files: Vec<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SessionEntry {
@@ -663,6 +671,21 @@ fn collect_session_paths(paths: &InstancePaths, lock: &ProfileLock) -> LauncherR
   entries.insert(format!(
     "config/fancymenu/customization/{FANCYMENU_MANAGED_LAYOUT_FILENAME}"
   ));
+  entries.insert(format!("config/fancymenu/{FANCYMENU_CUSTOM_MANIFEST_FILENAME}"));
+  let custom_manifest = paths
+    .minecraft_dir
+    .join("config")
+    .join("fancymenu")
+    .join(FANCYMENU_CUSTOM_MANIFEST_FILENAME);
+  if custom_manifest.exists() {
+    if let Ok(content) = fs::read_to_string(&custom_manifest) {
+      if let Ok(manifest) = serde_json::from_str::<FancyMenuBundleManifest>(&content) {
+        for relative in manifest.files {
+          entries.insert(relative);
+        }
+      }
+    }
+  }
   entries.insert("servers.dat".to_string());
 
   let filtered = entries

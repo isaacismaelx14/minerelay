@@ -25,6 +25,8 @@ pub struct ProfileMetadataResponse {
 pub struct FancyMenuSettings {
   #[serde(default)]
   pub enabled: bool,
+  #[serde(default = "default_fancy_menu_mode")]
+  pub mode: String,
   #[serde(default = "default_play_button_label")]
   pub play_button_label: String,
   #[serde(default = "default_true")]
@@ -34,36 +36,22 @@ pub struct FancyMenuSettings {
   #[serde(default = "default_true")]
   pub hide_realms: bool,
   #[serde(default)]
-  pub title_text: Option<String>,
+  pub custom_layout_url: Option<String>,
   #[serde(default)]
-  pub subtitle_text: Option<String>,
-  #[serde(default)]
-  pub logo_url: Option<String>,
-  #[serde(default)]
-  pub config_url: Option<String>,
-  #[serde(default)]
-  pub config_sha256: Option<String>,
-  #[serde(default)]
-  pub assets_url: Option<String>,
-  #[serde(default)]
-  pub assets_sha256: Option<String>,
+  pub custom_layout_sha256: Option<String>,
 }
 
 impl Default for FancyMenuSettings {
   fn default() -> Self {
     Self {
       enabled: false,
+      mode: default_fancy_menu_mode(),
       play_button_label: default_play_button_label(),
       hide_singleplayer: true,
       hide_multiplayer: true,
       hide_realms: true,
-      title_text: None,
-      subtitle_text: None,
-      logo_url: None,
-      config_url: None,
-      config_sha256: None,
-      assets_url: None,
-      assets_sha256: None,
+      custom_layout_url: None,
+      custom_layout_sha256: None,
     }
   }
 }
@@ -462,9 +450,9 @@ pub struct CatalogSnapshot {
   pub has_updates: bool,
   pub summary: UpdateSummary,
   pub fancy_menu_enabled: bool,
+  pub fancy_menu_mode: String,
   pub fancy_menu_present: bool,
-  pub fancy_menu_requires_assets: bool,
-  pub fancy_menu_configured: bool,
+  pub fancy_menu_custom_bundle_present: bool,
   pub mods: Vec<String>,
   pub resourcepacks: Vec<String>,
   pub shaderpacks: Vec<String>,
@@ -477,4 +465,8 @@ fn default_true() -> bool {
 
 fn default_play_button_label() -> String {
   "Play".to_string()
+}
+
+fn default_fancy_menu_mode() -> String {
+  "simple".to_string()
 }

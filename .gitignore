@@ -22,6 +22,10 @@ instances/
 runtimes/
 **/.runtime-artifacts/
 infra/sample-data/artifacts/
+.mss-client/
+artifacts/
+uploads/
+tmp/uploads/
 
 # Env
 .env

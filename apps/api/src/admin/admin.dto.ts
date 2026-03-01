@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -47,6 +48,11 @@ export class FancyMenuDto {
   enabled?: boolean;
 
   @IsString()
+  @IsIn(['simple', 'custom'])
+  @IsOptional()
+  mode?: 'simple' | 'custom';
+
+  @IsString()
   @IsOptional()
   playButtonLabel?: string;
 
@@ -67,33 +73,12 @@ export class FancyMenuDto {
 
   @IsString()
   @IsOptional()
-  titleText?: string;
-
-  @IsString()
-  @IsOptional()
-  subtitleText?: string;
-
-  @IsString()
-  @IsOptional()
-  logoUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  configUrl?: string;
+  customLayoutUrl?: string;
 
   @IsString()
   @Matches(/^[A-Fa-f0-9]{64}$/)
   @IsOptional()
-  configSha256?: string;
-
-  @IsString()
-  @IsOptional()
-  assetsUrl?: string;
-
-  @IsString()
-  @Matches(/^[A-Fa-f0-9]{64}$/)
-  @IsOptional()
-  assetsSha256?: string;
+  customLayoutSha256?: string;
 }
 
 export class BrandingDto {
@@ -138,59 +123,10 @@ export class GenerateLockfileDto {
   @Type(() => ResolvedModDto)
   mods!: ResolvedModDto[];
 
-  @Type(() => Boolean)
-  @IsBoolean()
+  @ValidateNested()
+  @Type(() => FancyMenuDto)
   @IsOptional()
-  includeFancyMenu?: boolean;
-
-  @IsString()
-  @IsOptional()
-  playButtonLabel?: string;
-
-  @Type(() => Boolean)
-  @IsBoolean()
-  @IsOptional()
-  hideSingleplayer?: boolean;
-
-  @Type(() => Boolean)
-  @IsBoolean()
-  @IsOptional()
-  hideMultiplayer?: boolean;
-
-  @Type(() => Boolean)
-  @IsBoolean()
-  @IsOptional()
-  hideRealms?: boolean;
-
-  @IsString()
-  @IsOptional()
-  titleText?: string;
-
-  @IsString()
-  @IsOptional()
-  subtitleText?: string;
-
-  @IsString()
-  @IsOptional()
-  logoUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  fancyMenuConfigUrl?: string;
-
-  @IsString()
-  @Matches(/^[A-Fa-f0-9]{64}$/)
-  @IsOptional()
-  fancyMenuConfigSha256?: string;
-
-  @IsString()
-  @IsOptional()
-  fancyMenuAssetsUrl?: string;
-
-  @IsString()
-  @Matches(/^[A-Fa-f0-9]{64}$/)
-  @IsOptional()
-  fancyMenuAssetsSha256?: string;
+  fancyMenu?: FancyMenuDto;
 }
 
 export class AdminLoginDto {
