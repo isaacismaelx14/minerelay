@@ -652,7 +652,6 @@ export class AdminService implements OnModuleInit {
           releaseMinor: nextSemver.minor,
           releasePatch: nextSemver.patch,
           supportedMinecraftVersions: allowedVersions,
-          publishDraft: Prisma.JsonNull,
         },
       });
 
