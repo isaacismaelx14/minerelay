@@ -43,12 +43,14 @@ pub async fn fetch_profile_metadata(state: &AppState, server_id: &str) -> Launch
   })?;
   validate_service_url(&api_base)?;
 
-  let direct_profile_url = format!("{api_base}/v1/profile");
   let legacy_server_url = format!("{api_base}/v1/servers/{server_id}/profile");
+  let direct_profile_url = format!("{api_base}/v1/profile");
 
-  let direct_profile = state.http.get(&direct_profile_url).send().await?;
-  if direct_profile.status().is_success() {
-    return direct_profile
+  // Prefer server-scoped metadata so session restore/dashboard refreshes cannot
+  // accidentally pull default profile metadata from /v1/profile.
+  let preferred = state.http.get(&legacy_server_url).send().await?;
+  if preferred.status().is_success() {
+    return preferred
       .json::<ProfileMetadataResponse>()
       .await
       .map(|mut profile| {
@@ -57,10 +59,23 @@ pub async fn fetch_profile_metadata(state: &AppState, server_id: &str) -> Launch
         }
         profile
       })
-      .map_err(|error| LauncherError::InvalidData(format!("invalid /v1/profile payload: {error}")));
+      .map_err(|error| {
+        LauncherError::InvalidData(format!(
+          "invalid /v1/servers/:serverId/profile payload: {error}"
+        ))
+      });
   }
 
-  let fallback = state.http.get(&legacy_server_url).send().await?;
+  if preferred.status() != reqwest::StatusCode::NOT_FOUND {
+    return Err(LauncherError::Network(
+      preferred
+        .text()
+        .await
+        .unwrap_or_else(|_| "Failed to fetch server profile metadata".to_string()),
+    ));
+  }
+
+  let fallback = state.http.get(&direct_profile_url).send().await?;
   if !fallback.status().is_success() {
     return Err(LauncherError::Network(
       fallback
@@ -79,7 +94,7 @@ pub async fn fetch_profile_metadata(state: &AppState, server_id: &str) -> Launch
       }
       profile
     })
-    .map_err(|error| LauncherError::InvalidData(format!("invalid /v1/servers/:serverId/profile payload: {error}")))
+    .map_err(|error| LauncherError::InvalidData(format!("invalid /v1/profile payload: {error}")))
 }
 
 pub async fn fetch_remote_lock(state: &AppState, server_id: &str) -> LauncherResult<ProfileLock> {
