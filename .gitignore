@@ -20,6 +20,8 @@ coverage/
 # Local runtime and launcher data
 instances/
 runtimes/
+**/.runtime-artifacts/
+infra/sample-data/artifacts/
 
 # Env
 .env

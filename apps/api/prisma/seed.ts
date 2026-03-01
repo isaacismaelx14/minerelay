@@ -57,6 +57,7 @@ async function main() {
       serverId,
       profileId,
       version: lock.version,
+      releaseVersion: '1.0.0',
       minecraftVersion: lock.minecraftVersion,
       loader: lock.loader,
       loaderVersion: lock.loaderVersion,
@@ -73,6 +74,7 @@ async function main() {
     },
     update: {
       profileId,
+      releaseVersion: '1.0.0',
       minecraftVersion: lock.minecraftVersion,
       loader: lock.loader,
       loaderVersion: lock.loaderVersion,
@@ -91,10 +93,16 @@ async function main() {
       id: 'global',
       supportedMinecraftVersions: [lock.minecraftVersion],
       supportedPlatforms: ['fabric'],
+      releaseMajor: 1,
+      releaseMinor: 0,
+      releasePatch: 0,
     },
     update: {
       supportedMinecraftVersions: [lock.minecraftVersion],
       supportedPlatforms: ['fabric'],
+      releaseMajor: 1,
+      releaseMinor: 0,
+      releasePatch: 0,
     },
   });
 }

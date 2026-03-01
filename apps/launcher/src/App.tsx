@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SyncPlan, UpdateSummary } from "@mvl/shared";
 
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
-const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MVL Syncer";
+const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MSS+ Client";
 const ONBOARDING_VERSION = 2;
 const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 
@@ -813,7 +813,7 @@ export default function App() {
       }
 
       const shouldClose = window.confirm(
-        "Close Minecraft Server Syncer?\n\nSelect OK to quit the app. Select Cancel to keep it running in the background.",
+        "Close MSS+ Client?\n\nSelect OK to quit the app. Select Cancel to keep it running in the background.",
       );
 
       if (shouldClose) {
@@ -2316,7 +2316,7 @@ export default function App() {
               />
             ) : null}
             <div>
-            <span className="eyebrow">Minecraft Java Server Client Center</span>
+            <span className="eyebrow">MSS+ Client Center</span>
             <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
             {sessionStatus.phase === "playing" ? (
               <p className="playing-status">

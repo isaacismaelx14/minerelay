@@ -505,16 +505,12 @@ pub async fn profile_catalog_snapshot(
   let lock_server_name = remote.branding.server_name.trim().to_string();
   let lock_server_address = remote.default_server.address.trim().to_string();
 
-  let server_name = if !lock_server_name.is_empty() {
-    lock_server_name
-  } else {
-    metadata_server_name.unwrap_or_else(|| "Managed Server".to_string())
-  };
-  let server_address = if !lock_server_address.is_empty() {
-    lock_server_address
-  } else {
-    metadata_server_address.unwrap_or_else(|| "--".to_string())
-  };
+  let server_name = metadata_server_name
+    .or_else(|| (!lock_server_name.is_empty()).then_some(lock_server_name))
+    .unwrap_or_else(|| "Managed Server".to_string());
+  let server_address = metadata_server_address
+    .or_else(|| (!lock_server_address.is_empty()).then_some(lock_server_address))
+    .unwrap_or_else(|| "--".to_string());
   let fancy_menu_enabled = metadata
     .as_ref()
     .map(|value| value.fancy_menu_enabled)

@@ -1,8 +1,8 @@
 [package]
 name = "mvl-syncer"
 version = "0.1.0"
-description = "Minecraft Server Syncer"
-authors = ["MVL"]
+description = "MSS+ Client"
+authors = ["MSS+ Client Team"]
 edition = "2021"
 
 [lib]

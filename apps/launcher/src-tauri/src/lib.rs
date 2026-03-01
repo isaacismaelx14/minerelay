@@ -94,7 +94,7 @@ pub fn run() {
       commands::game_running_probe,
     ])
     .build(tauri::generate_context!())
-    .expect("error while building Minecraft Server Syncer application");
+    .expect("error while building MSS+ Client application");
 
   app.run(|app_handle, event| {
     if let tauri::RunEvent::ExitRequested { api, .. } = event {
@@ -207,7 +207,7 @@ fn handle_quit_request(app: &tauri::AppHandle, app_state: Arc<state::AppState>) 
 
   let result = MessageDialog::new()
     .set_level(MessageLevel::Info)
-    .set_title("Quit Minecraft Server Syncer?")
+    .set_title("Quit MSS+ Client?")
     .set_description(
       "Select Yes to quit the app. Select No to keep it running in the background.",
     )

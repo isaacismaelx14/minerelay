@@ -7,15 +7,19 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   AdminLoginDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
+  SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
 import { renderAdminPage, renderAdminLoginPage } from './admin.page';
@@ -128,6 +132,12 @@ export class AdminController {
     return this.adminService.updateSettings(payload);
   }
 
+  @Patch('/v1/admin/draft')
+  @UseGuards(AdminSessionGuard)
+  saveDraft(@Body() payload: SaveDraftDto) {
+    return this.adminService.saveDraft(payload);
+  }
+
   @Get('/v1/admin/fabric/versions')
   @UseGuards(AdminSessionGuard)
   getFabricVersions(@Query('minecraftVersion') minecraftVersion = ''): Promise<{
@@ -195,5 +205,31 @@ export class AdminController {
         : request.protocol;
     const origin = `${protocol}://${host}`;
     return this.adminService.publishProfile(payload, origin);
+  }
+
+  @Post('/v1/admin/media/upload')
+  @UseGuards(AdminSessionGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadMedia(
+    @UploadedFile() file: {
+      originalname: string;
+      mimetype: string;
+      size: number;
+      buffer: Buffer;
+    },
+    @Req() request: Request,
+  ) {
+    const host = request.get('host') ?? 'localhost:3000';
+    const forwardedProto = request
+      .get('x-forwarded-proto')
+      ?.split(',')[0]
+      ?.trim()
+      ?.toLowerCase();
+    const protocol =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? forwardedProto
+        : request.protocol;
+    const origin = `${protocol}://${host}`;
+    return this.adminService.uploadMedia(file, origin);
   }
 }

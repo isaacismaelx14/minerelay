@@ -15,8 +15,12 @@ import {
   scrypt as scryptCb,
   timingSafeEqual,
 } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { basename, extname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import {
+  BrandingSchema,
   FancyMenuSettingsSchema,
   LockBundleItem,
   ProfileLock,
@@ -28,6 +32,7 @@ import {
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
+  SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
 
@@ -97,6 +102,14 @@ interface ResolvedModWithDeps {
 interface FabricLoaderRow {
   version: string;
   stable: boolean;
+}
+
+type BumpType = 'major' | 'minor' | 'patch';
+
+interface SemverParts {
+  major: number;
+  minor: number;
+  patch: number;
 }
 
 @Injectable()
@@ -224,6 +237,11 @@ export class AdminService implements OnModuleInit {
     const serverFancyMenu = this.extractFancyMenu(server.fancyMenuSettings);
     const profileFancyMenu = this.extractFancyMenu(latest.fancyMenuSettings);
     const lockFancyMenu = this.extractFancyMenu(lock.fancyMenu);
+    const lockBrandingResult = BrandingSchema.safeParse(lock.branding);
+    const lockBranding = lockBrandingResult.success
+      ? lockBrandingResult.data
+      : null;
+    const draft = this.extractDraft(settings.publishDraft);
 
     return {
       server: {
@@ -234,13 +252,22 @@ export class AdminService implements OnModuleInit {
       },
       latestProfile: {
         version: latest.version,
+        releaseVersion:
+          latest.releaseVersion ??
+          this.formatSemver({
+            major: settings.releaseMajor,
+            minor: settings.releaseMinor,
+            patch: settings.releasePatch,
+          }),
         minecraftVersion: latest.minecraftVersion,
         loader: latest.loader,
         loaderVersion: latest.loaderVersion,
         mods,
         fancyMenu: profileFancyMenu ?? serverFancyMenu ?? lockFancyMenu,
+        branding: lockBranding,
       },
       appSettings: settings,
+      draft,
     };
   }
 
@@ -295,6 +322,91 @@ export class AdminService implements OnModuleInit {
     return {
       supportedMinecraftVersions: setting.supportedMinecraftVersions,
       supportedPlatforms: setting.supportedPlatforms,
+      releaseVersion: this.formatSemver({
+        major: setting.releaseMajor,
+        minor: setting.releaseMinor,
+        patch: setting.releasePatch,
+      }),
+    };
+  }
+
+  async saveDraft(input: SaveDraftDto) {
+    const serverId = this.getServerId();
+    const serverName = input.serverName.trim();
+    const serverAddress = input.serverAddress.trim();
+    const profileId = input.profileId?.trim();
+
+    const fancyMenu = FancyMenuSettingsSchema.parse({
+      enabled: input.fancyMenu?.enabled ?? true,
+      playButtonLabel: input.fancyMenu?.playButtonLabel ?? 'Play',
+      hideSingleplayer: input.fancyMenu?.hideSingleplayer ?? true,
+      hideMultiplayer: input.fancyMenu?.hideMultiplayer ?? true,
+      hideRealms: input.fancyMenu?.hideRealms ?? true,
+      titleText: input.fancyMenu?.titleText?.trim() || undefined,
+      subtitleText: input.fancyMenu?.subtitleText?.trim() || undefined,
+      logoUrl: input.fancyMenu?.logoUrl?.trim() || undefined,
+      configUrl: input.fancyMenu?.configUrl?.trim() || undefined,
+      configSha256: input.fancyMenu?.configSha256?.trim() || undefined,
+      assetsUrl: input.fancyMenu?.assetsUrl?.trim() || undefined,
+      assetsSha256: input.fancyMenu?.assetsSha256?.trim() || undefined,
+    });
+
+    const branding = BrandingSchema.parse({
+      serverName,
+      logoUrl: input.branding?.logoUrl?.trim() || undefined,
+      backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
+      newsUrl: input.branding?.newsUrl?.trim() || undefined,
+    });
+
+    const [server, setting] = await this.prisma.$transaction([
+      this.prisma.server.update({
+        where: { id: serverId },
+        data: {
+          name: serverName,
+          address: serverAddress,
+          profileId: profileId || undefined,
+          fancyMenuEnabled: fancyMenu.enabled,
+          fancyMenuSettings: fancyMenu as unknown as object,
+        },
+      }),
+      this.prisma.appSetting.upsert({
+        where: { id: APP_SETTING_ID },
+        create: {
+          id: APP_SETTING_ID,
+          supportedMinecraftVersions: [],
+          supportedPlatforms: ['fabric'],
+          releaseMajor: 1,
+          releaseMinor: 0,
+          releasePatch: 0,
+          publishDraft: {
+            profileId: profileId || null,
+            fancyMenu,
+            branding,
+          } as unknown as object,
+        },
+        update: {
+          publishDraft: {
+            profileId: profileId || null,
+            fancyMenu,
+            branding,
+          } as unknown as object,
+        },
+      }),
+    ]);
+
+    return {
+      server: {
+        id: server.id,
+        name: server.name,
+        address: server.address,
+        profileId: server.profileId,
+      },
+      releaseVersion: this.formatSemver({
+        major: setting.releaseMajor,
+        minor: setting.releaseMinor,
+        patch: setting.releasePatch,
+      }),
+      draft: this.extractDraft(setting.publishDraft),
     };
   }
 
@@ -503,6 +615,11 @@ export class AdminService implements OnModuleInit {
         loaderVersion: input.loaderVersion,
         mods: input.mods,
         fancyMenu,
+        branding: {
+          logoUrl: input.branding?.logoUrl?.trim() || undefined,
+          backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
+          newsUrl: input.branding?.newsUrl?.trim() || undefined,
+        },
         previousLockJson: latest.lockJson,
       });
 
@@ -511,6 +628,32 @@ export class AdminService implements OnModuleInit {
       const allowedVersions = Array.from(
         new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
       );
+      const [appSettings] = await Promise.all([
+        tx.appSetting.upsert({
+          where: { id: APP_SETTING_ID },
+          create: {
+            id: APP_SETTING_ID,
+            supportedMinecraftVersions: allowedVersions,
+            supportedPlatforms: ['fabric'],
+            releaseMajor: 1,
+            releaseMinor: 0,
+            releasePatch: 0,
+          },
+          update: {},
+        }),
+      ]);
+      const currentSemver = {
+        major: appSettings.releaseMajor,
+        minor: appSettings.releaseMinor,
+        patch: appSettings.releasePatch,
+      };
+      const bumpType = this.classifyReleaseBump({
+        latest,
+        input,
+        summary,
+      });
+      const nextSemver = this.bumpSemver(currentSemver, bumpType);
+      const releaseVersion = this.formatSemver(nextSemver);
 
       await tx.server.update({
         where: { id: serverId },
@@ -529,6 +672,7 @@ export class AdminService implements OnModuleInit {
           serverId,
           profileId,
           version: nextVersion,
+          releaseVersion,
           minecraftVersion: generated.minecraftVersion,
           loader: generated.loader,
           loaderVersion: generated.loaderVersion,
@@ -545,12 +689,73 @@ export class AdminService implements OnModuleInit {
         },
       });
 
+      await tx.appSetting.update({
+        where: { id: APP_SETTING_ID },
+        data: {
+          releaseMajor: nextSemver.major,
+          releaseMinor: nextSemver.minor,
+          releasePatch: nextSemver.patch,
+          publishDraft: Prisma.JsonNull,
+          supportedMinecraftVersions: allowedVersions,
+        },
+      });
+
       return {
         version: nextVersion,
+        releaseVersion,
+        bumpType,
         lockUrl,
         summary,
       };
     });
+  }
+
+  async uploadMedia(
+    file: {
+      originalname: string;
+      mimetype: string;
+      size: number;
+      buffer: Buffer;
+    },
+    requestOrigin: string,
+  ) {
+    if (!file || !file.buffer || file.size <= 0) {
+      throw new BadGatewayException('No file uploaded');
+    }
+
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadGatewayException('Only image uploads are supported');
+    }
+
+    const allowedExt = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+    const fromName = extname(file.originalname || '').toLowerCase();
+    const ext = allowedExt.has(fromName)
+      ? fromName
+      : file.mimetype === 'image/png'
+        ? '.png'
+        : file.mimetype === 'image/webp'
+          ? '.webp'
+          : '.jpg';
+
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadGatewayException('Image must be 5MB or smaller');
+    }
+
+    const root = this.getArtifactsRoot();
+    await mkdir(root, { recursive: true });
+
+    const stamp = Date.now().toString(36);
+    const token = randomBytes(6).toString('hex');
+    const fileName = `admin-image-${stamp}-${token}${ext}`;
+    const target = resolve(root, basename(fileName));
+    await writeFile(target, file.buffer);
+
+    return {
+      fileName,
+      url: `${requestOrigin}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      size: file.size,
+      contentType: file.mimetype,
+    };
   }
 
   private async ensureAdminCredential(): Promise<string> {
@@ -600,6 +805,9 @@ export class AdminService implements OnModuleInit {
         id: APP_SETTING_ID,
         supportedMinecraftVersions: server?.allowedMinecraftVersions ?? [],
         supportedPlatforms: ['fabric'],
+        releaseMajor: 1,
+        releaseMinor: 0,
+        releasePatch: 0,
       },
     });
   }
@@ -611,6 +819,9 @@ export class AdminService implements OnModuleInit {
         id: APP_SETTING_ID,
         supportedMinecraftVersions: [],
         supportedPlatforms: ['fabric'],
+        releaseMajor: 1,
+        releaseMinor: 0,
+        releasePatch: 0,
       },
       update: {},
     });
@@ -618,6 +829,15 @@ export class AdminService implements OnModuleInit {
     return {
       supportedMinecraftVersions: setting.supportedMinecraftVersions,
       supportedPlatforms: setting.supportedPlatforms,
+      releaseMajor: setting.releaseMajor,
+      releaseMinor: setting.releaseMinor,
+      releasePatch: setting.releasePatch,
+      releaseVersion: this.formatSemver({
+        major: setting.releaseMajor,
+        minor: setting.releaseMinor,
+        patch: setting.releasePatch,
+      }),
+      publishDraft: setting.publishDraft,
     };
   }
 
@@ -1156,6 +1376,11 @@ export class AdminService implements OnModuleInit {
       assetsUrl?: string;
       assetsSha256?: string;
     };
+    branding?: {
+      logoUrl?: string;
+      backgroundUrl?: string;
+      newsUrl?: string;
+    };
     previousLockJson?: unknown;
   }): Promise<ProfileLock> {
     const cleanServerName = input.serverName.trim();
@@ -1251,13 +1476,20 @@ export class AdminService implements OnModuleInit {
         minMemoryMb: 4096,
         maxMemoryMb: 8192,
       },
-      branding: previousBranding ?? {
+      branding: {
         serverName: cleanServerName,
         logoUrl:
+          input.branding?.logoUrl?.trim() ||
+          previousBranding?.logoUrl ||
           'https://images.unsplash.com/photo-1579546929662-711aa81148cf?auto=format&fit=crop&w=320&q=80',
         backgroundUrl:
+          input.branding?.backgroundUrl?.trim() ||
+          previousBranding?.backgroundUrl ||
           'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1400&q=80',
-        newsUrl: 'https://example.com/news',
+        newsUrl:
+          input.branding?.newsUrl?.trim() ||
+          previousBranding?.newsUrl ||
+          'https://example.com/news',
       },
       fancyMenu: fancyMenuSettings,
     });
@@ -1266,6 +1498,94 @@ export class AdminService implements OnModuleInit {
   private extractFancyMenu(value: unknown) {
     const parsed = FancyMenuSettingsSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
+  }
+
+  private extractDraft(value: unknown) {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const draft = value as {
+      profileId?: unknown;
+      fancyMenu?: unknown;
+      branding?: unknown;
+    };
+
+    const fancyMenu = this.extractFancyMenu(draft.fancyMenu);
+    const brandingParsed = BrandingSchema.safeParse(draft.branding);
+    const branding = brandingParsed.success ? brandingParsed.data : null;
+
+    return {
+      profileId:
+        typeof draft.profileId === 'string' && draft.profileId.trim().length > 0
+          ? draft.profileId.trim()
+          : null,
+      fancyMenu,
+      branding,
+    };
+  }
+
+  private classifyReleaseBump(input: {
+    latest: {
+      minecraftVersion: string;
+      loaderVersion: string;
+      loader: string;
+    };
+    input: {
+      minecraftVersion: string;
+      loaderVersion: string;
+    };
+    summary: {
+      add: number;
+      remove: number;
+      update: number;
+    };
+  }): BumpType {
+    const minecraftChanged =
+      input.latest.minecraftVersion.trim() !== input.input.minecraftVersion.trim();
+    const loaderVersionChanged =
+      input.latest.loaderVersion.trim() !== input.input.loaderVersion.trim();
+    const loaderChanged =
+      input.latest.loader.trim().toLowerCase() !== 'fabric';
+
+    if (minecraftChanged || loaderVersionChanged || loaderChanged) {
+      return 'major';
+    }
+
+    if (input.summary.add > 0 || input.summary.remove > 0 || input.summary.update > 0) {
+      return 'minor';
+    }
+
+    return 'patch';
+  }
+
+  private bumpSemver(current: SemverParts, bumpType: BumpType): SemverParts {
+    if (bumpType === 'major') {
+      return { major: current.major + 1, minor: 0, patch: 0 };
+    }
+
+    if (bumpType === 'minor') {
+      return { major: current.major, minor: current.minor + 1, patch: 0 };
+    }
+
+    return { major: current.major, minor: current.minor, patch: current.patch + 1 };
+  }
+
+  private formatSemver(parts: SemverParts): string {
+    return `${parts.major}.${parts.minor}.${parts.patch}`;
+  }
+
+  private getArtifactsRoot() {
+    const configured = this.config.get<string>('ARTIFACTS_DIR')?.trim();
+    if (configured) {
+      return resolve(configured);
+    }
+
+    return resolve(
+      homedir(),
+      '.mss-client',
+      'artifacts',
+    );
   }
 
   private getServerId() {

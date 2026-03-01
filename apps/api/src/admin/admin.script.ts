@@ -74,6 +74,27 @@ export function renderAdminScript(): string {
       .replaceAll("'", '&#39;');
   }
 
+  function parseSemver(value) {
+    var raw = String(value || '').trim();
+    var match = raw.match(/^(\\d+)\\.(\\d+)\\.(\\d+)$/);
+    if (!match) return { major: 1, minor: 0, patch: 0 };
+    return {
+      major: Number(match[1]) || 1,
+      minor: Number(match[2]) || 0,
+      patch: Number(match[3]) || 0
+    };
+  }
+
+  function formatSemver(semver) {
+    return semver.major + '.' + semver.minor + '.' + semver.patch;
+  }
+
+  function bumpSemver(current, bumpType) {
+    if (bumpType === 'major') return { major: current.major + 1, minor: 0, patch: 0 };
+    if (bumpType === 'minor') return { major: current.major, minor: current.minor + 1, patch: 0 };
+    return { major: current.major, minor: current.minor, patch: current.patch + 1 };
+  }
+
   function setStatus(id, message, cls) {
     var el = byId(id);
     if (!el) return;
@@ -83,10 +104,7 @@ export function renderAdminScript(): string {
 
   function readError(response, fallback) {
     return response.text()
-      .then(function (text) {
-        if (!text) return fallback;
-        return text;
-      })
+      .then(function (text) { return text || fallback; })
       .catch(function () { return fallback; });
   }
 
@@ -95,9 +113,7 @@ export function renderAdminScript(): string {
     config.credentials = 'include';
 
     return fetch(url, config).then(function (response) {
-      if (response.status !== 401 || retried) {
-        return response;
-      }
+      if (response.status !== 401 || retried) return response;
 
       return fetch('/v1/admin/auth/refresh', {
         method: 'POST',
@@ -107,35 +123,67 @@ export function renderAdminScript(): string {
           window.location.href = '/admin/login';
           throw new Error('Session expired');
         }
-
         return authFetch(url, options, true);
       });
     });
   }
 
+  function sameMods(left, right) {
+    var a = Array.isArray(left) ? left.slice() : [];
+    var b = Array.isArray(right) ? right.slice() : [];
+    if (a.length !== b.length) return false;
+
+    var normalize = function (entry) {
+      return [
+        entry.projectId || '',
+        entry.versionId || '',
+        entry.sha256 || '',
+        entry.url || ''
+      ].join('|');
+    };
+
+    a.sort(function (x, y) { return normalize(x).localeCompare(normalize(y)); });
+    b.sort(function (x, y) { return normalize(x).localeCompare(normalize(y)); });
+    return a.every(function (entry, index) { return normalize(entry) === normalize(b[index]); });
+  }
+
+  function predictBumpType() {
+    if (!state.bootstrap || !state.bootstrap.latestProfile) return 'patch';
+    var latest = state.bootstrap.latestProfile;
+    var mc = (byId('minecraftVersion').value || '').trim();
+    var loader = (byId('loaderVersion').value || '').trim();
+
+    if ((latest.minecraftVersion || '').trim() !== mc || (latest.loaderVersion || '').trim() !== loader) {
+      return 'major';
+    }
+
+    if (!sameMods(state.selectedMods, latest.mods || [])) {
+      return 'minor';
+    }
+
+    return 'patch';
+  }
+
   function updateRail() {
     var mc = (byId('minecraftVersion').value || '').trim() || '-';
     var loader = (byId('loaderVersion').value || '').trim() || '-';
-    var currentVersion = Number((byId('currentVersion').value || '0').trim()) || 0;
+    var currentRelease = (byId('currentReleaseVersion').value || '1.0.0').trim();
+    var bumpType = predictBumpType();
+    var nextRelease = formatSemver(bumpSemver(parseSemver(currentRelease), bumpType));
+
     byId('railMinecraft').textContent = 'MC: ' + mc;
     byId('railFabric').textContent = 'Fabric: ' + loader;
-    byId('railVersion').textContent = 'Next profile: ' + (currentVersion + 1);
+    byId('railVersion').textContent = 'Next release: ' + nextRelease + ' (' + bumpType + ')';
   }
 
   function fillLoaderOptions(loaders, latestStable) {
     var select = byId('loaderVersion');
     var current = (select.value || '').trim();
-    var options = [];
-
-    if (Array.isArray(loaders)) {
-      options = loaders;
-    }
+    var options = Array.isArray(loaders) ? loaders : [];
 
     select.innerHTML = options.map(function (entry) {
       var suffix = entry.stable ? ' (stable)' : '';
-      if (latestStable && entry.version === latestStable) {
-        suffix = ' (latest stable)';
-      }
+      if (latestStable && entry.version === latestStable) suffix = ' (latest stable)';
       return '<option value="' + escapeHtml(entry.version) + '">' + escapeHtml(entry.version + suffix) + '</option>';
     }).join('');
 
@@ -147,10 +195,7 @@ export function renderAdminScript(): string {
       select.value = current;
     }
 
-    if (!select.value && latestStable) {
-      select.value = latestStable;
-    }
-
+    if (!select.value && latestStable) select.value = latestStable;
     updateRail();
   }
 
@@ -162,13 +207,10 @@ export function renderAdminScript(): string {
     }
 
     setStatus('settingsStatus', 'Loading Fabric versions...');
-
     return authFetch('/v1/admin/fabric/versions?minecraftVersion=' + encodeURIComponent(minecraftVersion))
       .then(function (response) {
         if (response.ok) return response.json();
-        return readError(response, 'Failed loading Fabric versions.').then(function (text) {
-          throw new Error(text);
-        });
+        return readError(response, 'Failed loading Fabric versions.').then(function (text) { throw new Error(text); });
       })
       .then(function (payload) {
         fillLoaderOptions(payload.loaders || [], payload.latestStable || null);
@@ -183,6 +225,7 @@ export function renderAdminScript(): string {
     var el = byId('selectedMods');
     if (!state.selectedMods.length) {
       el.innerHTML = '<p class="meta">No mods selected.</p>';
+      updateRail();
       return;
     }
 
@@ -206,6 +249,8 @@ export function renderAdminScript(): string {
         setStatus('modsStatus', 'Mod removed.', 'ok');
       });
     });
+
+    updateRail();
   }
 
   function installMod(projectId) {
@@ -228,19 +273,15 @@ export function renderAdminScript(): string {
     })
       .then(function (response) {
         if (response.ok) return response.json();
-        return readError(response, 'Install failed').then(function (text) {
-          throw new Error(text);
-        });
+        return readError(response, 'Install failed').then(function (text) { throw new Error(text); });
       })
       .then(function (payload) {
         var mods = Array.isArray(payload.mods) ? payload.mods : [];
-
         mods.forEach(function (mod) {
           var idx = state.selectedMods.findIndex(function (entry) { return entry.projectId === mod.projectId; });
           if (idx >= 0) state.selectedMods[idx] = mod;
           else state.selectedMods.push(mod);
         });
-
         renderSelectedMods();
         setStatus('modsStatus', 'Installed ' + mods.length + ' mod(s).', 'ok');
       })
@@ -258,10 +299,7 @@ export function renderAdminScript(): string {
 
     el.innerHTML = state.searchResults.map(function (result) {
       var dep = state.dependencyMap[result.projectId];
-      var depLabel = dep && dep.requiresDependencies
-        ? '<span class="flag">Requires dependencies</span>'
-        : '';
-
+      var depLabel = dep && dep.requiresDependencies ? '<span class="flag">Requires dependencies</span>' : '';
       return ''
         + '<div class="item">'
         + '  <div class="item-head">'
@@ -269,10 +307,7 @@ export function renderAdminScript(): string {
         + '    <button class="btn btn-ghost" data-install="' + escapeHtml(result.projectId) + '">Install</button>'
         + '  </div>'
         + '  <div class="meta">' + escapeHtml(result.description || 'No description') + '</div>'
-        + '  <div class="row">'
-        + '    <span class="meta">Project: ' + escapeHtml(result.projectId) + '</span>'
-        +      depLabel
-        + '  </div>'
+        + '  <div class="row"><span class="meta">Project: ' + escapeHtml(result.projectId) + '</span>' + depLabel + '</div>'
         + '</div>';
     }).join('');
 
@@ -286,47 +321,31 @@ export function renderAdminScript(): string {
 
   function analyzeDependencies(results, minecraftVersion) {
     return Promise.all(results.map(function (result) {
-      var url = '/v1/admin/mods/analyze?projectId='
-        + encodeURIComponent(result.projectId)
-        + '&minecraftVersion='
-        + encodeURIComponent(minecraftVersion);
-
+      var url = '/v1/admin/mods/analyze?projectId=' + encodeURIComponent(result.projectId) + '&minecraftVersion=' + encodeURIComponent(minecraftVersion);
       return authFetch(url)
-        .then(function (response) {
-          if (!response.ok) return null;
-          return response.json();
-        })
-        .then(function (analysis) {
-          if (analysis) state.dependencyMap[result.projectId] = analysis;
-        })
-        .catch(function () {
-          return null;
-        });
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (analysis) { if (analysis) state.dependencyMap[result.projectId] = analysis; })
+        .catch(function () { return null; });
     }));
   }
 
   function searchMods() {
     var query = (byId('searchQuery').value || '').trim();
     var minecraftVersion = (byId('minecraftVersion').value || '').trim();
-
     if (!query) {
       setStatus('modsStatus', 'Type a mod name first.', 'error');
       return;
     }
-
     if (!minecraftVersion) {
       setStatus('modsStatus', 'Set Minecraft version first.', 'error');
       return;
     }
 
     setStatus('modsStatus', 'Searching mods...');
-
     authFetch('/v1/admin/mods/search?query=' + encodeURIComponent(query) + '&minecraftVersion=' + encodeURIComponent(minecraftVersion))
       .then(function (response) {
         if (response.ok) return response.json();
-        return readError(response, 'Search failed').then(function (text) {
-          throw new Error(text);
-        });
+        return readError(response, 'Search failed').then(function (text) { throw new Error(text); });
       })
       .then(function (payload) {
         state.searchResults = Array.isArray(payload) ? payload : [];
@@ -343,12 +362,34 @@ export function renderAdminScript(): string {
       });
   }
 
+  function collectFancyMenuPayload() {
+    return {
+      enabled: byId('fancyMenuEnabled').value === 'true',
+      playButtonLabel: (byId('playButtonLabel').value || '').trim() || 'Play',
+      hideSingleplayer: byId('hideSingleplayer').value === 'true',
+      hideMultiplayer: byId('hideMultiplayer').value === 'true',
+      hideRealms: byId('hideRealms').value === 'true',
+      titleText: (byId('titleText').value || '').trim() || undefined,
+      subtitleText: (byId('subtitleText').value || '').trim() || undefined,
+      logoUrl: (byId('fancyMenuLogoUrl').value || '').trim() || undefined,
+      configUrl: (byId('fancyMenuConfigUrl').value || '').trim() || undefined,
+      configSha256: (byId('fancyMenuConfigSha256').value || '').trim() || undefined,
+      assetsUrl: (byId('fancyMenuAssetsUrl').value || '').trim() || undefined,
+      assetsSha256: (byId('fancyMenuAssetsSha256').value || '').trim() || undefined
+    };
+  }
+
+  function collectBrandingPayload() {
+    return {
+      logoUrl: (byId('brandingLogoUrl').value || '').trim() || undefined,
+      backgroundUrl: (byId('brandingBackgroundUrl').value || '').trim() || undefined,
+      newsUrl: (byId('brandingNewsUrl').value || '').trim() || undefined
+    };
+  }
+
   function saveSettings() {
     var versionsRaw = (byId('supportedMinecraftVersions').value || '').trim();
-    var versions = versionsRaw
-      .split(',')
-      .map(function (value) { return value.trim(); })
-      .filter(Boolean);
+    var versions = versionsRaw.split(',').map(function (value) { return value.trim(); }).filter(Boolean);
 
     authFetch('/v1/admin/settings', {
       method: 'PATCH',
@@ -360,9 +401,7 @@ export function renderAdminScript(): string {
     })
       .then(function (response) {
         if (response.ok) return response.json();
-        return readError(response, 'Failed to save settings').then(function (text) {
-          throw new Error(text);
-        });
+        return readError(response, 'Failed to save settings').then(function (text) { throw new Error(text); });
       })
       .then(function (payload) {
         byId('supportedMinecraftVersions').value = (payload.supportedMinecraftVersions || []).join(', ');
@@ -370,6 +409,42 @@ export function renderAdminScript(): string {
       })
       .catch(function (error) {
         setStatus('settingsStatus', error.message || 'Failed to save settings.', 'error');
+      });
+  }
+
+  function saveDraft() {
+    setStatus('draftStatus', 'Saving draft...');
+    var payload = {
+      profileId: (byId('profileId').value || '').trim() || undefined,
+      serverName: (byId('serverName').value || '').trim(),
+      serverAddress: (byId('serverAddress').value || '').trim(),
+      fancyMenu: collectFancyMenuPayload(),
+      branding: collectBrandingPayload()
+    };
+
+    authFetch('/v1/admin/draft', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (response) {
+        if (response.ok) return response.json();
+        return readError(response, 'Failed to save draft').then(function (text) { throw new Error(text); });
+      })
+      .then(function (saved) {
+        if (saved && saved.server) {
+          byId('serverName').value = saved.server.name || byId('serverName').value;
+          byId('serverAddress').value = saved.server.address || byId('serverAddress').value;
+          byId('profileId').value = saved.server.profileId || byId('profileId').value;
+        }
+        if (saved && saved.releaseVersion) {
+          byId('currentReleaseVersion').value = saved.releaseVersion;
+        }
+        setStatus('draftStatus', 'Draft saved.', 'ok');
+        updateRail();
+      })
+      .catch(function (error) {
+        setStatus('draftStatus', error.message || 'Failed to save draft.', 'error');
       });
   }
 
@@ -387,8 +462,7 @@ export function renderAdminScript(): string {
       return;
     }
 
-    setStatus('publishStatus', 'Publishing next version...');
-
+    setStatus('publishStatus', 'Publishing next release...');
     var payload = {
       profileId: (byId('profileId').value || '').trim(),
       serverName: (byId('serverName').value || '').trim(),
@@ -396,10 +470,8 @@ export function renderAdminScript(): string {
       minecraftVersion: minecraftVersion,
       loaderVersion: loaderVersion,
       mods: state.selectedMods,
-      fancyMenu: {
-        enabled: byId('fancyMenuEnabled').value === 'true',
-        playButtonLabel: (byId('playButtonLabel').value || '').trim() || 'Play'
-      }
+      fancyMenu: collectFancyMenuPayload(),
+      branding: collectBrandingPayload()
     };
 
     authFetch('/v1/admin/profile/publish', {
@@ -409,22 +481,86 @@ export function renderAdminScript(): string {
     })
       .then(function (response) {
         if (response.ok) return response.json();
-        return readError(response, 'Publish failed').then(function (text) {
-          throw new Error(text);
-        });
+        return readError(response, 'Publish failed').then(function (text) { throw new Error(text); });
       })
       .then(function (published) {
         byId('currentVersion').value = String(published.version);
+        byId('currentReleaseVersion').value = published.releaseVersion || byId('currentReleaseVersion').value;
+        if (state.bootstrap && state.bootstrap.latestProfile) {
+          state.bootstrap.latestProfile.mods = state.selectedMods.slice();
+          state.bootstrap.latestProfile.minecraftVersion = minecraftVersion;
+          state.bootstrap.latestProfile.loaderVersion = loaderVersion;
+        }
         updateRail();
         setStatus(
           'publishStatus',
-          'Published v' + published.version + ' (+' + published.summary.add + ' / ~' + published.summary.update + ' / -' + published.summary.remove + ').',
+          'Published ' + (published.releaseVersion || ('v' + published.version)) + ' (' + (published.bumpType || 'patch') + ', +' + published.summary.add + ' / ~' + published.summary.update + ' / -' + published.summary.remove + ').',
           'ok'
         );
       })
       .catch(function (error) {
         setStatus('publishStatus', error.message || 'Publish failed.', 'error');
       });
+  }
+
+  function uploadImage(file, targetInputId, statusId) {
+    if (!file) return Promise.resolve();
+    var form = new FormData();
+    form.append('file', file);
+    setStatus(statusId, 'Uploading image...');
+
+    return authFetch('/v1/admin/media/upload', { method: 'POST', body: form })
+      .then(function (response) {
+        if (response.ok) return response.json();
+        return readError(response, 'Upload failed').then(function (text) { throw new Error(text); });
+      })
+      .then(function (uploaded) {
+        var target = byId(targetInputId);
+        if (target) target.value = uploaded.url || '';
+        setStatus(statusId, 'Image uploaded.', 'ok');
+      })
+      .catch(function (error) {
+        setStatus(statusId, error.message || 'Upload failed.', 'error');
+      });
+  }
+
+  function attachUpload(buttonId, inputId, targetId, statusId) {
+    var button = byId(buttonId);
+    var input = byId(inputId);
+    if (!button || !input) return;
+
+    button.addEventListener('click', function () {
+      input.value = '';
+      input.click();
+    });
+
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      uploadImage(file, targetId, statusId);
+    });
+  }
+
+  function applyFancyMenu(fancyMenu) {
+    var fm = fancyMenu || {};
+    byId('fancyMenuEnabled').value = fm.enabled === false ? 'false' : 'true';
+    byId('playButtonLabel').value = fm.playButtonLabel || 'Play';
+    byId('titleText').value = fm.titleText || '';
+    byId('subtitleText').value = fm.subtitleText || '';
+    byId('fancyMenuLogoUrl').value = fm.logoUrl || '';
+    byId('hideSingleplayer').value = fm.hideSingleplayer === false ? 'false' : 'true';
+    byId('hideMultiplayer').value = fm.hideMultiplayer === false ? 'false' : 'true';
+    byId('hideRealms').value = fm.hideRealms === false ? 'false' : 'true';
+    byId('fancyMenuConfigUrl').value = fm.configUrl || '';
+    byId('fancyMenuConfigSha256').value = fm.configSha256 || '';
+    byId('fancyMenuAssetsUrl').value = fm.assetsUrl || '';
+    byId('fancyMenuAssetsSha256').value = fm.assetsSha256 || '';
+  }
+
+  function applyBranding(branding) {
+    var b = branding || {};
+    byId('brandingLogoUrl').value = b.logoUrl || '';
+    byId('brandingBackgroundUrl').value = b.backgroundUrl || '';
+    byId('brandingNewsUrl').value = b.newsUrl || '';
   }
 
   function populateBootstrap(payload) {
@@ -434,14 +570,21 @@ export function renderAdminScript(): string {
     byId('serverAddress').value = payload.server.address || '';
     byId('profileId').value = payload.server.profileId || '';
     byId('currentVersion').value = String(payload.latestProfile.version || 1);
+    byId('currentReleaseVersion').value =
+      payload.latestProfile.releaseVersion ||
+      (payload.appSettings && payload.appSettings.releaseVersion) ||
+      '1.0.0';
     byId('minecraftVersion').value = payload.latestProfile.minecraftVersion || '';
 
     var settingsVersions = (payload.appSettings && payload.appSettings.supportedMinecraftVersions) || [];
     byId('supportedMinecraftVersions').value = settingsVersions.join(', ');
 
-    var fancyMenu = payload.latestProfile.fancyMenu || {};
-    byId('fancyMenuEnabled').value = fancyMenu.enabled === false ? 'false' : 'true';
-    byId('playButtonLabel').value = fancyMenu.playButtonLabel || 'Play';
+    var draft = payload.draft || null;
+    var fancyMenu = (draft && draft.fancyMenu) || payload.latestProfile.fancyMenu || {};
+    var branding = (draft && draft.branding) || payload.latestProfile.branding || {};
+
+    applyFancyMenu(fancyMenu);
+    applyBranding(branding);
 
     state.selectedMods = Array.isArray(payload.latestProfile.mods) ? payload.latestProfile.mods : [];
     renderSelectedMods();
@@ -454,15 +597,11 @@ export function renderAdminScript(): string {
     return authFetch('/v1/admin/bootstrap')
       .then(function (response) {
         if (response.ok) return response.json();
-
         if (response.status === 401) {
           window.location.href = '/admin/login';
           throw new Error('Unauthorized');
         }
-
-        return readError(response, 'Failed to load bootstrap').then(function (text) {
-          throw new Error(text);
-        });
+        return readError(response, 'Failed to load bootstrap').then(function (text) { throw new Error(text); });
       })
       .then(function (payload) {
         populateBootstrap(payload);
@@ -476,10 +615,9 @@ export function renderAdminScript(): string {
   }
 
   function logout() {
-    authFetch('/v1/admin/auth/logout', { method: 'POST' })
-      .finally(function () {
-        window.location.href = '/admin/login';
-      });
+    authFetch('/v1/admin/auth/logout', { method: 'POST' }).finally(function () {
+      window.location.href = '/admin/login';
+    });
   }
 
   byId('logoutBtn').addEventListener('click', logout);
@@ -490,18 +628,18 @@ export function renderAdminScript(): string {
       searchMods();
     }
   });
-
   byId('saveSettingsBtn').addEventListener('click', saveSettings);
+  byId('saveDraftBtn').addEventListener('click', saveDraft);
   byId('refreshLoadersBtn').addEventListener('click', loadFabricVersions);
   byId('publishBtn').addEventListener('click', publishProfile);
 
-  byId('minecraftVersion').addEventListener('change', function () {
-    updateRail();
-  });
+  byId('minecraftVersion').addEventListener('change', updateRail);
+  byId('loaderVersion').addEventListener('change', updateRail);
+  byId('fancyMenuEnabled').addEventListener('change', updateRail);
 
-  byId('loaderVersion').addEventListener('change', function () {
-    updateRail();
-  });
+  attachUpload('uploadBrandLogoBtn', 'brandLogoFile', 'brandingLogoUrl', 'draftStatus');
+  attachUpload('uploadBrandBackgroundBtn', 'brandBackgroundFile', 'brandingBackgroundUrl', 'draftStatus');
+  attachUpload('uploadFancyLogoBtn', 'fancyLogoFile', 'fancyMenuLogoUrl', 'publishStatus');
 
   loadBootstrap();
 })();`;

@@ -96,6 +96,20 @@ export class FancyMenuDto {
   assetsSha256?: string;
 }
 
+export class BrandingDto {
+  @IsString()
+  @IsOptional()
+  logoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  backgroundUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  newsUrl?: string;
+}
+
 export class GenerateLockfileDto {
   @IsString()
   @IsOptional()
@@ -234,4 +248,31 @@ export class PublishProfileDto {
   @Type(() => FancyMenuDto)
   @IsOptional()
   fancyMenu?: FancyMenuDto;
+
+  @ValidateNested()
+  @Type(() => BrandingDto)
+  @IsOptional()
+  branding?: BrandingDto;
+}
+
+export class SaveDraftDto {
+  @IsString()
+  serverName!: string;
+
+  @IsString()
+  serverAddress!: string;
+
+  @IsString()
+  @IsOptional()
+  profileId?: string;
+
+  @ValidateNested()
+  @Type(() => FancyMenuDto)
+  @IsOptional()
+  fancyMenu?: FancyMenuDto;
+
+  @ValidateNested()
+  @Type(() => BrandingDto)
+  @IsOptional()
+  branding?: BrandingDto;
 }

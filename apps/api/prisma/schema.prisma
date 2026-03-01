@@ -25,6 +25,7 @@ model ProfileVersion {
   serverId             String
   profileId            String
   version              Int
+  releaseVersion       String   @default("1.0.0")
   minecraftVersion     String
   loader               String
   loaderVersion        String
@@ -76,6 +77,10 @@ model AppSetting {
   id                         String   @id
   supportedMinecraftVersions String[]
   supportedPlatforms         String[]
+  releaseMajor               Int      @default(1)
+  releaseMinor               Int      @default(0)
+  releasePatch               Int      @default(0)
+  publishDraft               Json?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
