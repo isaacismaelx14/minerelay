@@ -192,7 +192,7 @@ Required runtime env:
 Required GitHub secrets for signed release builds:
 
 - `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (if your key has a password)
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (set this in CI; generate a password-protected key)
 - `LAUNCHER_UPDATE_PUBKEY` (public key string from `.pub`; injected at build time so installed app can verify updates)
 
 Tag-based release flow:

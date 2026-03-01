@@ -96,6 +96,11 @@ jobs:
             echo "Missing TAURI_SIGNING_PRIVATE_KEY secret. Beta updater releases require signing." >&2
             exit 1
           fi
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret." >&2
+            echo "Passwordless updater keys are not reliable in CI; generate a password-protected key and set both secrets." >&2
+            exit 1
+          fi
           if [ -z "$LAUNCHER_UPDATE_PUBKEY" ]; then
             echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates." >&2
             exit 1
