@@ -37,6 +37,27 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Compute release version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "$VERSION" ]; then
+            echo "Failed to parse version from tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          if [[ "$VERSION" == *-* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp launcher version for this release
+        shell: bash
+        run: node apps/launcher/scripts/set-release-version.mjs "${{ steps.version.outputs.version }}"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
@@ -77,7 +98,7 @@ jobs:
           releaseName: Launcher ${{ github.ref_name }}
           releaseBody: Automated launcher release for ${{ github.ref_name }}.
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ steps.version.outputs.is_prerelease }}
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}

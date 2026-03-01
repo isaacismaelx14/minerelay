@@ -7,12 +7,29 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import { createCipheriv, createDecipheriv, createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  scrypt as scryptCb,
+  timingSafeEqual,
+} from 'node:crypto';
 import { promisify } from 'node:util';
-import { FancyMenuSettingsSchema, LockBundleItem, ProfileLock, ProfileLockSchema } from '@mvl/shared';
+import {
+  FancyMenuSettingsSchema,
+  LockBundleItem,
+  ProfileLock,
+  ProfileLockSchema,
+} from '@mvl/shared';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
-import { GenerateLockfileDto, InstallModDto, PublishProfileDto, UpdateSettingsDto } from './admin.dto';
+import {
+  GenerateLockfileDto,
+  InstallModDto,
+  PublishProfileDto,
+  UpdateSettingsDto,
+} from './admin.dto';
 
 const scrypt = promisify(scryptCb);
 
@@ -90,18 +107,26 @@ export class AdminService implements OnModuleInit {
   private readonly refreshTtlMs: number;
   private readonly cookieSecure: boolean;
   private readonly cipherKey: Buffer;
-  private readonly fabricCache = new Map<string, { expiresAt: number; value: FabricLoaderRow[] }>();
+  private readonly fabricCache = new Map<
+    string,
+    { expiresAt: number; value: FabricLoaderRow[] }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    const accessMinutes = Number(this.config.get('ADMIN_ACCESS_TOKEN_TTL_MINUTES') ?? 15);
-    const refreshDays = Number(this.config.get('ADMIN_REFRESH_TOKEN_TTL_DAYS') ?? 14);
+    const accessMinutes = Number(
+      this.config.get('ADMIN_ACCESS_TOKEN_TTL_MINUTES') ?? 15,
+    );
+    const refreshDays = Number(
+      this.config.get('ADMIN_REFRESH_TOKEN_TTL_DAYS') ?? 14,
+    );
     this.accessTtlMs = Math.max(1, accessMinutes) * 60 * 1000;
     this.refreshTtlMs = Math.max(1, refreshDays) * 24 * 60 * 60 * 1000;
     const secureRaw = this.config.get<string>('ADMIN_COOKIE_SECURE');
-    this.cookieSecure = secureRaw === 'true' || this.config.get('NODE_ENV') === 'production';
+    this.cookieSecure =
+      secureRaw === 'true' || this.config.get('NODE_ENV') === 'production';
     this.cipherKey = this.deriveCipherKey();
   }
 
@@ -188,7 +213,9 @@ export class AdminService implements OnModuleInit {
     ]);
 
     if (!server || !latest) {
-      throw new NotFoundException(`No profile version found for server '${serverId}'`);
+      throw new NotFoundException(
+        `No profile version found for server '${serverId}'`,
+      );
     }
 
     const lock = ProfileLockSchema.parse(latest.lockJson);
@@ -219,15 +246,27 @@ export class AdminService implements OnModuleInit {
 
   async updateSettings(input: UpdateSettingsDto) {
     const cleanVersions = Array.from(
-      new Set(input.supportedMinecraftVersions.map((value) => value.trim()).filter(Boolean)),
+      new Set(
+        input.supportedMinecraftVersions
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
     );
 
     const cleanPlatforms = Array.from(
-      new Set(input.supportedPlatforms.map((value) => value.trim().toLowerCase()).filter(Boolean)),
+      new Set(
+        input.supportedPlatforms
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean),
+      ),
     );
 
-    if (!cleanPlatforms.every((platform) => SUPPORTED_MVP_PLATFORMS.has(platform))) {
-      throw new BadGatewayException('Only fabric platform is supported for MVP');
+    if (
+      !cleanPlatforms.every((platform) => SUPPORTED_MVP_PLATFORMS.has(platform))
+    ) {
+      throw new BadGatewayException(
+        'Only fabric platform is supported for MVP',
+      );
     }
 
     const serverId = this.getServerId();
@@ -270,7 +309,8 @@ export class AdminService implements OnModuleInit {
       return {
         minecraftVersion: version,
         loaders: cached.value,
-        latestStable: cached.value.find((loader) => loader.stable)?.version ?? null,
+        latestStable:
+          cached.value.find((loader) => loader.stable)?.version ?? null,
       };
     }
 
@@ -283,17 +323,24 @@ export class AdminService implements OnModuleInit {
     });
 
     if (!response.ok) {
-      throw new BadGatewayException(`Failed to fetch Fabric versions (${response.status})`);
+      throw new BadGatewayException(
+        `Failed to fetch Fabric versions (${response.status})`,
+      );
     }
 
-    const payload = (await response.json()) as Array<{ loader?: { version?: string; stable?: boolean } }>;
+    const payload = (await response.json()) as Array<{
+      loader?: { version?: string; stable?: boolean };
+    }>;
     const loaders = payload
       .map((entry) => ({
         version: entry.loader?.version?.trim() ?? '',
         stable: entry.loader?.stable === true,
       }))
       .filter((entry) => entry.version.length > 0)
-      .filter((entry, idx, arr) => arr.findIndex((item) => item.version === entry.version) === idx);
+      .filter(
+        (entry, idx, arr) =>
+          arr.findIndex((item) => item.version === entry.version) === idx,
+      );
 
     this.fabricCache.set(version, {
       value: loaders,
@@ -330,7 +377,9 @@ export class AdminService implements OnModuleInit {
     });
 
     if (!response.ok) {
-      throw new BadGatewayException(`Modrinth search failed (${response.status})`);
+      throw new BadGatewayException(
+        `Modrinth search failed (${response.status})`,
+      );
     }
 
     const payload = (await response.json()) as ModrinthSearchResponse;
@@ -343,7 +392,11 @@ export class AdminService implements OnModuleInit {
   }
 
   async analyzeModDependencies(projectId: string, minecraftVersion: string) {
-    const resolved = await this.resolveCompatibleModWithDependencies(projectId, minecraftVersion, {});
+    const resolved = await this.resolveCompatibleModWithDependencies(
+      projectId,
+      minecraftVersion,
+      {},
+    );
 
     return {
       projectId: resolved.mod.projectId,
@@ -357,7 +410,13 @@ export class AdminService implements OnModuleInit {
     const includeDependencies = input.includeDependencies ?? true;
     const installed = new Map<string, ResolvedModWithDeps['mod']>();
 
-    await this.collectMod(input.projectId, input.minecraftVersion, includeDependencies, installed, new Set());
+    await this.collectMod(
+      input.projectId,
+      input.minecraftVersion,
+      includeDependencies,
+      installed,
+      new Set(),
+    );
 
     return {
       mods: Array.from(installed.values()),
@@ -365,7 +424,11 @@ export class AdminService implements OnModuleInit {
   }
 
   async resolveCompatibleMod(projectId: string, minecraftVersion: string) {
-    const resolved = await this.resolveCompatibleModWithDependencies(projectId, minecraftVersion, {});
+    const resolved = await this.resolveCompatibleModWithDependencies(
+      projectId,
+      minecraftVersion,
+      {},
+    );
     return resolved.mod;
   }
 
@@ -408,11 +471,14 @@ export class AdminService implements OnModuleInit {
       ]);
 
       if (!server || !latest) {
-        throw new NotFoundException(`No profile version found for server '${serverId}'`);
+        throw new NotFoundException(
+          `No profile version found for server '${serverId}'`,
+        );
       }
 
       const nextVersion = latest.version + 1;
-      const profileId = input.profileId?.trim() || server.profileId || latest.profileId;
+      const profileId =
+        input.profileId?.trim() || server.profileId || latest.profileId;
       const fancyMenu = FancyMenuSettingsSchema.parse({
         enabled: input.fancyMenu?.enabled ?? true,
         playButtonLabel: input.fancyMenu?.playButtonLabel ?? 'Play',
@@ -509,7 +575,10 @@ export class AdminService implements OnModuleInit {
       return password;
     }
 
-    return this.decryptPassword(existing.passwordCiphertext, existing.passwordIv);
+    return this.decryptPassword(
+      existing.passwordCiphertext,
+      existing.passwordIv,
+    );
   }
 
   private async ensureAppSettings() {
@@ -522,7 +591,9 @@ export class AdminService implements OnModuleInit {
     }
 
     const serverId = this.getServerId();
-    const server = await this.prisma.server.findUnique({ where: { id: serverId } });
+    const server = await this.prisma.server.findUnique({
+      where: { id: serverId },
+    });
 
     await this.prisma.appSetting.create({
       data: {
@@ -579,7 +650,9 @@ export class AdminService implements OnModuleInit {
     };
   }
 
-  private async rotateSession(refreshToken: string): Promise<AdminSessionResult> {
+  private async rotateSession(
+    refreshToken: string,
+  ): Promise<AdminSessionResult> {
     const refreshTokenHash = this.hashToken(refreshToken);
     const session = await this.prisma.adminSession.findFirst({
       where: {
@@ -705,7 +778,10 @@ export class AdminService implements OnModuleInit {
     return `scrypt$${salt.toString('hex')}$${derived.toString('hex')}`;
   }
 
-  private async verifyPassword(password: string, encoded: string): Promise<boolean> {
+  private async verifyPassword(
+    password: string,
+    encoded: string,
+  ): Promise<boolean> {
     const [algo, saltHex, hashHex] = encoded.split('$');
     if (algo !== 'scrypt' || !saltHex || !hashHex) {
       return false;
@@ -723,19 +799,25 @@ export class AdminService implements OnModuleInit {
   }
 
   private deriveCipherKey() {
-    const configured = this.config.get<string>('ADMIN_PASSWORD_CIPHER_KEY')?.trim();
+    const configured = this.config
+      .get<string>('ADMIN_PASSWORD_CIPHER_KEY')
+      ?.trim();
     if (configured) {
       return createHash('sha256').update(configured).digest();
     }
 
-    const fallback = this.config.get<string>('DATABASE_URL') ?? 'local-dev-fallback';
+    const fallback =
+      this.config.get<string>('DATABASE_URL') ?? 'local-dev-fallback';
     return createHash('sha256').update(fallback).digest();
   }
 
   private encryptPassword(password: string) {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.cipherKey, iv);
-    const encrypted = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(password, 'utf8'),
+      cipher.final(),
+    ]);
     const tag = cipher.getAuthTag();
 
     return {
@@ -756,7 +838,10 @@ export class AdminService implements OnModuleInit {
     const decipher = createDecipheriv('aes-256-gcm', this.cipherKey, iv);
     decipher.setAuthTag(tag);
 
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]).toString('utf8');
   }
 
   private generateRandomToken(lengthBytes = 32) {
@@ -777,7 +862,11 @@ export class AdminService implements OnModuleInit {
 
     visited.add(normalized);
 
-    const resolved = await this.resolveCompatibleModWithDependencies(normalized, minecraftVersion, {});
+    const resolved = await this.resolveCompatibleModWithDependencies(
+      normalized,
+      minecraftVersion,
+      {},
+    );
     output.set(resolved.mod.projectId, resolved.mod);
 
     if (!includeDependencies) {
@@ -785,7 +874,13 @@ export class AdminService implements OnModuleInit {
     }
 
     for (const dependencyId of resolved.requiredDependencies) {
-      await this.collectMod(dependencyId, minecraftVersion, includeDependencies, output, visited);
+      await this.collectMod(
+        dependencyId,
+        minecraftVersion,
+        includeDependencies,
+        output,
+        visited,
+      );
     }
   }
 
@@ -802,11 +897,18 @@ export class AdminService implements OnModuleInit {
       this.fetchProjectVersions(cleanProjectId),
     ]);
 
-    const selected = this.selectBestCompatibleVersion(project.title, cleanMinecraftVersion, versions);
-    const file = selected.files.find((entry) => entry.primary) ?? selected.files[0];
+    const selected = this.selectBestCompatibleVersion(
+      project.title,
+      cleanMinecraftVersion,
+      versions,
+    );
+    const file =
+      selected.files.find((entry) => entry.primary) ?? selected.files[0];
 
     if (!file) {
-      throw new BadGatewayException(`No downloadable file found for '${project.title}'`);
+      throw new BadGatewayException(
+        `No downloadable file found for '${project.title}'`,
+      );
     }
 
     const sha256 = await this.computeSha256FromUrl(file.url);
@@ -834,19 +936,27 @@ export class AdminService implements OnModuleInit {
     };
   }
 
-  private async fetchProject(projectId: string, cache?: Record<string, ModrinthProject>): Promise<ModrinthProject> {
+  private async fetchProject(
+    projectId: string,
+    cache?: Record<string, ModrinthProject>,
+  ): Promise<ModrinthProject> {
     if (cache?.[projectId]) {
       return cache[projectId];
     }
 
-    const response = await fetch(`${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}`, {
-      headers: {
-        'User-Agent': 'mvl-admin-mvp/0.2.0',
+    const response = await fetch(
+      `${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}`,
+      {
+        headers: {
+          'User-Agent': 'mvl-admin-mvp/0.2.0',
+        },
       },
-    });
+    );
 
     if (!response.ok) {
-      throw new BadGatewayException(`Failed to fetch Modrinth project '${projectId}' (${response.status})`);
+      throw new BadGatewayException(
+        `Failed to fetch Modrinth project '${projectId}' (${response.status})`,
+      );
     }
 
     const project = (await response.json()) as ModrinthProject;
@@ -857,12 +967,17 @@ export class AdminService implements OnModuleInit {
     return project;
   }
 
-  private async fetchProjectVersions(projectId: string): Promise<ModrinthVersion[]> {
-    const response = await fetch(`${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}/version`, {
-      headers: {
-        'User-Agent': 'mvl-admin-mvp/0.2.0',
+  private async fetchProjectVersions(
+    projectId: string,
+  ): Promise<ModrinthVersion[]> {
+    const response = await fetch(
+      `${this.modrinthApiBase}/project/${encodeURIComponent(projectId)}/version`,
+      {
+        headers: {
+          'User-Agent': 'mvl-admin-mvp/0.2.0',
+        },
       },
-    });
+    );
 
     if (!response.ok) {
       throw new BadGatewayException(
@@ -879,7 +994,9 @@ export class AdminService implements OnModuleInit {
     versions: ModrinthVersion[],
   ): ModrinthVersion {
     const compatible = versions.filter(
-      (entry) => entry.loaders.includes('fabric') && entry.game_versions.includes(minecraftVersion),
+      (entry) =>
+        entry.loaders.includes('fabric') &&
+        entry.game_versions.includes(minecraftVersion),
     );
 
     if (compatible.length === 0) {
@@ -917,7 +1034,9 @@ export class AdminService implements OnModuleInit {
     });
 
     if (!response.ok) {
-      throw new BadGatewayException(`Failed to download artifact for hash (${response.status})`);
+      throw new BadGatewayException(
+        `Failed to download artifact for hash (${response.status})`,
+      );
     }
 
     const payload = await response.arrayBuffer();
@@ -943,7 +1062,11 @@ export class AdminService implements OnModuleInit {
 
     if (!previous.success) {
       return {
-        add: nextLock.items.length + nextLock.resources.length + nextLock.shaders.length + nextLock.configs.length,
+        add:
+          nextLock.items.length +
+          nextLock.resources.length +
+          nextLock.shaders.length +
+          nextLock.configs.length,
         remove: 0,
         update: 0,
         keep: 0,
@@ -953,8 +1076,12 @@ export class AdminService implements OnModuleInit {
     const prevItems = this.flattenLockItems(previous.data);
     const nextItems = this.flattenLockItems(nextLock);
 
-    const prevMap = new Map(prevItems.map((item) => [this.itemKey(item), item.sha256]));
-    const nextMap = new Map(nextItems.map((item) => [this.itemKey(item), item.sha256]));
+    const prevMap = new Map(
+      prevItems.map((item) => [this.itemKey(item), item.sha256]),
+    );
+    const nextMap = new Map(
+      nextItems.map((item) => [this.itemKey(item), item.sha256]),
+    );
 
     let add = 0;
     let remove = 0;
@@ -1036,7 +1163,9 @@ export class AdminService implements OnModuleInit {
     const cleanMinecraftVersion = input.minecraftVersion.trim();
     const cleanLoaderVersion = input.loaderVersion.trim();
 
-    const profileId = input.profileId?.trim() || this.slugify(cleanServerName || 'server-profile');
+    const profileId =
+      input.profileId?.trim() ||
+      this.slugify(cleanServerName || 'server-profile');
     const includeFancyMenu = input.fancyMenu.enabled ?? true;
 
     const fancyMenuSettings = FancyMenuSettingsSchema.parse({
@@ -1055,16 +1184,23 @@ export class AdminService implements OnModuleInit {
     });
 
     const mods = input.mods.filter(
-      (entry) => !entry.name.toLowerCase().includes('server lock') && !entry.url.includes('server-lock-'),
+      (entry) =>
+        !entry.name.toLowerCase().includes('server lock') &&
+        !entry.url.includes('server-lock-'),
     );
 
     if (includeFancyMenu) {
       const hasFancyMenu = mods.some(
-        (entry) => entry.projectId === FANCY_MENU_PROJECT_ID || entry.name.toLowerCase().includes('fancymenu'),
+        (entry) =>
+          entry.projectId === FANCY_MENU_PROJECT_ID ||
+          entry.name.toLowerCase().includes('fancymenu'),
       );
 
       if (!hasFancyMenu) {
-        const fancyMenuMod = await this.resolveCompatibleMod(FANCY_MENU_PROJECT_ID, cleanMinecraftVersion);
+        const fancyMenuMod = await this.resolveCompatibleMod(
+          FANCY_MENU_PROJECT_ID,
+          cleanMinecraftVersion,
+        );
         mods.push(fancyMenuMod);
       }
     }
@@ -1089,8 +1225,12 @@ export class AdminService implements OnModuleInit {
     }
 
     const previousParsed = ProfileLockSchema.safeParse(input.previousLockJson);
-    const previousBranding = previousParsed.success ? previousParsed.data.branding : null;
-    const previousRuntime = previousParsed.success ? previousParsed.data.runtimeHints : null;
+    const previousBranding = previousParsed.success
+      ? previousParsed.data.branding
+      : null;
+    const previousRuntime = previousParsed.success
+      ? previousParsed.data.runtimeHints
+      : null;
 
     return ProfileLockSchema.parse({
       profileId,
@@ -1113,7 +1253,8 @@ export class AdminService implements OnModuleInit {
       },
       branding: previousBranding ?? {
         serverName: cleanServerName,
-        logoUrl: 'https://images.unsplash.com/photo-1579546929662-711aa81148cf?auto=format&fit=crop&w=320&q=80',
+        logoUrl:
+          'https://images.unsplash.com/photo-1579546929662-711aa81148cf?auto=format&fit=crop&w=320&q=80',
         backgroundUrl:
           'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1400&q=80',
         newsUrl: 'https://example.com/news',

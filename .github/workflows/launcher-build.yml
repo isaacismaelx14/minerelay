@@ -49,6 +49,19 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Compute beta build version
+        id: version
+        shell: bash
+        run: |
+          BASE_VERSION=$(node -p "require('./apps/launcher/package.json').version")
+          VERSION="${BASE_VERSION}-beta.${{ github.run_number }}"
+          echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp launcher version for this build
+        shell: bash
+        run: node apps/launcher/scripts/set-release-version.mjs "${{ steps.version.outputs.version }}"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
@@ -141,8 +154,9 @@ jobs:
       - name: Compute beta release metadata
         id: meta
         run: |
-          VERSION=$(node -p "require('./apps/launcher/package.json').version")
-          TAG="v${VERSION}-beta.${{ github.run_number }}"
+          BASE_VERSION=$(node -p "require('./apps/launcher/package.json').version")
+          VERSION="${BASE_VERSION}-beta.${{ github.run_number }}"
+          TAG="v${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "name=Launcher ${TAG}" >> "$GITHUB_OUTPUT"
