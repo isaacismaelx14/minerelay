@@ -398,7 +398,7 @@ export class AdminService implements OnModuleInit {
   async publishProfile(input: PublishProfileDto, requestOrigin: string) {
     const serverId = this.getServerId();
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const [server, latest] = await Promise.all([
         tx.server.findUnique({ where: { id: serverId } }),
         tx.profileVersion.findFirst({
@@ -442,7 +442,9 @@ export class AdminService implements OnModuleInit {
 
       const lockUrl = `${requestOrigin}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
       const summary = this.computeDiffSummary(latest.lockJson, generated);
-      const allowedVersions = Array.from(new Set([...server.allowedMinecraftVersions, input.minecraftVersion]));
+      const allowedVersions = Array.from(
+        new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
+      );
 
       await tx.server.update({
         where: { id: serverId },
@@ -451,7 +453,7 @@ export class AdminService implements OnModuleInit {
           address: input.serverAddress.trim(),
           profileId,
           fancyMenuEnabled: fancyMenu.enabled,
-          fancyMenuSettings: fancyMenu as unknown as Prisma.JsonObject,
+          fancyMenuSettings: fancyMenu as unknown as Prisma.InputJsonValue,
           allowedMinecraftVersions: allowedVersions,
         },
       });
@@ -467,13 +469,13 @@ export class AdminService implements OnModuleInit {
           defaultServerName: generated.defaultServer.name,
           defaultServerAddress: generated.defaultServer.address,
           fancyMenuEnabled: generated.fancyMenu.enabled,
-          fancyMenuSettings: generated.fancyMenu as unknown as Prisma.JsonObject,
+          fancyMenuSettings: generated.fancyMenu as unknown as Prisma.InputJsonValue,
           lockUrl,
           summaryAdd: summary.add,
           summaryRemove: summary.remove,
           summaryUpdate: summary.update,
           summaryKeep: summary.keep,
-          lockJson: generated as unknown as Prisma.JsonObject,
+          lockJson: generated as unknown as Prisma.InputJsonValue,
         },
       });
 

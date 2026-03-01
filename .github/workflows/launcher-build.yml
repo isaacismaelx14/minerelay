@@ -3,7 +3,25 @@ name: launcher-build
 on:
   push:
     branches: [main]
+    paths:
+      - 'apps/launcher/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - 'turbo.json'
+      - '.github/workflows/launcher-build.yml'
   pull_request:
+    paths:
+      - 'apps/launcher/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - 'turbo.json'
+      - '.github/workflows/launcher-build.yml'
 
 jobs:
   build-launcher:
