@@ -22,11 +22,19 @@ use std::{
   },
 };
 
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{NSWindow, NSWindowTitleVisibility};
+use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
+
 use tauri::{
   menu::{Menu, MenuItem},
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-  Emitter, Manager,
+  Manager,
 };
+
+use crate::types::{AppSettings, GameSessionPhase};
+
+const REQUIRED_ONBOARDING_VERSION: i32 = 2;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -41,6 +49,14 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .setup(|app| {
       build_tray(app)?;
+
+      #[cfg(target_os = "macos")]
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title_bar_style(tauri::TitleBarStyle::Transparent);
+        apply_macos_transparent_titlebar(&window);
+      }
+
+      show_primary_window(app.handle());
 
       let app_handle = app.handle().clone();
       let app_state = app.state::<Arc<state::AppState>>().inner().clone();
@@ -73,6 +89,9 @@ pub fn run() {
       commands::launcher_update_install,
       commands::app_request_close,
       commands::app_keep_running_in_background,
+      commands::app_open_setup_window,
+      commands::app_return_to_main_window,
+      commands::game_running_probe,
     ])
     .build(tauri::generate_context!())
     .expect("error while building Minecraft Server Syncer application");
@@ -86,8 +105,20 @@ pub fn run() {
       }
 
       api.prevent_exit();
-      show_main_window(app_handle);
-      let _ = app_handle.emit("app://quit-requested", ());
+      handle_quit_request(app_handle, app_state);
+    }
+  });
+}
+
+#[cfg(target_os = "macos")]
+fn apply_macos_transparent_titlebar(window: &tauri::WebviewWindow) {
+  let _ = window.with_webview(|webview| {
+    // SAFETY: Tauri provides the native NSWindow pointer on macOS.
+    unsafe {
+      let ns_window: &NSWindow = &*webview.ns_window().cast();
+      ns_window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
+      ns_window.setTitlebarAppearsTransparent(true);
+      ns_window.setMovableByWindowBackground(false);
     }
   });
 }
@@ -102,7 +133,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     .show_menu_on_left_click(false)
     .on_menu_event(|app, event| match event.id().as_ref() {
       "open" => {
-        show_main_window(app);
+        show_primary_window(app);
       }
       "quit" => {
         app.exit(0);
@@ -116,7 +147,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         ..
       } = event
       {
-        show_main_window(tray.app_handle());
+        show_primary_window(tray.app_handle());
       }
     });
 
@@ -129,8 +160,22 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
   Ok(())
 }
 
-fn show_main_window(app: &tauri::AppHandle) {
-  if let Some(window) = app.get_webview_window("main") {
+fn show_primary_window(app: &tauri::AppHandle) {
+  let app_state = app.state::<Arc<state::AppState>>();
+  let settings = app_state.settings.lock().clone();
+  let target = if onboarding_required(&settings) {
+    "setup"
+  } else {
+    "main"
+  };
+  let hide = if target == "main" { "setup" } else { "main" };
+
+  if let Some(window) = app.get_webview_window(hide) {
+    let _ = window.hide();
+  }
+
+  if let Some(window) = app.get_webview_window(target) {
+    let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
     return;
@@ -140,4 +185,67 @@ fn show_main_window(app: &tauri::AppHandle) {
     let _ = window.show();
     let _ = window.set_focus();
   }
+}
+
+fn handle_quit_request(app: &tauri::AppHandle, app_state: Arc<state::AppState>) {
+  if app_state.is_exiting.load(Ordering::SeqCst) {
+    return;
+  }
+
+  if session::get_status(&app_state).phase == GameSessionPhase::Playing {
+    keep_running_in_background(app);
+    let _ = MessageDialog::new()
+      .set_level(MessageLevel::Warning)
+      .set_title("Minecraft is currently playing")
+      .set_description(
+        "The app will keep running in the background while your play session is active.",
+      )
+      .set_buttons(MessageButtons::Ok)
+      .show();
+    return;
+  }
+
+  let result = MessageDialog::new()
+    .set_level(MessageLevel::Info)
+    .set_title("Quit Minecraft Server Syncer?")
+    .set_description(
+      "Select Yes to quit the app. Select No to keep it running in the background.",
+    )
+    .set_buttons(MessageButtons::YesNo)
+    .show();
+
+  if result == MessageDialogResult::Yes {
+    if app_state.is_exiting.swap(true, Ordering::SeqCst) {
+      return;
+    }
+    app_state.allow_exit_once.store(true, Ordering::SeqCst);
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+      let _ = session::restore_active_session(&app_handle, app_state).await;
+      app_handle.exit(0);
+    });
+    return;
+  }
+
+  keep_running_in_background(app);
+}
+
+fn keep_running_in_background(app: &tauri::AppHandle) {
+  if let Some(main) = app.get_webview_window("main") {
+    let _ = main.hide();
+  }
+  if let Some(setup) = app.get_webview_window("setup") {
+    let _ = setup.hide();
+  }
+}
+
+fn onboarding_required(settings: &AppSettings) -> bool {
+  !settings.wizard_completed
+    || settings.onboarding_version != Some(REQUIRED_ONBOARDING_VERSION)
+    || settings
+      .api_base_url
+      .as_deref()
+      .map(|value| value.trim().is_empty())
+      .unwrap_or(true)
 }

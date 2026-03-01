@@ -31,7 +31,7 @@ impl LauncherConfig {
       .or_else(dirs::data_dir)
       .unwrap_or_else(|| PathBuf::from("."));
 
-    let data_root = base.join("minecraft-server-syncer");
+    let data_root = base.join(data_dir_name());
     let updater_endpoint = env::var("LAUNCHER_UPDATE_ENDPOINT")
       .ok()
       .map(|value| value.trim().to_string())
@@ -71,6 +71,14 @@ impl LauncherConfig {
 
   pub fn settings_path(&self) -> PathBuf {
     self.data_root.join("settings.json")
+  }
+}
+
+fn data_dir_name() -> &'static str {
+  if cfg!(debug_assertions) {
+    "minecraft-server-syncer-dev"
+  } else {
+    "minecraft-server-syncer"
   }
 }
 

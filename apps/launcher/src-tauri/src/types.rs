@@ -343,6 +343,17 @@ pub struct LauncherUpdateInstallResponse {
   pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameRunningProbe {
+  pub running: bool,
+  pub source: String,
+  #[serde(default)]
+  pub launcher_id: Option<String>,
+  #[serde(default)]
+  pub live_minecraft_dir: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum GameSessionPhase {

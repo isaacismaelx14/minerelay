@@ -24,11 +24,11 @@ use crate::{
   state::AppState,
   sync,
   types::{
-    AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameSessionPhase,
-    GameSessionStatus, InstanceState, LauncherBootstrapResult, LauncherCandidate,
-    LauncherDetectionResult, LauncherUpdateInstallResponse, LauncherUpdateStatus,
-    MinecraftRootStatus, OpenLauncherResponse, ProfileMetadataResponse, SyncApplyResponse,
-    SyncPlan, UpdatesResponse, VersionReadiness,
+    AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
+    GameSessionPhase, GameSessionStatus, InstanceState, LauncherBootstrapResult,
+    LauncherCandidate, LauncherDetectionResult, LauncherUpdateInstallResponse,
+    LauncherUpdateStatus, MinecraftRootStatus, OpenLauncherResponse,
+    ProfileMetadataResponse, SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
 
@@ -163,8 +163,19 @@ pub async fn app_request_close(
 
 #[tauri::command]
 pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
-  let Some(window) = app.get_webview_window("main") else {
-    return Err("Main window is not available.".to_string());
+  let selected = app
+    .get_webview_window("main")
+    .filter(|window| window.is_visible().unwrap_or(false))
+    .or_else(|| {
+      app
+        .get_webview_window("setup")
+        .filter(|window| window.is_visible().unwrap_or(false))
+    })
+    .or_else(|| app.get_webview_window("main"))
+    .or_else(|| app.get_webview_window("setup"));
+
+  let Some(window) = selected else {
+    return Err("No app window is available.".to_string());
   };
 
   if window.hide().is_ok() {
@@ -176,6 +187,52 @@ pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
     .map_err(|error| format!("Failed to keep app in background: {error}"))?;
 
   Ok(())
+}
+
+#[tauri::command]
+pub fn app_open_setup_window(app: AppHandle) -> Result<(), String> {
+  switch_to_window(&app, "setup", "main")
+}
+
+#[tauri::command]
+pub fn app_return_to_main_window(app: AppHandle) -> Result<(), String> {
+  switch_to_window(&app, "main", "setup")
+}
+
+#[tauri::command]
+pub fn game_running_probe(state: State<'_, Arc<AppState>>) -> Result<GameRunningProbe, String> {
+  let status = session::get_status(state.inner());
+  if status.phase != GameSessionPhase::Idle {
+    return Ok(GameRunningProbe {
+      running: true,
+      source: "session".to_string(),
+      launcher_id: status.launcher_id.clone(),
+      live_minecraft_dir: status.live_minecraft_dir.clone(),
+    });
+  }
+
+  let settings = state.settings.lock().clone();
+  let detected = launcher_apps::detect_installed_launchers();
+  let selected = selected_launcher_id(&settings, &detected);
+  let probe_launcher = selected.clone().unwrap_or_else(|| "official".to_string());
+
+  let Ok((minecraft_root, _)) = resolve_launcher_minecraft_root(&settings) else {
+    return Ok(GameRunningProbe {
+      running: false,
+      source: "process".to_string(),
+      launcher_id: selected,
+      live_minecraft_dir: None,
+    });
+  };
+
+  let running = session::probe_game_running(&minecraft_root, &probe_launcher);
+
+  Ok(GameRunningProbe {
+    running,
+    source: "process".to_string(),
+    launcher_id: Some(probe_launcher),
+    live_minecraft_dir: Some(minecraft_root.to_string_lossy().to_string()),
+  })
 }
 
 #[tauri::command]
@@ -849,6 +906,26 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
   value
     .map(|raw| raw.trim().to_string())
     .filter(|raw| !raw.is_empty())
+}
+
+fn switch_to_window(app: &AppHandle, target: &str, hide: &str) -> Result<(), String> {
+  let Some(target_window) = app.get_webview_window(target) else {
+    return Err(format!("Window `{target}` is not available."));
+  };
+
+  if let Some(hide_window) = app.get_webview_window(hide) {
+    let _ = hide_window.hide();
+  }
+
+  let _ = target_window.unminimize();
+  target_window
+    .show()
+    .map_err(|error| format!("Failed to show `{target}` window: {error}"))?;
+  target_window
+    .set_focus()
+    .map_err(|error| format!("Failed to focus `{target}` window: {error}"))?;
+
+  Ok(())
 }
 
 fn sanitize_server_id(raw: &str) -> Option<String> {

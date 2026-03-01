@@ -48,13 +48,6 @@ interface LauncherDetectionResult {
   officialMaybeUwp: boolean;
 }
 
-interface LauncherBootstrapResult {
-  launcherId: string;
-  instanceName: string;
-  instancePath: string | null;
-  message: string;
-}
-
 interface SyncProgressEvent {
   phase: string;
   completedBytes: number;
@@ -92,7 +85,7 @@ interface VersionReadiness {
 interface OpenLauncherResponse {
   opened: boolean;
   path: string | null;
-  bootstrap: LauncherBootstrapResult | null;
+  bootstrap: { message: string } | null;
   session: GameSessionStatus | null;
 }
 
@@ -102,6 +95,19 @@ interface GameSessionStatus {
   launcherId: string | null;
   sessionId: string | null;
   startedAt: number | null;
+}
+
+interface GameRunningProbe {
+  running: boolean;
+  source: "session" | "process";
+  launcherId: string | null;
+  liveMinecraftDir: string | null;
+}
+
+interface ToastMessage {
+  id: number;
+  tone: "error" | "hint";
+  text: string;
 }
 
 interface MinecraftRootStatus {
@@ -282,6 +288,10 @@ function normalizeSecureUrl(input: string, trimTrailingSlash: boolean): string {
 }
 
 export default function App() {
+  const currentWindow = getCurrentWindow();
+  const isSetupWindow = currentWindow.label === "setup";
+  const isCompactWindow = currentWindow.label === "main";
+
   const [screen, setScreen] = useState<ScreenState>("booting");
   const [isChecking, setIsChecking] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -333,21 +343,21 @@ export default function App() {
     useState<MinecraftRootStatus | null>(null);
   const [wizardRuntimeStatus, setWizardRuntimeStatus] =
     useState<FabricRuntimeStatus | null>(null);
-  const [closeModalOpen, setCloseModalOpen] = useState(false);
-  const [closeModalBusy, setCloseModalBusy] = useState(false);
-  const [closeModalWarning, setCloseModalWarning] = useState<string | null>(
-    null,
-  );
+  const [wizardSyncing, setWizardSyncing] = useState(false);
 
   const [profileSourceDraft, setProfileSourceDraft] = useState({
     apiBaseUrl: "",
     profileLockUrl: "",
   });
+  const [probePlaying, setProbePlaying] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const cycleInFlight = useRef(false);
   const checkingLauncherUpdateRef = useRef(false);
   const installingLauncherUpdateRef = useRef(false);
   const isPlayingRef = useRef(false);
+  const toastCounterRef = useRef(0);
+  const closePromptBusyRef = useRef(false);
 
   const progressPercent = useMemo(() => {
     if (sync.totalBytes <= 0) {
@@ -372,10 +382,36 @@ export default function App() {
   const hasFancyMenuConfig = catalog?.fancyMenuConfigured ?? false;
   const sessionActive = sessionStatus.phase !== "idle";
   const isPlaying = sessionStatus.phase === "playing";
+  const compactPlaying = isPlaying || probePlaying;
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  const pushToast = useCallback((tone: "error" | "hint", text: string) => {
+    const id = toastCounterRef.current + 1;
+    toastCounterRef.current = id;
+    setToasts((current) => [...current, { id, tone, text }]);
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((entry) => entry.id !== id));
+    }, 3600);
+  }, []);
+
+  useEffect(() => {
+    if (!error) {
+      return;
+    }
+    pushToast("error", error);
+    setError(null);
+  }, [error, pushToast]);
+
+  useEffect(() => {
+    if (!hint) {
+      return;
+    }
+    pushToast("hint", hint);
+    setHint(null);
+  }, [hint, pushToast]);
 
   const saveSettings = useCallback(async (next: AppSettings) => {
     const persisted = await invoke<AppSettings>("settings_set", {
@@ -697,6 +733,9 @@ export default function App() {
       await refreshSessionStatus();
 
       if (onboardingRequired(loaded.settings)) {
+        if (isCompactWindow) {
+          await invoke("app_open_setup_window");
+        }
         setWizardActive(true);
         setWizardStep("source");
         setScreen("ready");
@@ -712,6 +751,7 @@ export default function App() {
     }
   }, [
     checkLauncherUpdate,
+    isCompactWindow,
     loadSettingsAndLaunchers,
     refreshSessionStatus,
     runSyncCycle,
@@ -756,99 +796,70 @@ export default function App() {
     };
   }, []);
 
-  const handleKeepRunningInBackground = useCallback(async () => {
-    try {
-      await invoke("app_keep_running_in_background");
-      setCloseModalOpen(false);
-      setCloseModalWarning(null);
-    } catch (cause) {
-      setCloseModalWarning(
-        cause instanceof Error ? cause.message : String(cause),
-      );
-    }
-  }, []);
-
-  const handleCloseFromCloseModal = useCallback(async () => {
-    if (isPlaying) {
-      setCloseModalWarning("Cannot close while Minecraft is playing.");
+  const requestSystemCloseModal = useCallback(async () => {
+    if (closePromptBusyRef.current) {
       return;
     }
-
-    setCloseModalBusy(true);
-    setCloseModalWarning(null);
+    closePromptBusyRef.current = true;
 
     try {
-      const result = await invoke<AppCloseResponse>("app_request_close");
-      if (!result.closed) {
-        setCloseModalWarning(
-          result.reason ?? "Close request was blocked by an active session.",
+      if (isPlayingRef.current) {
+        await invoke("app_keep_running_in_background");
+        pushToast(
+          "hint",
+          "Minecraft is running. App was kept in the background.",
         );
+        return;
       }
-    } catch (cause) {
-      setCloseModalWarning(
-        cause instanceof Error ? cause.message : String(cause),
-      );
-    } finally {
-      setCloseModalBusy(false);
-    }
-  }, [isPlaying]);
 
-  const openCloseModal = useCallback(() => {
-    setCloseModalOpen(true);
-    setCloseModalBusy(false);
-    setCloseModalWarning(
-      isPlaying ? "Cannot close while Minecraft is playing." : null,
-    );
-  }, [isPlaying]);
+      const shouldClose = window.confirm(
+        "Close Minecraft Server Syncer?\n\nSelect OK to quit the app. Select Cancel to keep it running in the background.",
+      );
+
+      if (shouldClose) {
+        const result = await invoke<AppCloseResponse>("app_request_close");
+        if (!result.closed) {
+          pushToast(
+            "error",
+            result.reason ?? "Close request was blocked by an active session.",
+          );
+        }
+        return;
+      }
+
+      await invoke("app_keep_running_in_background");
+    } catch (cause) {
+      pushToast("error", cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      closePromptBusyRef.current = false;
+    }
+  }, [pushToast]);
 
   useEffect(() => {
     let unlistenCloseRequested: UnlistenFn | undefined;
-    let unlistenQuitRequested: UnlistenFn | undefined;
 
-    void getCurrentWindow()
+    void currentWindow
       .onCloseRequested((event) => {
+        if (isSetupWindow && !wizardActive) {
+          event.preventDefault();
+          void invoke("app_return_to_main_window");
+          return;
+        }
+
         event.preventDefault();
-        openCloseModal();
+        void requestSystemCloseModal();
       })
       .then((off) => {
         unlistenCloseRequested = off;
       });
 
-    void listen("app://quit-requested", () => {
-      openCloseModal();
-    }).then((off) => {
-      unlistenQuitRequested = off;
-    });
-
     return () => {
       unlistenCloseRequested?.();
-      unlistenQuitRequested?.();
     };
-  }, [openCloseModal]);
+  }, [currentWindow, isSetupWindow, requestSystemCloseModal, wizardActive]);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const isMacQuit =
-        event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === "q";
-      if (!isMacQuit) {
-        return;
-      }
-
-      event.preventDefault();
-      openCloseModal();
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [openCloseModal]);
-
-  useEffect(() => {
-    if (wizardActive || !settings || sessionActive) {
+    if (!isCompactWindow || wizardActive || !settings || sessionActive) {
       return;
     }
 
@@ -860,7 +871,45 @@ export default function App() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [checkLauncherUpdate, runSyncCycle, sessionActive, settings, wizardActive]);
+  }, [
+    checkLauncherUpdate,
+    isCompactWindow,
+    runSyncCycle,
+    sessionActive,
+    settings,
+    wizardActive,
+  ]);
+
+  useEffect(() => {
+    if (!isCompactWindow || wizardActive) {
+      setProbePlaying(false);
+      return;
+    }
+
+    let cancelled = false;
+    const checkProbe = async () => {
+      try {
+        const status = await invoke<GameRunningProbe>("game_running_probe");
+        if (!cancelled) {
+          setProbePlaying(status.running);
+        }
+      } catch {
+        if (!cancelled) {
+          setProbePlaying(false);
+        }
+      }
+    };
+
+    void checkProbe();
+    const timer = window.setInterval(() => {
+      void checkProbe();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isCompactWindow, wizardActive]);
 
   useEffect(() => {
     if (wizardActive) {
@@ -1024,33 +1073,67 @@ export default function App() {
       return;
     }
 
-    await runSyncCycle(true, { suppressSyncScreen: true });
+    setWizardSyncing(true);
+    setError(null);
 
-    const next: AppSettings = {
-      ...settings,
-      wizardCompleted: true,
-      onboardingVersion: ONBOARDING_VERSION,
-    };
+    try {
+      await runSyncCycle(true, { suppressSyncScreen: true });
 
-    await saveSettings(next);
-    setWizardActive(false);
-    setHint(
-      "Setup complete. Auto-sync every 30 minutes is active while the app is open.",
-    );
-    setScreen("ready");
-  }, [runSyncCycle, saveSettings, settings]);
+      const next: AppSettings = {
+        ...settings,
+        wizardCompleted: true,
+        onboardingVersion: ONBOARDING_VERSION,
+      };
 
-  const openLauncher = useCallback(async () => {
+      await saveSettings(next);
+      setWizardActive(false);
+      setHint(
+        "Setup complete. Auto-sync every 30 minutes is active while the app is open.",
+      );
+      setScreen("ready");
+
+      if (isSetupWindow) {
+        await invoke("app_return_to_main_window");
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setWizardSyncing(false);
+    }
+  }, [isSetupWindow, runSyncCycle, saveSettings, settings]);
+
+  const returnToMainWindow = useCallback(async () => {
+    try {
+      await invoke("app_return_to_main_window");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, []);
+
+  const openSetupWindow = useCallback(async () => {
+    try {
+      await invoke("app_open_setup_window");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, []);
+
+  const openLauncherFromCompact = useCallback(async () => {
+    if (compactPlaying) {
+      return;
+    }
+
     try {
       setError(null);
       setHint(null);
-
       const result = await invoke<OpenLauncherResponse>("launcher_open", {
         serverId: SERVER_ID,
       });
+
       if (result.session) {
         setSessionStatus(result.session);
       }
+
       if (!result.opened) {
         setHint(
           "No launcher executable was selected. Choose one in settings or set a custom path.",
@@ -1058,29 +1141,14 @@ export default function App() {
         return;
       }
 
-      const messages = [
-        `Opened launcher: ${result.path ?? "selected launcher"}`,
-      ];
-      if (result.bootstrap) {
-        messages.push(result.bootstrap.message);
-      }
-      setHint(messages.join(" | "));
+      const message = result.bootstrap?.message
+        ? `Launcher opened. ${result.bootstrap.message}`
+        : "Launcher opened.";
+      setHint(message);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, []);
-
-  const restoreSessionNow = useCallback(async () => {
-    try {
-      setError(null);
-      const status = await invoke<GameSessionStatus>("session_restore_now");
-      setSessionStatus(status);
-      setHint("Session restored. Managed files moved back from live Minecraft dir.");
-      await refreshDashboardState();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [refreshDashboardState]);
+  }, [compactPlaying]);
 
   const updateLauncherSelection = useCallback(
     async (value: string) => {
@@ -1494,18 +1562,52 @@ export default function App() {
               </li>
             </ul>
 
+            {wizardSyncing ? (
+              <>
+                <div
+                  className="meter"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={hasSyncTotal ? progressPercent : undefined}
+                  aria-valuetext={
+                    syncHasUnknownTotal
+                      ? "Download progress total unknown"
+                      : undefined
+                  }
+                >
+                  <div
+                    className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
+                    style={{
+                      width: syncHasUnknownTotal ? "30%" : `${progressPercent}%`,
+                    }}
+                  />
+                </div>
+                <p className="wizard-meta">
+                  {sync.currentFile ?? "Applying sync..."}{" "}
+                  {hasSyncTotal ? `(${progressPercent}%)` : ""}
+                </p>
+                <div className="metrics-row">
+                  <span>{syncBytesLabel}</span>
+                  <span>{bytesToHuman(sync.speedBps)}/s</span>
+                  <span>ETA {formatEta(sync.etaSec)}</span>
+                </div>
+              </>
+            ) : null}
+
             <div className="actions-row">
               <button
                 className="btn ghost"
                 onClick={() => setWizardStep("runtime")}
+                disabled={wizardSyncing}
               >
                 Back
               </button>
               <button
                 className="btn primary"
                 onClick={() => void completeWizard()}
+                disabled={wizardSyncing}
               >
-                Run Sync and Finish Setup
+                {wizardSyncing ? "Syncing..." : "Run Sync and Finish Setup"}
               </button>
             </div>
           </div>
@@ -1608,40 +1710,60 @@ export default function App() {
           </li>
         </ul>
 
-        <div className="actions-row">
-          <button
-            className="btn primary"
-            onClick={() => void openLauncher()}
-            disabled={isChecking}
-          >
-            Open Launcher
-          </button>
-          <button
-            className="btn ghost"
-            onClick={() => void runSyncCycle(true)}
-            disabled={isChecking || sessionActive}
-          >
-            Check + Auto Apply
-          </button>
-          {catalog?.hasUpdates ? (
-            <button
-              className="btn ghost"
-              onClick={() =>
-                void executeSyncApply().then(() => runSyncCycle(false))
-              }
-              disabled={isChecking || sessionActive}
-            >
-              Apply Updates Now
-            </button>
-          ) : null}
-          {sessionActive ? (
-            <button
-              className="btn ghost"
-              onClick={() => void restoreSessionNow()}
-            >
-              Restore Session Now
-            </button>
-          ) : null}
+        <div className="pane-grid">
+          <section className="panel-card">
+            <h3>Server Profile</h3>
+            <p className="small-dark">Name: {catalog?.serverName ?? "--"}</p>
+            <p className="small-dark">Server URL: {catalog?.serverAddress ?? "--"}</p>
+            <p className="small-dark">Source URL: {sourceLabel}</p>
+            <p className="small-dark">
+              Runtime target: {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC {catalog?.minecraftVersion ?? "--"}
+            </p>
+          </section>
+
+          <section className="panel-card">
+            <h3>Current Settings</h3>
+            <p className="small-dark">Launcher: {settings?.selectedLauncherId ?? "--"}</p>
+            <p className="small-dark">Custom launcher path: {settings?.customLauncherPath ?? "--"}</p>
+            <p className="small-dark">Live minecraft root: {versionReadiness?.liveMinecraftRoot ?? "--"}</p>
+            <p className="small-dark">Managed sync dir: {instance?.minecraftDir ?? "--"}</p>
+          </section>
+
+          <section className="panel-card">
+            <h3>Mods ({catalog?.mods.length ?? 0})</h3>
+            <div className="overview-list">
+              {(catalog?.mods ?? []).map((item) => (
+                <span key={item} className="overview-chip">{item}</span>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-card">
+            <h3>Resourcepacks ({catalog?.resourcepacks.length ?? 0})</h3>
+            <div className="overview-list">
+              {(catalog?.resourcepacks ?? []).map((item) => (
+                <span key={item} className="overview-chip">{item}</span>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-card">
+            <h3>Shaders ({catalog?.shaderpacks.length ?? 0})</h3>
+            <div className="overview-list">
+              {(catalog?.shaderpacks ?? []).map((item) => (
+                <span key={item} className="overview-chip">{item}</span>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-card">
+            <h3>Configs ({catalog?.configs.length ?? 0})</h3>
+            <div className="overview-list">
+              {(catalog?.configs ?? []).map((item) => (
+                <span key={item} className="overview-chip">{item}</span>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     );
@@ -1723,9 +1845,6 @@ export default function App() {
                 </button>
               </>
             ) : null}
-            <button className="btn ghost" onClick={() => void openLauncher()}>
-              Open Launcher
-            </button>
           </section>
 
           <section className="panel-card">
@@ -1774,7 +1893,7 @@ export default function App() {
               Live game dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
             </p>
             <p className="small-dark">
-              Sync writes only to managed game dir. Live Minecraft files are swapped only after Open Launcher.
+              Sync writes only to managed game dir. Live Minecraft files are swapped during active play sessions.
             </p>
           </section>
         </div>
@@ -1987,10 +2106,143 @@ export default function App() {
     return renderPrimary();
   };
 
+  const renderCompactWindow = () => {
+    const compactHasServerInfo = catalog !== null;
+    const compactNeedsConnect = !compactHasServerInfo;
+    const statusTitle = compactPlaying
+      ? "Playing"
+      : compactNeedsConnect
+        ? "Disconnected"
+        : "Ready";
+    const statusSubtitle = compactPlaying
+      ? `Playing in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}`
+      : compactNeedsConnect
+        ? "Server info unavailable. Connect to refresh profile data."
+        : `Server ${catalog?.serverName ?? SERVER_ID} is synced and ready.`;
+
+    return (
+      <main className="compact-shell">
+        <div className="compact-frame">
+          <header className="compact-head">
+            <div className="compact-server-row">
+              {catalog?.logoUrl ? (
+                <img
+                  className="compact-server-logo"
+                  src={catalog.logoUrl}
+                  alt={`${catalog.serverName ?? SERVER_ID} logo`}
+                />
+              ) : null}
+              <div className="compact-server-meta">
+                <p className="compact-app">{APP_NAME}</p>
+                <p className="compact-server">{catalog?.serverName ?? `Server ${SERVER_ID}`}</p>
+                <p className="compact-version">
+                  MC {catalog?.minecraftVersion ?? "--"} · {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <section className={`compact-core${compactPlaying ? " is-playing" : ""}`}>
+            <div className="compact-ring" aria-hidden="true">
+              <div className="compact-ring-inner" />
+            </div>
+            <h2>{statusTitle}</h2>
+            <p>{statusSubtitle}</p>
+            <div className="actions-row compact-actions">
+              <button
+                className={compactNeedsConnect ? "btn connect" : "btn primary"}
+                onClick={() =>
+                  compactNeedsConnect
+                    ? void runSyncCycle(false)
+                    : void openLauncherFromCompact()
+                }
+                disabled={compactNeedsConnect ? isChecking : compactPlaying}
+              >
+                {compactNeedsConnect
+                  ? isChecking
+                    ? "Connecting..."
+                    : "Connect"
+                  : compactPlaying
+                    ? "Playing"
+                    : "Play"}
+              </button>
+              <button className="btn ghost" onClick={() => void openSetupWindow()}>
+                Overview
+              </button>
+            </div>
+          </section>
+
+          <section className="compact-stats">
+            <article>
+              <strong>{catalog?.summary.keep ?? 0}</strong>
+              <span>Keep</span>
+            </article>
+            <article>
+              <strong>{catalog?.summary.add ?? 0}</strong>
+              <span>Add</span>
+            </article>
+            <article>
+              <strong>{catalog?.summary.remove ?? 0}</strong>
+              <span>Remove</span>
+            </article>
+            <article>
+              <strong>{catalog?.summary.update ?? 0}</strong>
+              <span>Update</span>
+            </article>
+          </section>
+
+          <footer className="compact-foot">
+            <p>Session: {sessionStatus.phase.replaceAll("_", " ")}</p>
+            <p>Last check: {formatTime(lastCheckAt)}</p>
+          </footer>
+        </div>
+      </main>
+    );
+  };
+
   const sourceLabel =
     settings?.apiBaseUrl ??
     settings?.profileLockUrl ??
     "API source not configured";
+
+  const toastStack = toasts.length ? (
+    <div className="toast-stack" aria-live="polite" aria-atomic="true">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`toast-item ${toast.tone === "error" ? "error" : "hint"}`}
+          role="status"
+        >
+          {toast.text}
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  if (isCompactWindow) {
+    return (
+      <>
+        {renderCompactWindow()}
+        {toastStack}
+      </>
+    );
+  }
+
+  if (isSetupWindow && wizardActive) {
+    return (
+      <main className="setup-onboarding-shell">
+        <header className="setup-onboarding-head">
+          <p className="eyebrow">First-time setup</p>
+          <h1>{APP_NAME}</h1>
+          <p className="small-dark">Complete onboarding to continue.</p>
+        </header>
+
+        {renderWizard()}
+
+        {toastStack}
+      </main>
+    );
+  }
 
   return (
     <main className="desktop-shell">
@@ -2007,12 +2259,6 @@ export default function App() {
             onClick={() => setActiveView("overview")}
           >
             Overview
-          </button>
-          <button
-            className={activeView === "onboarding" ? "nav-item active" : "nav-item"}
-            onClick={() => setActiveView("onboarding")}
-          >
-            Setup
           </button>
           <button
             className={activeView === "sourcePaths" ? "nav-item active" : "nav-item"}
@@ -2079,67 +2325,20 @@ export default function App() {
             ) : null}
             </div>
           </div>
-          <div className="version-pill">
-            {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
-            {catalog?.minecraftVersion ?? "--"}
+          <div className="workspace-header-actions">
+            <div className="version-pill">
+              {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
+              {catalog?.minecraftVersion ?? "--"}
+            </div>
+            <button className="btn ghost" onClick={() => void returnToMainWindow()}>
+              Back to Launcher
+            </button>
           </div>
         </header>
 
         {renderWorkspace()}
 
-        {closeModalOpen ? (
-          <div className="modal-backdrop" role="presentation">
-            <div
-              className="modal-card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="close-modal-title"
-            >
-              <h3 id="close-modal-title">Close App?</h3>
-              <p className="small-dark">
-                Choose whether to close the app or keep it running in the background.
-              </p>
-              {closeModalWarning ? (
-                <div className="alert error" role="alert">
-                  {closeModalWarning}
-                </div>
-              ) : null}
-              <div className="actions-row">
-                <button
-                  className="btn ghost"
-                  onClick={() => {
-                    setCloseModalOpen(false);
-                    setCloseModalWarning(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn ghost"
-                  onClick={() => void handleKeepRunningInBackground()}
-                  disabled={closeModalBusy}
-                >
-                  Keep Running in Background
-                </button>
-                <button
-                  className="btn primary"
-                  onClick={() => void handleCloseFromCloseModal()}
-                  disabled={closeModalBusy || isPlaying}
-                >
-                  {closeModalBusy ? "Closing..." : "Close App"}
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="alert error" role="alert">
-            {error}
-          </div>
-        ) : null}
-
-        {hint ? <div className="alert hint">{hint}</div> : null}
+        {toastStack}
       </section>
     </main>
   );

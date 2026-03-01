@@ -2184,6 +2184,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "hex",
+ "objc2-app-kit",
  "parking_lot",
  "reqwest 0.12.28",
  "rfd",

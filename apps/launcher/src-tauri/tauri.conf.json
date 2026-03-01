@@ -12,12 +12,25 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Minecraft Server Syncer",
+        "width": 430,
+        "height": 720,
+        "decorations": true,
+        "resizable": false,
+        "minWidth": 390,
+        "minHeight": 620,
+        "visible": false
+      },
+      {
+        "label": "setup",
+        "title": "Minecraft Server Syncer Setup",
         "width": 1160,
         "height": 760,
         "resizable": true,
         "minWidth": 920,
-        "minHeight": 620
+        "minHeight": 620,
+        "visible": false
       }
     ],
     "security": {

@@ -66,6 +66,12 @@ pub fn sync_allowed(state: &AppState) -> LauncherResult<()> {
   Ok(())
 }
 
+pub fn probe_game_running(live_minecraft_dir: &Path, launcher_id: &str) -> bool {
+  let mut sys = System::new_all();
+  sys.refresh_processes();
+  game_running(&sys, &live_minecraft_dir.to_string_lossy(), launcher_id)
+}
+
 pub async fn recover_on_startup(app: &AppHandle, state: Arc<AppState>) -> LauncherResult<()> {
   if active_journal_path(state.as_ref()).exists() {
     restore_internal(app, state, None, false).await?;
