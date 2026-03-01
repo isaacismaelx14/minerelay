@@ -82,12 +82,38 @@ pub async fn fetch_profile_metadata(state: &AppState, server_id: &str) -> Launch
 }
 
 pub async fn fetch_remote_lock(state: &AppState, server_id: &str) -> LauncherResult<ProfileLock> {
-  if let Some(lock_url) = configured_lock_url(state) {
-    return fetch_lockfile(state, &lock_url).await;
-  }
+  let cache_key = remote_lock_cache_key(state, server_id);
+  let fetch_result = if let Some(lock_url) = configured_lock_url(state) {
+    fetch_lockfile(state, &lock_url).await
+  } else {
+    match fetch_profile_metadata(state, server_id).await {
+      Ok(profile) => fetch_lockfile(state, &profile.lock_url).await,
+      Err(error) => Err(error),
+    }
+  };
 
-  let profile = fetch_profile_metadata(state, server_id).await?;
-  fetch_lockfile(state, &profile.lock_url).await
+  match fetch_result {
+    Ok(lock) => {
+      state
+        .remote_lock_cache
+        .lock()
+        .insert(cache_key.clone(), lock.clone());
+      Ok(lock)
+    }
+    Err(error) => state
+      .remote_lock_cache
+      .lock()
+      .get(&cache_key)
+      .cloned()
+      .ok_or(error),
+  }
+}
+
+fn remote_lock_cache_key(state: &AppState, server_id: &str) -> String {
+  let source = configured_lock_url(state)
+    .or_else(|| configured_api_base(state))
+    .unwrap_or_default();
+  format!("{server_id}|{source}")
 }
 
 fn configured_lock_url(state: &AppState) -> Option<String> {

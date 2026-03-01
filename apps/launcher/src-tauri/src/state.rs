@@ -3,6 +3,7 @@ use std::sync::{
   Arc,
 };
 use std::time::Duration;
+use std::collections::HashMap;
 
 use parking_lot::Mutex;
 use tokio::task::JoinHandle;
@@ -10,7 +11,7 @@ use tokio::task::JoinHandle;
 use crate::{
   config::LauncherConfig,
   settings,
-  types::{AppSettings, GameSessionStatus, InstallMode},
+  types::{AppSettings, GameSessionStatus, InstallMode, ProfileLock},
 };
 
 pub struct AppState {
@@ -20,6 +21,7 @@ pub struct AppState {
   pub is_exiting: AtomicBool,
   pub allow_exit_once: AtomicBool,
   pub settings: Mutex<AppSettings>,
+  pub remote_lock_cache: Mutex<HashMap<String, ProfileLock>>,
   pub session_status: Mutex<GameSessionStatus>,
   pub session_monitor: Mutex<Option<JoinHandle<()>>>,
 }
@@ -47,6 +49,7 @@ impl AppState {
       is_exiting: AtomicBool::new(false),
       allow_exit_once: AtomicBool::new(false),
       settings: Mutex::new(loaded),
+      remote_lock_cache: Mutex::new(HashMap::new()),
       session_status: Mutex::new(GameSessionStatus::default()),
       session_monitor: Mutex::new(None),
     }
