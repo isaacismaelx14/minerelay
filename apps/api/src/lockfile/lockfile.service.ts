@@ -1,23 +1,51 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../db/prisma.service';
+import { SigningService } from '../security/signing.service';
 import { ProfileLock, ProfileLockSchema } from '@mvl/shared';
+
+export interface SignedLockfileResponse {
+  lock: ProfileLock;
+  signature?: string;
+  signatureAlgorithm?: 'ed25519';
+  signatureKeyId?: string;
+  signatureInput?: string;
+  signedAt?: string;
+}
 
 @Injectable()
 export class LockfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly signing: SigningService,
+  ) {}
 
-  async getLock(profileId: string, version: number): Promise<ProfileLock> {
-    const lock = await this.prisma.profileVersion.findFirst({
+  async getLock(
+    profileId: string,
+    version: number,
+  ): Promise<SignedLockfileResponse> {
+    const profileVersion = await this.prisma.profileVersion.findFirst({
       where: {
         profileId,
         version,
       },
     });
 
-    if (!lock) {
-      throw new NotFoundException(`No lockfile found for profile '${profileId}' version '${version}'`);
+    if (!profileVersion) {
+      throw new NotFoundException(
+        `No lockfile found for profile '${profileId}' version '${version}'`,
+      );
     }
 
-    return ProfileLockSchema.parse(lock.lockJson);
+    const lock = ProfileLockSchema.parse(profileVersion.lockJson);
+    const signature = this.signing.signLockPayload(lock);
+
+    return {
+      lock,
+      signature: signature?.signature,
+      signatureAlgorithm: signature?.signatureAlgorithm,
+      signatureKeyId: signature?.signatureKeyId,
+      signatureInput: signature?.signatureInput,
+      signedAt: signature?.signedAt,
+    };
   }
 }

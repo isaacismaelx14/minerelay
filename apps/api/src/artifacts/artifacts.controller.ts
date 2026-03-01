@@ -6,6 +6,7 @@ import {
   Res,
   StreamableFile,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, existsSync } from 'node:fs';
@@ -14,6 +15,7 @@ import { basename, relative, resolve } from 'node:path';
 import type { Response } from 'express';
 
 @ApiTags('artifacts')
+@Throttle({ public_read: { limit: 120, ttl: 60000 } })
 @Controller('/v1/artifacts')
 export class ArtifactsController {
   constructor(private readonly config: ConfigService) {}

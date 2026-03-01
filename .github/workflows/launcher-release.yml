@@ -70,6 +70,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
+          PROFILE_SIGNATURE_PUBLIC_KEY: ${{ vars.PROFILE_SIGNATURE_PUBLIC_KEY || secrets.PROFILE_SIGNATURE_PUBLIC_KEY }}
         run: |
           TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
@@ -86,6 +87,10 @@ jobs:
           fi
           if [ -z "$LAUNCHER_UPDATE_PUBKEY" ]; then
             echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates." >&2
+            exit 1
+          fi
+          if [ -z "$PROFILE_SIGNATURE_PUBLIC_KEY" ]; then
+            echo "Missing PROFILE_SIGNATURE_PUBLIC_KEY (set repo variable PROFILE_SIGNATURE_PUBLIC_KEY or secret PROFILE_SIGNATURE_PUBLIC_KEY)." >&2
             exit 1
           fi
 
@@ -113,6 +118,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
+          PROFILE_SIGNATURE_PUBLIC_KEY: ${{ vars.PROFILE_SIGNATURE_PUBLIC_KEY || secrets.PROFILE_SIGNATURE_PUBLIC_KEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}

@@ -17,7 +17,16 @@ pub struct ProfileMetadataResponse {
   pub fancy_menu_enabled: bool,
   #[serde(default)]
   pub fancy_menu: Option<FancyMenuSettings>,
+  #[serde(default)]
   pub signature: Option<String>,
+  #[serde(default)]
+  pub signature_algorithm: Option<String>,
+  #[serde(default)]
+  pub signature_key_id: Option<String>,
+  #[serde(default)]
+  pub signature_input: Option<String>,
+  #[serde(default)]
+  pub signed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

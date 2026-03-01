@@ -11,6 +11,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
@@ -22,13 +23,16 @@ import {
   SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
+import { readAdminScript, readLoginScript } from './admin.assets';
 import { renderAdminPage, renderAdminLoginPage } from './admin.page';
-import { renderAdminScript, renderLoginScript } from './admin.script';
 import { AdminPublic } from './admin-auth.decorator';
 import { AdminSessionGuard } from './admin.guard';
+import { AdminCsrfGuard } from './auth/admin-csrf.guard';
 import { AdminService } from './admin.service';
 
 @ApiTags('admin')
+@Throttle({ admin_api: { limit: 60, ttl: 60000 } })
+@UseGuards(AdminSessionGuard, AdminCsrfGuard)
 @Controller()
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -49,11 +53,12 @@ export class AdminController {
   @Get('/admin/login/app.js')
   @AdminPublic()
   getLoginScript(@Res() response: Response) {
-    response.type('application/javascript').send(renderLoginScript());
+    response.type('application/javascript').send(readLoginScript());
   }
 
   @Post('/v1/admin/auth/login')
   @AdminPublic()
+  @Throttle({ admin_auth: { limit: 10, ttl: 300000 } })
   login(
     @Body() payload: AdminLoginDto,
     @Req() request: Request,
@@ -64,6 +69,7 @@ export class AdminController {
 
   @Post('/v1/admin/auth/refresh')
   @AdminPublic()
+  @Throttle({ admin_auth: { limit: 20, ttl: 60000 } })
   refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -72,7 +78,7 @@ export class AdminController {
   }
 
   @Post('/v1/admin/auth/logout')
-  @AdminPublic()
+  @Throttle({ admin_auth: { limit: 20, ttl: 60000 } })
   logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -94,31 +100,26 @@ export class AdminController {
   }
 
   @Get('/admin/app.js')
-  @UseGuards(AdminSessionGuard)
   getAdminScript(@Res() response: Response) {
-    response.type('application/javascript').send(renderAdminScript());
+    response.type('application/javascript').send(readAdminScript());
   }
 
   @Get('/v1/admin/bootstrap')
-  @UseGuards(AdminSessionGuard)
   getBootstrap() {
     return this.adminService.getBootstrap();
   }
 
   @Patch('/v1/admin/settings')
-  @UseGuards(AdminSessionGuard)
   updateSettings(@Body() payload: UpdateSettingsDto) {
     return this.adminService.updateSettings(payload);
   }
 
   @Patch('/v1/admin/draft')
-  @UseGuards(AdminSessionGuard)
   saveDraft(@Body() payload: SaveDraftDto) {
     return this.adminService.saveDraft(payload);
   }
 
   @Get('/v1/admin/fabric/versions')
-  @UseGuards(AdminSessionGuard)
   getFabricVersions(@Query('minecraftVersion') minecraftVersion = ''): Promise<{
     minecraftVersion: string;
     loaders: Array<{ version: string; stable: boolean }>;
@@ -128,7 +129,6 @@ export class AdminController {
   }
 
   @Get('/v1/admin/mods/search')
-  @UseGuards(AdminSessionGuard)
   searchMods(
     @Query('query') query = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -137,7 +137,6 @@ export class AdminController {
   }
 
   @Get('/v1/admin/mods/resolve')
-  @UseGuards(AdminSessionGuard)
   resolveMod(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -146,7 +145,6 @@ export class AdminController {
   }
 
   @Get('/v1/admin/mods/analyze')
-  @UseGuards(AdminSessionGuard)
   analyzeMod(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -158,19 +156,16 @@ export class AdminController {
   }
 
   @Post('/v1/admin/mods/install')
-  @UseGuards(AdminSessionGuard)
   installMod(@Body() payload: InstallModDto) {
     return this.adminService.installMod(payload);
   }
 
   @Post('/v1/admin/lockfile/generate')
-  @UseGuards(AdminSessionGuard)
   generateLockfile(@Body() payload: GenerateLockfileDto) {
     return this.adminService.generateLockfile(payload);
   }
 
   @Post('/v1/admin/profile/publish')
-  @UseGuards(AdminSessionGuard)
   publishProfile(@Body() payload: PublishProfileDto, @Req() request: Request) {
     const host = request.get('host') ?? 'localhost:3000';
     const forwardedProto = request
@@ -187,8 +182,9 @@ export class AdminController {
   }
 
   @Post('/v1/admin/media/upload')
-  @UseGuards(AdminSessionGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
   uploadMedia(
     @UploadedFile()
     file: {
@@ -214,8 +210,9 @@ export class AdminController {
   }
 
   @Post('/v1/admin/fancymenu/bundle/upload')
-  @UseGuards(AdminSessionGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }),
+  )
   uploadFancyMenuBundle(
     @UploadedFile()
     file: {
