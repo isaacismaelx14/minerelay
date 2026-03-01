@@ -23,7 +23,9 @@ runtimes/
 **/.runtime-artifacts/
 infra/sample-data/artifacts/
 .mss-client/
-artifacts/
+/artifacts/
+!apps/api/src/artifacts/
+!apps/api/src/artifacts/**
 uploads/
 tmp/uploads/
 
