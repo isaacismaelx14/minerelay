@@ -3,10 +3,33 @@ name: mod-build
 on:
   push:
     branches: [main]
+    paths:
+      - 'mods/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'build.gradle.kts'
+      - 'settings.gradle'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/mod-build.yml'
   pull_request:
+    paths:
+      - 'mods/**'
+      - 'gradle/**'
+      - 'build.gradle'
+      - 'build.gradle.kts'
+      - 'settings.gradle'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/mod-build.yml'
 
 jobs:
   build-mod:
+    if: ${{ hashFiles('mods/server-lock/**') != '' }}
     runs-on: ubuntu-latest
 
     steps:
