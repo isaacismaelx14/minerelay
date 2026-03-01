@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SyncPlan, UpdateSummary } from "@mvl/shared";
 
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
@@ -124,6 +125,11 @@ interface SyncApplyResponse {
   appliedVersion: number;
   modUpdatesDownloaded: number;
   serverName: string;
+}
+
+interface AppCloseResponse {
+  closed: boolean;
+  reason: string | null;
 }
 
 interface CatalogSnapshot {
@@ -278,6 +284,11 @@ export default function App() {
     useState<MinecraftRootStatus | null>(null);
   const [wizardRuntimeStatus, setWizardRuntimeStatus] =
     useState<FabricRuntimeStatus | null>(null);
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
+  const [closeModalBusy, setCloseModalBusy] = useState(false);
+  const [closeModalWarning, setCloseModalWarning] = useState<string | null>(
+    null,
+  );
 
   const [profileSourceDraft, setProfileSourceDraft] = useState({
     apiBaseUrl: "",
@@ -300,6 +311,7 @@ export default function App() {
   const fancyMenuRequiresAssets = catalog?.fancyMenuRequiresAssets ?? false;
   const hasFancyMenuConfig = catalog?.fancyMenuConfigured ?? false;
   const sessionActive = sessionStatus.phase !== "idle";
+  const isPlaying = sessionStatus.phase === "playing";
 
   const saveSettings = useCallback(async (next: AppSettings) => {
     const persisted = await invoke<AppSettings>("settings_set", {
@@ -550,6 +562,97 @@ export default function App() {
       stopSessionListener?.();
     };
   }, []);
+
+  const handleKeepRunningInBackground = useCallback(async () => {
+    try {
+      await invoke("app_keep_running_in_background");
+      setCloseModalOpen(false);
+      setCloseModalWarning(null);
+    } catch (cause) {
+      setCloseModalWarning(
+        cause instanceof Error ? cause.message : String(cause),
+      );
+    }
+  }, []);
+
+  const handleCloseFromCloseModal = useCallback(async () => {
+    if (isPlaying) {
+      setCloseModalWarning("Cannot close while Minecraft is playing.");
+      return;
+    }
+
+    setCloseModalBusy(true);
+    setCloseModalWarning(null);
+
+    try {
+      const result = await invoke<AppCloseResponse>("app_request_close");
+      if (!result.closed) {
+        setCloseModalWarning(
+          result.reason ?? "Close request was blocked by an active session.",
+        );
+      }
+    } catch (cause) {
+      setCloseModalWarning(
+        cause instanceof Error ? cause.message : String(cause),
+      );
+    } finally {
+      setCloseModalBusy(false);
+    }
+  }, [isPlaying]);
+
+  const openCloseModal = useCallback(() => {
+    setCloseModalOpen(true);
+    setCloseModalBusy(false);
+    setCloseModalWarning(
+      isPlaying ? "Cannot close while Minecraft is playing." : null,
+    );
+  }, [isPlaying]);
+
+  useEffect(() => {
+    let unlistenCloseRequested: UnlistenFn | undefined;
+    let unlistenQuitRequested: UnlistenFn | undefined;
+
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        event.preventDefault();
+        openCloseModal();
+      })
+      .then((off) => {
+        unlistenCloseRequested = off;
+      });
+
+    void listen("app://quit-requested", () => {
+      openCloseModal();
+    }).then((off) => {
+      unlistenQuitRequested = off;
+    });
+
+    return () => {
+      unlistenCloseRequested?.();
+      unlistenQuitRequested?.();
+    };
+  }, [openCloseModal]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isMacQuit =
+        event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "q";
+      if (!isMacQuit) {
+        return;
+      }
+
+      event.preventDefault();
+      openCloseModal();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openCloseModal]);
 
   useEffect(() => {
     if (wizardActive || !settings || sessionActive) {
@@ -1727,6 +1830,52 @@ export default function App() {
         </header>
 
         {renderWorkspace()}
+
+        {closeModalOpen ? (
+          <div className="modal-backdrop" role="presentation">
+            <div
+              className="modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="close-modal-title"
+            >
+              <h3 id="close-modal-title">Close App?</h3>
+              <p className="small-dark">
+                Choose whether to close the app or keep it running in the background.
+              </p>
+              {closeModalWarning ? (
+                <div className="alert error" role="alert">
+                  {closeModalWarning}
+                </div>
+              ) : null}
+              <div className="actions-row">
+                <button
+                  className="btn ghost"
+                  onClick={() => {
+                    setCloseModalOpen(false);
+                    setCloseModalWarning(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn ghost"
+                  onClick={() => void handleKeepRunningInBackground()}
+                  disabled={closeModalBusy}
+                >
+                  Keep Running in Background
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => void handleCloseFromCloseModal()}
+                  disabled={closeModalBusy || isPlaying}
+                >
+                  {closeModalBusy ? "Closing..." : "Close App"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="alert error" role="alert">

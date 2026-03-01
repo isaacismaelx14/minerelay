@@ -415,6 +415,27 @@ ul {
   color: #b9e6d2;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 11, 17, 0.68);
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.modal-card {
+  width: min(500px, 100%);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, #142131 0%, #101a26 100%);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
 .btn:focus-visible,
 .nav-item:focus-visible,
 .select:focus-visible,

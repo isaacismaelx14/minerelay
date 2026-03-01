@@ -25,7 +25,7 @@ use std::{
 use tauri::{
   menu::{Menu, MenuItem},
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-  Manager, WindowEvent,
+  Emitter, Manager,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -49,12 +49,6 @@ pub fn run() {
 
       Ok(())
     })
-    .on_window_event(|window, event| {
-      if let WindowEvent::CloseRequested { api, .. } = event {
-        api.prevent_close();
-        let _ = window.hide();
-      }
-    })
     .invoke_handler(tauri::generate_handler![
       commands::settings_get,
       commands::settings_set,
@@ -74,6 +68,8 @@ pub fn run() {
       commands::instance_get_state,
       commands::instance_check_version_readiness,
       commands::runtime_ensure_fabric,
+      commands::app_request_close,
+      commands::app_keep_running_in_background,
     ])
     .build(tauri::generate_context!())
     .expect("error while building Minecraft Server Syncer application");
@@ -82,17 +78,13 @@ pub fn run() {
     if let tauri::RunEvent::ExitRequested { api, .. } = event {
       let app_state = app_handle.state::<Arc<state::AppState>>().inner().clone();
 
-      if app_state.is_exiting.swap(true, Ordering::SeqCst) {
+      if app_state.allow_exit_once.swap(false, Ordering::SeqCst) {
         return;
       }
 
       api.prevent_exit();
-
-      let app_handle = app_handle.clone();
-      tauri::async_runtime::spawn(async move {
-        let _ = session::restore_active_session(&app_handle, app_state).await;
-        app_handle.exit(0);
-      });
+      show_main_window(app_handle);
+      let _ = app_handle.emit("app://quit-requested", ());
     }
   });
 }
@@ -110,16 +102,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         show_main_window(app);
       }
       "quit" => {
-        let app_state = app.state::<Arc<state::AppState>>().inner().clone();
-        if app_state.is_exiting.swap(true, Ordering::SeqCst) {
-          return;
-        }
-
-        let app_handle = app.clone();
-        tauri::async_runtime::spawn(async move {
-          let _ = session::restore_active_session(&app_handle, app_state).await;
-          app_handle.exit(0);
-        });
+        app.exit(0);
       }
       _ => {}
     })

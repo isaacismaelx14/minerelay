@@ -313,6 +313,14 @@ pub struct OpenLauncherResponse {
   pub session: Option<GameSessionStatus>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppCloseResponse {
+  pub closed: bool,
+  #[serde(default)]
+  pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum GameSessionPhase {

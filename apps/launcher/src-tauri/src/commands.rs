@@ -1,6 +1,12 @@
-use std::{path::Path, sync::Arc};
+use std::{
+  path::Path,
+  sync::{
+    atomic::Ordering,
+    Arc,
+  },
+};
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::{
   instance::{
@@ -15,10 +21,10 @@ use crate::{
   state::AppState,
   sync,
   types::{
-    AppSettings, CatalogSnapshot, FabricRuntimeStatus, InstanceState, LauncherBootstrapResult,
-    LauncherCandidate, LauncherDetectionResult, MinecraftRootStatus, OpenLauncherResponse,
-    ProfileMetadataResponse, SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
-    GameSessionStatus,
+    AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameSessionPhase,
+    GameSessionStatus, InstanceState, LauncherBootstrapResult, LauncherCandidate,
+    LauncherDetectionResult, MinecraftRootStatus, OpenLauncherResponse, ProfileMetadataResponse,
+    SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
 
@@ -97,6 +103,57 @@ pub async fn session_restore_now(
   session::restore_active_session(&app, Arc::clone(state.inner()))
     .await
     .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn app_request_close(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+) -> Result<AppCloseResponse, String> {
+  let current = session::get_status(state.inner());
+  if current.phase == GameSessionPhase::Playing {
+    return Ok(AppCloseResponse {
+      closed: false,
+      reason: Some("Cannot close while Minecraft is playing.".to_string()),
+    });
+  }
+
+  let app_state = Arc::clone(state.inner());
+  if app_state.is_exiting.swap(true, Ordering::SeqCst) {
+    return Ok(AppCloseResponse {
+      closed: true,
+      reason: None,
+    });
+  }
+  app_state.allow_exit_once.store(true, Ordering::SeqCst);
+
+  let app_handle = app.clone();
+  tauri::async_runtime::spawn(async move {
+    let _ = session::restore_active_session(&app_handle, app_state).await;
+    app_handle.exit(0);
+  });
+
+  Ok(AppCloseResponse {
+    closed: true,
+    reason: None,
+  })
+}
+
+#[tauri::command]
+pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
+  let Some(window) = app.get_webview_window("main") else {
+    return Err("Main window is not available.".to_string());
+  };
+
+  if window.hide().is_ok() {
+    return Ok(());
+  }
+
+  window
+    .minimize()
+    .map_err(|error| format!("Failed to keep app in background: {error}"))?;
+
+  Ok(())
 }
 
 #[tauri::command]
