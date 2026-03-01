@@ -14,6 +14,10 @@ export const ProfileMetadataResponseSchema = z.object({
   fancyMenuEnabled: z.boolean().default(false),
   fancyMenu: FancyMenuSettingsSchema.optional(),
   signature: z.string().optional(),
+  signatureAlgorithm: z.literal('ed25519').optional(),
+  signatureKeyId: z.string().min(1).optional(),
+  signatureInput: z.string().min(1).optional(),
+  signedAt: z.iso.datetime().optional(),
 });
 
 export type ProfileMetadataResponse = z.infer<typeof ProfileMetadataResponseSchema>;

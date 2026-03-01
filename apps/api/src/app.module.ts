@@ -8,16 +8,35 @@ import { LockfileModule } from './lockfile/lockfile.module';
 import { ProfileModule } from './profile/profile.module';
 import { UpdatesModule } from './updates/updates.module';
 
+import { SecurityModule } from './security/security.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
+        name: 'default',
+        ttl: 60000,
+        limit: 80,
+      },
+      {
+        name: 'public_read',
         ttl: 60000,
         limit: 120,
       },
+      {
+        name: 'admin_auth',
+        ttl: 300000,
+        limit: 10,
+      },
+      {
+        name: 'admin_api',
+        ttl: 60000,
+        limit: 60,
+      },
     ]),
     PrismaModule,
+    SecurityModule,
     ProfileModule,
     UpdatesModule,
     LockfileModule,

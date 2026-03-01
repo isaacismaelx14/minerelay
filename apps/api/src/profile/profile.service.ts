@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../db/prisma.service';
+import { SigningService } from '../security/signing.service';
 import {
   FancyMenuSettingsSchema,
   ProfileMetadataResponse,
@@ -12,6 +13,7 @@ export class ProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly signing: SigningService,
   ) {}
 
   async getDefaultProfile(): Promise<ProfileMetadataResponse> {
@@ -49,19 +51,32 @@ export class ProfileService {
       server.fancyMenuEnabled ||
       fancyMenu?.enabled === true;
 
-    return ProfileMetadataResponseSchema.parse({
+    const unsignedPayload = {
       profileId: latest.profileId,
       version: latest.version,
       minecraftVersion: latest.minecraftVersion,
       loader: latest.loader,
       loaderVersion: latest.loaderVersion,
       lockUrl: this.normalizeLockUrl(latest.lockUrl),
-      serverName: server.name,
-      serverAddress: server.address,
+      serverName: latest.defaultServerName || server.name,
+      serverAddress: latest.defaultServerAddress || server.address,
       allowedMinecraftVersions,
       fancyMenuEnabled,
       fancyMenu,
-      signature: latest.signature ?? undefined,
+    };
+
+    const signature = this.signing.signProfileMetadata(
+      unsignedPayload,
+      latest.createdAt,
+    );
+
+    return ProfileMetadataResponseSchema.parse({
+      ...unsignedPayload,
+      signature: signature?.signature,
+      signatureAlgorithm: signature?.signatureAlgorithm,
+      signatureKeyId: signature?.signatureKeyId,
+      signatureInput: signature?.signatureInput,
+      signedAt: signature?.signedAt,
     });
   }
 

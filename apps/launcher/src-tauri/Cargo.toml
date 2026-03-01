@@ -14,7 +14,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow = "1.0.100"
+base64 = "0.22.1"
 dirs = "6.0.0"
+ed25519-dalek = "2.1.1"
 fastnbt = "2.6.0"
 flate2 = "1.1.2"
 futures-util = "0.3.31"

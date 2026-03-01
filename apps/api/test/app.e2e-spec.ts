@@ -16,10 +16,23 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('/v1/profile (GET)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/profile')
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        profileId: expect.any(String),
+        version: expect.any(Number),
+        lockUrl: expect.any(String),
+        serverName: expect.any(String),
+        serverAddress: expect.any(String),
+      }),
+    );
   });
 });

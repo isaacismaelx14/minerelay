@@ -36,4 +36,16 @@ export class ProfileResponseDto {
 
   @ApiProperty({ required: false })
   signature?: string;
+
+  @ApiProperty({ required: false, enum: ['ed25519'] })
+  signatureAlgorithm?: 'ed25519';
+
+  @ApiProperty({ required: false })
+  signatureKeyId?: string;
+
+  @ApiProperty({ required: false })
+  signatureInput?: string;
+
+  @ApiProperty({ required: false })
+  signedAt?: string;
 }

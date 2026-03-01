@@ -7,18 +7,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  scrypt as scryptCb,
-  timingSafeEqual,
-} from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, extname, posix, resolve } from 'node:path';
-import { promisify } from 'node:util';
 import * as yauzl from 'yauzl';
 import {
   BrandingSchema,
@@ -29,6 +21,7 @@ import {
 } from '@mvl/shared';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
+import { SigningService } from '../security/signing.service';
 import {
   GenerateLockfileDto,
   InstallModDto,
@@ -37,13 +30,16 @@ import {
   UpdateSettingsDto,
 } from './admin.dto';
 
-const scrypt = promisify(scryptCb);
+import { AdminAuthService } from './auth/admin-auth.service';
+import {
+  AdminSessionService,
+  ACCESS_COOKIE,
+  REFRESH_COOKIE,
+} from './auth/admin-session.service';
 
 const FANCY_MENU_PROJECT_ID = 'Wq5SjeWM';
 const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
-const ACCESS_COOKIE = 'mvl_admin_access';
-const REFRESH_COOKIE = 'mvl_admin_refresh';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
 const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -83,14 +79,6 @@ interface ModrinthVersion {
   }>;
 }
 
-interface AdminSessionResult {
-  sessionId: string;
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
-  refreshExpiresAt: Date;
-}
-
 interface ResolvedModWithDeps {
   mod: {
     kind: 'mod';
@@ -127,10 +115,6 @@ interface FancyMenuBundleValidation {
 export class AdminService implements OnModuleInit {
   private readonly modrinthApiBase = 'https://api.modrinth.com/v2';
   private readonly fabricMetaBase = 'https://meta.fabricmc.net';
-  private readonly accessTtlMs: number;
-  private readonly refreshTtlMs: number;
-  private readonly cookieSecure: boolean;
-  private readonly cipherKey: Buffer;
   private readonly fabricCache = new Map<
     string,
     { expiresAt: number; value: FabricLoaderRow[] }
@@ -139,25 +123,14 @@ export class AdminService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {
-    const accessMinutes = Number(
-      this.config.get('ADMIN_ACCESS_TOKEN_TTL_MINUTES') ?? 15,
-    );
-    const refreshDays = Number(
-      this.config.get('ADMIN_REFRESH_TOKEN_TTL_DAYS') ?? 14,
-    );
-    this.accessTtlMs = Math.max(1, accessMinutes) * 60 * 1000;
-    this.refreshTtlMs = Math.max(1, refreshDays) * 24 * 60 * 60 * 1000;
-    const secureRaw = this.config.get<string>('ADMIN_COOKIE_SECURE');
-    this.cookieSecure =
-      secureRaw === 'true' || this.config.get('NODE_ENV') === 'production';
-    this.cipherKey = this.deriveCipherKey();
-  }
+    private readonly authService: AdminAuthService,
+    private readonly sessionService: AdminSessionService,
+    private readonly signing: SigningService,
+  ) {}
 
   async onModuleInit() {
     await this.ensureAppSettings();
-    const password = await this.ensureAdminCredential();
-    console.log(`[admin] password: ${password}`);
+    await this.ensureAdminCredential();
   }
 
   async login(password: string, request: Request, response: Response) {
@@ -169,44 +142,53 @@ export class AdminService implements OnModuleInit {
       throw new UnauthorizedException('Admin password is not initialized');
     }
 
-    const valid = await this.verifyPassword(password, credential.passwordHash);
+    const valid = await this.authService.verifyPassword(
+      password,
+      credential.passwordHash,
+    );
     if (!valid) {
       throw new UnauthorizedException('Invalid admin password');
     }
 
-    const session = await this.createSession(request);
-    this.setSessionCookies(response, session);
+    const session = await this.sessionService.createSession(request);
+    this.sessionService.setSessionCookies(response, session);
 
     return { success: true };
   }
 
   async refresh(request: Request, response: Response) {
-    const refreshToken = this.readCookie(request, REFRESH_COOKIE);
+    const refreshToken = this.sessionService.readCookie(
+      request,
+      REFRESH_COOKIE,
+    );
     if (!refreshToken) {
       throw new UnauthorizedException('Missing refresh token');
     }
 
-    const refreshed = await this.rotateSession(refreshToken);
-    this.setSessionCookies(response, refreshed);
+    const refreshed = await this.sessionService.rotateSession(refreshToken);
+    this.sessionService.setSessionCookies(response, refreshed);
     return { success: true };
   }
 
   async logout(request: Request, response: Response) {
-    const accessToken = this.readCookie(request, ACCESS_COOKIE);
-    const refreshToken = this.readCookie(request, REFRESH_COOKIE);
+    const accessToken = this.sessionService.readCookie(request, ACCESS_COOKIE);
+    const refreshToken = this.sessionService.readCookie(
+      request,
+      REFRESH_COOKIE,
+    );
 
-    await this.revokeSession(accessToken, refreshToken);
-    this.clearSessionCookies(response);
+    await this.sessionService.revokeSession(accessToken, refreshToken);
+    this.sessionService.clearSessionCookies(response);
     return { success: true };
   }
 
   async authenticateRequest(request: Request): Promise<boolean> {
-    const accessToken = this.readCookie(request, ACCESS_COOKIE);
+    const accessToken = this.sessionService.readCookie(request, ACCESS_COOKIE);
     if (!accessToken) {
       return false;
     }
 
-    const tokenHash = this.hashToken(accessToken);
+    const tokenHash = this.sessionService.hashToken(accessToken);
     const session = await this.prisma.adminSession.findFirst({
       where: {
         accessTokenHash: tokenHash,
@@ -343,6 +325,11 @@ export class AdminService implements OnModuleInit {
 
   async saveDraft(input: SaveDraftDto) {
     const serverId = this.getServerId();
+    const server = await this.prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) {
+      throw new NotFoundException(`Server '${serverId}' not found`);
+    }
+
     const serverName = input.serverName.trim();
     const serverAddress = input.serverAddress.trim();
     const profileId = input.profileId?.trim();
@@ -356,55 +343,49 @@ export class AdminService implements OnModuleInit {
       newsUrl: input.branding?.newsUrl?.trim() || undefined,
     });
 
-    const [server, setting] = await this.prisma.$transaction([
-      this.prisma.server.update({
-        where: { id: serverId },
-        data: {
-          name: serverName,
-          address: serverAddress,
-          profileId: profileId || undefined,
-          fancyMenuEnabled: fancyMenu.enabled,
-          fancyMenuSettings: fancyMenu as unknown as object,
-        },
-      }),
-      this.prisma.appSetting.upsert({
-        where: { id: APP_SETTING_ID },
-        create: {
-          id: APP_SETTING_ID,
-          supportedMinecraftVersions: [],
-          supportedPlatforms: ['fabric'],
-          releaseMajor: 1,
-          releaseMinor: 0,
-          releasePatch: 0,
-          publishDraft: {
-            profileId: profileId || null,
-            fancyMenu,
-            branding,
-          } as unknown as object,
-        },
-        update: {
-          publishDraft: {
-            profileId: profileId || null,
-            fancyMenu,
-            branding,
-          } as unknown as object,
-        },
-      }),
-    ]);
+    const setting = await this.prisma.appSetting.upsert({
+      where: { id: APP_SETTING_ID },
+      create: {
+        id: APP_SETTING_ID,
+        supportedMinecraftVersions: [],
+        supportedPlatforms: ['fabric'],
+        releaseMajor: 1,
+        releaseMinor: 0,
+        releasePatch: 0,
+        publishDraft: {
+          serverName,
+          serverAddress,
+          profileId: profileId || null,
+          fancyMenu,
+          branding,
+        } as unknown as object,
+      },
+      update: {
+        publishDraft: {
+          serverName,
+          serverAddress,
+          profileId: profileId || null,
+          fancyMenu,
+          branding,
+        } as unknown as object,
+      },
+    });
+
+    const draft = this.extractDraft(setting.publishDraft);
 
     return {
       server: {
         id: server.id,
-        name: server.name,
-        address: server.address,
-        profileId: server.profileId,
+        name: draft?.serverName || server.name,
+        address: draft?.serverAddress || server.address,
+        profileId: draft?.profileId || server.profileId,
       },
       releaseVersion: this.formatSemver({
         major: setting.releaseMajor,
         minor: setting.releaseMinor,
         patch: setting.releasePatch,
       }),
-      draft: this.extractDraft(setting.publishDraft),
+      draft,
     };
   }
 
@@ -598,6 +579,7 @@ export class AdminService implements OnModuleInit {
 
       const lockUrl = `${publicBase}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
       const summary = this.computeDiffSummary(latest.lockJson, generated);
+      const lockSignature = this.signing.signLockPayload(generated);
       const allowedVersions = Array.from(
         new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
       );
@@ -658,6 +640,7 @@ export class AdminService implements OnModuleInit {
           summaryRemove: summary.remove,
           summaryUpdate: summary.update,
           summaryKeep: summary.keep,
+          signature: lockSignature?.signature,
           lockJson: generated as unknown as object,
         },
       });
@@ -669,6 +652,7 @@ export class AdminService implements OnModuleInit {
           releaseMinor: nextSemver.minor,
           releasePatch: nextSemver.patch,
           supportedMinecraftVersions: allowedVersions,
+          publishDraft: Prisma.JsonNull,
         },
       });
 
@@ -775,32 +759,37 @@ export class AdminService implements OnModuleInit {
     };
   }
 
-  private async ensureAdminCredential(): Promise<string> {
+  private async ensureAdminCredential(): Promise<void> {
     const existing = await this.prisma.adminCredential.findUnique({
       where: { id: ADMIN_CREDENTIAL_ID },
     });
 
     if (!existing) {
-      const password = this.generateRandomToken(24);
-      const passwordHash = await this.hashPassword(password);
-      const encrypted = this.encryptPassword(password);
+      const initialPassword = this.config.get<string>('ADMIN_INITIAL_PASSWORD');
+      if (!initialPassword && this.config.get('NODE_ENV') === 'production') {
+        throw new Error(
+          'ADMIN_INITIAL_PASSWORD env var is required in production',
+        );
+      }
 
+      const password =
+        initialPassword || this.authService.generateRandomToken(24);
+      const passwordHash = await this.authService.hashPassword(password);
       await this.prisma.adminCredential.create({
         data: {
           id: ADMIN_CREDENTIAL_ID,
           passwordHash,
-          passwordCiphertext: encrypted.ciphertext,
-          passwordIv: encrypted.iv,
+          passwordCiphertext: '',
+          passwordIv: '',
         },
       });
 
-      return password;
+      if (!initialPassword) {
+        console.warn(
+          `[admin] Auto-generated admin password for dev: ${password}`,
+        );
+      }
     }
-
-    return this.decryptPassword(
-      existing.passwordCiphertext,
-      existing.passwordIv,
-    );
   }
 
   private async ensureAppSettings() {
@@ -856,233 +845,6 @@ export class AdminService implements OnModuleInit {
       }),
       publishDraft: setting.publishDraft,
     };
-  }
-
-  private async createSession(request: Request): Promise<AdminSessionResult> {
-    const now = Date.now();
-    const accessToken = this.generateRandomToken();
-    const refreshToken = this.generateRandomToken();
-    const sessionId = randomBytes(16).toString('hex');
-    const expiresAt = new Date(now + this.accessTtlMs);
-    const refreshExpiresAt = new Date(now + this.refreshTtlMs);
-
-    await this.prisma.adminSession.create({
-      data: {
-        id: sessionId,
-        accessTokenHash: this.hashToken(accessToken),
-        refreshTokenHash: this.hashToken(refreshToken),
-        expiresAt,
-        refreshExpiresAt,
-        ip: request.ip,
-        userAgent: request.headers['user-agent']?.slice(0, 256),
-      },
-    });
-
-    return {
-      sessionId,
-      accessToken,
-      refreshToken,
-      expiresAt,
-      refreshExpiresAt,
-    };
-  }
-
-  private async rotateSession(
-    refreshToken: string,
-  ): Promise<AdminSessionResult> {
-    const refreshTokenHash = this.hashToken(refreshToken);
-    const session = await this.prisma.adminSession.findFirst({
-      where: {
-        refreshTokenHash,
-        revokedAt: null,
-      },
-    });
-
-    if (!session) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    if (session.refreshExpiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException('Refresh token expired');
-    }
-
-    const accessToken = this.generateRandomToken();
-    const nextRefreshToken = this.generateRandomToken();
-    const expiresAt = new Date(Date.now() + this.accessTtlMs);
-    const refreshExpiresAt = new Date(Date.now() + this.refreshTtlMs);
-
-    await this.prisma.adminSession.update({
-      where: { id: session.id },
-      data: {
-        accessTokenHash: this.hashToken(accessToken),
-        refreshTokenHash: this.hashToken(nextRefreshToken),
-        expiresAt,
-        refreshExpiresAt,
-      },
-    });
-
-    return {
-      sessionId: session.id,
-      accessToken,
-      refreshToken: nextRefreshToken,
-      expiresAt,
-      refreshExpiresAt,
-    };
-  }
-
-  private async revokeSession(
-    accessToken?: string | null,
-    refreshToken?: string | null,
-  ) {
-    const tokenHashes = [accessToken, refreshToken]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => this.hashToken(value));
-
-    if (!tokenHashes.length) {
-      return;
-    }
-
-    await this.prisma.adminSession.updateMany({
-      where: {
-        revokedAt: null,
-        OR: [
-          { accessTokenHash: { in: tokenHashes } },
-          { refreshTokenHash: { in: tokenHashes } },
-        ],
-      },
-      data: {
-        revokedAt: new Date(),
-      },
-    });
-  }
-
-  private setSessionCookies(response: Response, session: AdminSessionResult) {
-    response.cookie(ACCESS_COOKIE, session.accessToken, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: this.cookieSecure,
-      path: '/',
-      expires: session.expiresAt,
-    });
-
-    response.cookie(REFRESH_COOKIE, session.refreshToken, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: this.cookieSecure,
-      path: '/',
-      expires: session.refreshExpiresAt,
-    });
-  }
-
-  clearSessionCookies(response: Response) {
-    response.clearCookie(ACCESS_COOKIE, {
-      path: '/',
-      sameSite: 'strict',
-      secure: this.cookieSecure,
-    });
-
-    response.clearCookie(REFRESH_COOKIE, {
-      path: '/',
-      sameSite: 'strict',
-      secure: this.cookieSecure,
-    });
-  }
-
-  private readCookie(request: Request, name: string): string | null {
-    const cookieHeader = request.headers.cookie;
-    if (!cookieHeader) {
-      return null;
-    }
-
-    const pairs = cookieHeader.split(';');
-    for (const pair of pairs) {
-      const [rawKey, ...rest] = pair.trim().split('=');
-      if (rawKey === name) {
-        return decodeURIComponent(rest.join('='));
-      }
-    }
-
-    return null;
-  }
-
-  private hashToken(token: string) {
-    return createHash('sha256').update(token).digest('hex');
-  }
-
-  private async hashPassword(password: string): Promise<string> {
-    const salt = randomBytes(16);
-    const derived = (await scrypt(password, salt, 64)) as Buffer;
-    return `scrypt$${salt.toString('hex')}$${derived.toString('hex')}`;
-  }
-
-  private async verifyPassword(
-    password: string,
-    encoded: string,
-  ): Promise<boolean> {
-    const [algo, saltHex, hashHex] = encoded.split('$');
-    if (algo !== 'scrypt' || !saltHex || !hashHex) {
-      return false;
-    }
-
-    const salt = Buffer.from(saltHex, 'hex');
-    const expected = Buffer.from(hashHex, 'hex');
-    const derived = (await scrypt(password, salt, expected.length)) as Buffer;
-
-    if (derived.length !== expected.length) {
-      return false;
-    }
-
-    return timingSafeEqual(derived, expected);
-  }
-
-  private deriveCipherKey() {
-    const configured = this.config
-      .get<string>('ADMIN_PASSWORD_CIPHER_KEY')
-      ?.trim();
-    if (configured) {
-      return createHash('sha256').update(configured).digest();
-    }
-
-    const fallback =
-      this.config.get<string>('DATABASE_URL') ?? 'local-dev-fallback';
-    return createHash('sha256').update(fallback).digest();
-  }
-
-  private encryptPassword(password: string) {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', this.cipherKey, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(password, 'utf8'),
-      cipher.final(),
-    ]);
-    const tag = cipher.getAuthTag();
-
-    return {
-      iv: iv.toString('base64'),
-      ciphertext: `${encrypted.toString('base64')}.${tag.toString('base64')}`,
-    };
-  }
-
-  private decryptPassword(ciphertext: string, ivBase64: string) {
-    const [encryptedBase64, tagBase64] = ciphertext.split('.');
-    if (!encryptedBase64 || !tagBase64) {
-      throw new Error('Invalid encrypted admin password payload');
-    }
-
-    const iv = Buffer.from(ivBase64, 'base64');
-    const encrypted = Buffer.from(encryptedBase64, 'base64');
-    const tag = Buffer.from(tagBase64, 'base64');
-    const decipher = createDecipheriv('aes-256-gcm', this.cipherKey, iv);
-    decipher.setAuthTag(tag);
-
-    return Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final(),
-    ]).toString('utf8');
-  }
-
-  private generateRandomToken(lengthBytes = 32) {
-    return randomBytes(lengthBytes).toString('base64url');
   }
 
   private async collectMod(
@@ -1886,6 +1648,8 @@ export class AdminService implements OnModuleInit {
 
     const draft = value as {
       profileId?: unknown;
+      serverName?: unknown;
+      serverAddress?: unknown;
       fancyMenu?: unknown;
       branding?: unknown;
     };
@@ -1895,6 +1659,16 @@ export class AdminService implements OnModuleInit {
     const branding = brandingParsed.success ? brandingParsed.data : null;
 
     return {
+      serverName:
+        typeof draft.serverName === 'string' &&
+        draft.serverName.trim().length > 0
+          ? draft.serverName.trim()
+          : null,
+      serverAddress:
+        typeof draft.serverAddress === 'string' &&
+        draft.serverAddress.trim().length > 0
+          ? draft.serverAddress.trim()
+          : null,
       profileId:
         typeof draft.profileId === 'string' && draft.profileId.trim().length > 0
           ? draft.profileId.trim()

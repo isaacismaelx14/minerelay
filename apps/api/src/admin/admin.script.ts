@@ -111,6 +111,13 @@ export function renderAdminScript(): string {
   function authFetch(url, options, retried) {
     var config = Object.assign({}, options || {});
     config.credentials = 'include';
+    config.headers = config.headers || {};
+
+    var match = document.cookie.match(/(^| )mvl_admin_csrf=([^;]+)/);
+    var csrf = match ? decodeURIComponent(match[2]) : '';
+    if (csrf) {
+      config.headers['x-csrf-token'] = csrf;
+    }
 
     return fetch(url, config).then(function (response) {
       if (response.status !== 401 || retried) return response;
@@ -589,9 +596,14 @@ export function renderAdminScript(): string {
   function populateBootstrap(payload) {
     state.bootstrap = payload;
 
-    byId('serverName').value = payload.server.name || '';
-    byId('serverAddress').value = payload.server.address || '';
-    byId('profileId').value = payload.server.profileId || '';
+    var draft = payload.draft || null;
+    var draftServerName = (draft && draft.serverName) || null;
+    var draftServerAddress = (draft && draft.serverAddress) || null;
+    var draftProfileId = (draft && draft.profileId) || null;
+
+    byId('serverName').value = draftServerName || payload.server.name || '';
+    byId('serverAddress').value = draftServerAddress || payload.server.address || '';
+    byId('profileId').value = draftProfileId || payload.server.profileId || '';
     byId('currentVersion').value = String(payload.latestProfile.version || 1);
     byId('currentReleaseVersion').value =
       payload.latestProfile.releaseVersion ||
@@ -602,7 +614,6 @@ export function renderAdminScript(): string {
     var settingsVersions = (payload.appSettings && payload.appSettings.supportedMinecraftVersions) || [];
     byId('supportedMinecraftVersions').value = settingsVersions.join(', ');
 
-    var draft = payload.draft || null;
     var fancyMenu = (draft && draft.fancyMenu) || payload.latestProfile.fancyMenu || {};
     var branding = (draft && draft.branding) || payload.latestProfile.branding || {};
 

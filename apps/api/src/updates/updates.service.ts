@@ -6,14 +6,19 @@ import { UpdatesResponse, UpdatesResponseSchema } from '@mvl/shared';
 export class UpdatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getUpdates(serverId: string, clientVersion?: number): Promise<UpdatesResponse> {
+  async getUpdates(
+    serverId: string,
+    clientVersion?: number,
+  ): Promise<UpdatesResponse> {
     const latest = await this.prisma.profileVersion.findFirst({
       where: { serverId },
       orderBy: { version: 'desc' },
     });
 
     if (!latest) {
-      throw new NotFoundException(`No profile version found for server '${serverId}'`);
+      throw new NotFoundException(
+        `No profile version found for server '${serverId}'`,
+      );
     }
 
     const hasUpdates = clientVersion == null || clientVersion < latest.version;
