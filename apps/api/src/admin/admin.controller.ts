@@ -23,8 +23,8 @@ import {
   SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
+import { readAdminScript, readLoginScript } from './admin.assets';
 import { renderAdminPage, renderAdminLoginPage } from './admin.page';
-import { renderAdminScript, renderLoginScript } from './admin.script';
 import { AdminPublic } from './admin-auth.decorator';
 import { AdminSessionGuard } from './admin.guard';
 import { AdminCsrfGuard } from './auth/admin-csrf.guard';
@@ -53,7 +53,7 @@ export class AdminController {
   @Get('/admin/login/app.js')
   @AdminPublic()
   getLoginScript(@Res() response: Response) {
-    response.type('application/javascript').send(renderLoginScript());
+    response.type('application/javascript').send(readLoginScript());
   }
 
   @Post('/v1/admin/auth/login')
@@ -101,7 +101,7 @@ export class AdminController {
 
   @Get('/admin/app.js')
   getAdminScript(@Res() response: Response) {
-    response.type('application/javascript').send(renderAdminScript());
+    response.type('application/javascript').send(readAdminScript());
   }
 
   @Get('/v1/admin/bootstrap')

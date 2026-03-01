@@ -4,9 +4,9 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
-    "dev": "nest start --watch",
-    "start": "nest start",
+    "build": "pnpm run admin:build-client && nest build",
+    "dev": "pnpm run admin:build-client && nest start --watch",
+    "start": "pnpm run admin:build-client && nest start",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
@@ -17,6 +17,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
+    "admin:build-client": "node scripts/build-admin-client.mjs",
     "admin:rotate-password": "tsx scripts/rotate-admin-password.ts"
   },
   "dependencies": {
@@ -69,6 +70,7 @@
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
+    "esbuild": "^0.25.10",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
