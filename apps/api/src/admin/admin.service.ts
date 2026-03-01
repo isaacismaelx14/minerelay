@@ -453,7 +453,7 @@ export class AdminService implements OnModuleInit {
           address: input.serverAddress.trim(),
           profileId,
           fancyMenuEnabled: fancyMenu.enabled,
-          fancyMenuSettings: fancyMenu as unknown as Prisma.InputJsonValue,
+          fancyMenuSettings: fancyMenu as unknown as object,
           allowedMinecraftVersions: allowedVersions,
         },
       });
@@ -469,13 +469,13 @@ export class AdminService implements OnModuleInit {
           defaultServerName: generated.defaultServer.name,
           defaultServerAddress: generated.defaultServer.address,
           fancyMenuEnabled: generated.fancyMenu.enabled,
-          fancyMenuSettings: generated.fancyMenu as unknown as Prisma.InputJsonValue,
+          fancyMenuSettings: generated.fancyMenu as unknown as object,
           lockUrl,
           summaryAdd: summary.add,
           summaryRemove: summary.remove,
           summaryUpdate: summary.update,
           summaryKeep: summary.keep,
-          lockJson: generated as unknown as Prisma.InputJsonValue,
+          lockJson: generated as unknown as object,
         },
       });
 
