@@ -321,6 +321,28 @@ pub struct AppCloseResponse {
   pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherUpdateStatus {
+  pub current_version: String,
+  #[serde(default)]
+  pub latest_version: Option<String>,
+  pub available: bool,
+  #[serde(default)]
+  pub body: Option<String>,
+  #[serde(default)]
+  pub pub_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherUpdateInstallResponse {
+  pub updated: bool,
+  #[serde(default)]
+  pub version: Option<String>,
+  pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum GameSessionPhase {

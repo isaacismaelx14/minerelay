@@ -132,6 +132,20 @@ interface AppCloseResponse {
   reason: string | null;
 }
 
+interface LauncherUpdateStatus {
+  currentVersion: string;
+  latestVersion: string | null;
+  available: boolean;
+  body: string | null;
+  pubDate: string | null;
+}
+
+interface LauncherUpdateInstallResponse {
+  updated: boolean;
+  version: string | null;
+  message: string;
+}
+
 interface CatalogSnapshot {
   serverId: string;
   serverName: string;
@@ -190,6 +204,24 @@ function formatTime(date: Date | null): string {
   }
 
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return "--";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function onboardingRequired(settings: AppSettings): boolean {
@@ -267,6 +299,15 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [launcherUpdate, setLauncherUpdate] =
+    useState<LauncherUpdateStatus | null>(null);
+  const [isCheckingLauncherUpdate, setIsCheckingLauncherUpdate] =
+    useState(false);
+  const [isInstallingLauncherUpdate, setIsInstallingLauncherUpdate] =
+    useState(false);
+  const [launcherUpdateNotice, setLauncherUpdateNotice] = useState<
+    string | null
+  >(null);
 
   const [lastCheckAt, setLastCheckAt] = useState<Date | null>(null);
   const [nextCheckAt, setNextCheckAt] = useState<Date | null>(null);
@@ -296,6 +337,9 @@ export default function App() {
   });
 
   const cycleInFlight = useRef(false);
+  const checkingLauncherUpdateRef = useRef(false);
+  const installingLauncherUpdateRef = useRef(false);
+  const isPlayingRef = useRef(false);
 
   const progressPercent = useMemo(() => {
     if (sync.totalBytes <= 0) {
@@ -312,6 +356,10 @@ export default function App() {
   const hasFancyMenuConfig = catalog?.fancyMenuConfigured ?? false;
   const sessionActive = sessionStatus.phase !== "idle";
   const isPlaying = sessionStatus.phase === "playing";
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
 
   const saveSettings = useCallback(async (next: AppSettings) => {
     const persisted = await invoke<AppSettings>("settings_set", {
@@ -427,6 +475,122 @@ export default function App() {
     return response;
   }, [sessionActive]);
 
+  const installLauncherUpdate = useCallback(
+    async (availableVersion?: string): Promise<boolean> => {
+      if (installingLauncherUpdateRef.current) {
+        return false;
+      }
+
+      if (isPlayingRef.current) {
+        const message =
+          "Finish current play session before installing launcher updates.";
+        setLauncherUpdateNotice(message);
+        setHint(message);
+        return false;
+      }
+
+      installingLauncherUpdateRef.current = true;
+      setIsInstallingLauncherUpdate(true);
+      setLauncherUpdateNotice(
+        availableVersion
+          ? `Preparing launcher update ${availableVersion}...`
+          : "Preparing launcher update...",
+      );
+      setHint(
+        availableVersion
+          ? `Downloading launcher update ${availableVersion}...`
+          : "Downloading launcher update...",
+      );
+
+      try {
+        const result = await invoke<LauncherUpdateInstallResponse>(
+          "launcher_update_install",
+        );
+        setHint(result.message);
+        setLauncherUpdateNotice(result.message);
+        setLauncherUpdate((current) =>
+          current
+            ? {
+                ...current,
+                available: false,
+                latestVersion: result.version ?? current.latestVersion,
+              }
+            : current,
+        );
+        return result.updated;
+      } catch (cause) {
+        const raw = cause instanceof Error ? cause.message : String(cause);
+        const message = /valid release json/iu.test(raw)
+          ? "No updater release metadata is published yet. This does not affect server sync."
+          : "Could not install launcher update right now. Please try again later.";
+        setLauncherUpdateNotice(message);
+        setHint(message);
+        return false;
+      } finally {
+        installingLauncherUpdateRef.current = false;
+        setIsInstallingLauncherUpdate(false);
+      }
+    },
+    [],
+  );
+
+  const checkLauncherUpdate = useCallback(
+    async (
+      autoInstall: boolean,
+      suppressErrors = false,
+    ): Promise<boolean> => {
+      if (
+        checkingLauncherUpdateRef.current ||
+        installingLauncherUpdateRef.current
+      ) {
+        return false;
+      }
+
+      checkingLauncherUpdateRef.current = true;
+      setIsCheckingLauncherUpdate(true);
+      setLauncherUpdateNotice("Checking launcher updates...");
+
+      try {
+        const status = await invoke<LauncherUpdateStatus>("launcher_update_check");
+        setLauncherUpdate(status);
+
+        if (!status.available) {
+          const message = `Launcher is up to date (${status.currentVersion}).`;
+          setLauncherUpdateNotice(message);
+          if (!suppressErrors) {
+            setHint(message);
+          }
+          return false;
+        }
+
+        if (!autoInstall) {
+          const message = `Launcher update ${status.latestVersion ?? "available"} is ready to install.`;
+          setLauncherUpdateNotice(message);
+          setHint(
+            `Launcher update ${status.latestVersion ?? "available"} detected. Click Download & Install.`,
+          );
+          return true;
+        }
+
+        return installLauncherUpdate(status.latestVersion ?? undefined);
+      } catch (cause) {
+        const raw = cause instanceof Error ? cause.message : String(cause);
+        const message = /valid release json/iu.test(raw)
+          ? "No updater release metadata is published yet. This does not affect server sync."
+          : "Launcher updates are temporarily unavailable. This does not affect server sync.";
+        setLauncherUpdateNotice(message);
+        if (!suppressErrors) {
+          setHint(message);
+        }
+        return false;
+      } finally {
+        checkingLauncherUpdateRef.current = false;
+        setIsCheckingLauncherUpdate(false);
+      }
+    },
+    [installLauncherUpdate],
+  );
+
   const runSyncCycle = useCallback(
     async (autoApply: boolean) => {
       if (cycleInFlight.current) {
@@ -518,11 +682,17 @@ export default function App() {
 
       setWizardActive(false);
       await runSyncCycle(true);
+      await checkLauncherUpdate(true, true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setScreen("ready");
     }
-  }, [loadSettingsAndLaunchers, refreshSessionStatus, runSyncCycle]);
+  }, [
+    checkLauncherUpdate,
+    loadSettingsAndLaunchers,
+    refreshSessionStatus,
+    runSyncCycle,
+  ]);
 
   useEffect(() => {
     void bootstrap();
@@ -661,12 +831,13 @@ export default function App() {
 
     const timer = window.setInterval(() => {
       void runSyncCycle(true);
+      void checkLauncherUpdate(true, true);
     }, AUTO_SYNC_INTERVAL_MS);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [runSyncCycle, sessionActive, settings, wizardActive]);
+  }, [checkLauncherUpdate, runSyncCycle, sessionActive, settings, wizardActive]);
 
   useEffect(() => {
     if (wizardActive) {
@@ -1675,6 +1846,58 @@ export default function App() {
           </section>
 
           <section className="panel-card">
+            <h3>Launcher Updates</h3>
+            <p className="small-dark">
+              Current version: {launcherUpdate?.currentVersion ?? "--"}
+            </p>
+            <p className="small-dark">
+              Latest release: {launcherUpdate?.latestVersion ?? "--"}
+            </p>
+            <p className="small-dark">
+              Published: {formatDateTime(launcherUpdate?.pubDate ?? null)}
+            </p>
+            <p className="small-dark">
+              Status:{" "}
+              {launcherUpdate?.available
+                ? "update available"
+                : launcherUpdate
+                  ? "up to date"
+                  : "not checked"}
+            </p>
+            <p className="small-dark">
+              {launcherUpdateNotice ??
+                "Updater checks run at startup and every 30 minutes."}
+            </p>
+            {launcherUpdate?.body ? (
+              <p className="small-dark">{launcherUpdate.body}</p>
+            ) : null}
+            <div className="actions-row">
+              <button
+                className="btn ghost"
+                onClick={() => void checkLauncherUpdate(false)}
+                disabled={isCheckingLauncherUpdate || isInstallingLauncherUpdate}
+              >
+                {isCheckingLauncherUpdate ? "Checking..." : "Check Updates"}
+              </button>
+              {launcherUpdate?.available ? (
+                <button
+                  className="btn ghost"
+                  onClick={() =>
+                    void installLauncherUpdate(
+                      launcherUpdate.latestVersion ?? undefined,
+                    )
+                  }
+                  disabled={isInstallingLauncherUpdate || isPlaying}
+                >
+                  {isInstallingLauncherUpdate
+                    ? "Installing..."
+                    : "Download & Install"}
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="panel-card">
             <h3>Current Session</h3>
             <p className="small-dark">
               Phase: {sessionStatus.phase.replaceAll("_", " ")}
@@ -1793,6 +2016,12 @@ export default function App() {
           </p>
           <p className="small-dark">
             Lock drift: {catalog?.hasUpdates ? "detected" : "none"}
+          </p>
+          <p className="small-dark">
+            App update:{" "}
+            {launcherUpdate?.available
+              ? `v${launcherUpdate.latestVersion ?? "new"} ready`
+              : "none"}
           </p>
           <p className="small-dark">
             Session: {sessionStatus.phase.replaceAll("_", " ")}

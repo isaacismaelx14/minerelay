@@ -6,6 +6,8 @@ pub struct LauncherConfig {
   pub profile_lock_url: Option<String>,
   pub server_id: String,
   pub data_root: PathBuf,
+  pub updater_endpoint: String,
+  pub updater_pubkey: Option<String>,
 }
 
 impl LauncherConfig {
@@ -30,12 +32,36 @@ impl LauncherConfig {
       .unwrap_or_else(|| PathBuf::from("."));
 
     let data_root = base.join("minecraft-server-syncer");
+    let updater_endpoint = env::var("LAUNCHER_UPDATE_ENDPOINT")
+      .ok()
+      .map(|value| value.trim().to_string())
+      .filter(|value| !value.is_empty())
+      .or_else(|| {
+        option_env!("LAUNCHER_UPDATE_ENDPOINT")
+          .map(|value| value.trim().to_string())
+          .filter(|value| !value.is_empty())
+      })
+      .unwrap_or_else(|| {
+        "https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json"
+          .to_string()
+      });
+    let updater_pubkey = env::var("LAUNCHER_UPDATE_PUBKEY")
+      .ok()
+      .map(|value| value.trim().to_string())
+      .filter(|value| !value.is_empty())
+      .or_else(|| {
+        option_env!("LAUNCHER_UPDATE_PUBKEY")
+          .map(|value| value.trim().to_string())
+          .filter(|value| !value.is_empty())
+      });
 
     Self {
       api_base_url,
       profile_lock_url,
       server_id,
       data_root,
+      updater_endpoint,
+      updater_pubkey,
     }
   }
 

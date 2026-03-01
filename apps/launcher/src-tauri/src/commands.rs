@@ -7,6 +7,8 @@ use std::{
 };
 
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_updater::UpdaterExt;
+use url::Url;
 
 use crate::{
   instance::{
@@ -23,8 +25,9 @@ use crate::{
   types::{
     AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameSessionPhase,
     GameSessionStatus, InstanceState, LauncherBootstrapResult, LauncherCandidate,
-    LauncherDetectionResult, MinecraftRootStatus, OpenLauncherResponse, ProfileMetadataResponse,
-    SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
+    LauncherDetectionResult, LauncherUpdateInstallResponse, LauncherUpdateStatus,
+    MinecraftRootStatus, OpenLauncherResponse, ProfileMetadataResponse, SyncApplyResponse,
+    SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
 
@@ -154,6 +157,98 @@ pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
     .map_err(|error| format!("Failed to keep app in background: {error}"))?;
 
   Ok(())
+}
+
+#[tauri::command]
+pub async fn launcher_update_check(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+) -> Result<LauncherUpdateStatus, String> {
+  let current_version = app.package_info().version.to_string();
+  let mut updater_builder = app.updater_builder();
+  if let Some(pubkey) = state.config.updater_pubkey.clone() {
+    updater_builder = updater_builder.pubkey(pubkey);
+  }
+  let updater = updater_builder
+    .endpoints(vec![
+      Url::parse(&state.config.updater_endpoint)
+        .map_err(|error| format!("Invalid updater endpoint URL: {error}"))?,
+    ])
+    .map_err(|error| format!("Failed to configure launcher updater endpoint: {error}"))?
+    .build()
+    .map_err(|error| format!("Failed to initialize launcher updater: {error}"))?;
+  let update = updater
+    .check()
+    .await
+    .map_err(|error| format!("Failed to check launcher updates: {error}"))?;
+
+  let Some(update) = update else {
+    return Ok(LauncherUpdateStatus {
+      current_version,
+      latest_version: None,
+      available: false,
+      body: None,
+      pub_date: None,
+    });
+  };
+
+  Ok(LauncherUpdateStatus {
+    current_version,
+    latest_version: Some(update.version.clone()),
+    available: true,
+    body: update.body.clone(),
+    pub_date: update.date.map(|date| date.to_string()),
+  })
+}
+
+#[tauri::command]
+pub async fn launcher_update_install(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+) -> Result<LauncherUpdateInstallResponse, String> {
+  let mut updater_builder = app.updater_builder();
+  if let Some(pubkey) = state.config.updater_pubkey.clone() {
+    updater_builder = updater_builder.pubkey(pubkey);
+  }
+  let updater = updater_builder
+    .endpoints(vec![
+      Url::parse(&state.config.updater_endpoint)
+        .map_err(|error| format!("Invalid updater endpoint URL: {error}"))?,
+    ])
+    .map_err(|error| format!("Failed to configure launcher updater endpoint: {error}"))?
+    .build()
+    .map_err(|error| format!("Failed to initialize launcher updater: {error}"))?;
+  let update = updater
+    .check()
+    .await
+    .map_err(|error| format!("Failed to check launcher updates: {error}"))?;
+
+  let Some(update) = update else {
+    return Ok(LauncherUpdateInstallResponse {
+      updated: false,
+      version: None,
+      message: "Launcher is already up to date.".to_string(),
+    });
+  };
+
+  let target_version = update.version.clone();
+  update
+    .download_and_install(
+      |_chunk_length, _content_length| {},
+      || {},
+    )
+    .await
+    .map_err(|error| format!("Failed to install launcher update: {error}"))?;
+
+  app.request_restart();
+
+  Ok(LauncherUpdateInstallResponse {
+    updated: true,
+    version: Some(target_version.clone()),
+    message: format!(
+      "Launcher update {target_version} installed. Restarting to apply the new version."
+    ),
+  })
 }
 
 #[tauri::command]

@@ -38,6 +38,7 @@ pub fn run() {
   let app = tauri::Builder::default()
     .manage(state)
     .plugin(tauri_plugin_notification::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .setup(|app| {
       build_tray(app)?;
 
@@ -68,6 +69,8 @@ pub fn run() {
       commands::instance_get_state,
       commands::instance_check_version_readiness,
       commands::runtime_ensure_fabric,
+      commands::launcher_update_check,
+      commands::launcher_update_install,
       commands::app_request_close,
       commands::app_keep_running_in_background,
     ])

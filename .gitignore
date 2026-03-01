@@ -26,6 +26,9 @@ runtimes/
 .env.*
 !.env.example
 
+# Local Tauri updater signing keys
+apps/launcher/.updater/
+
 # IDE
 .vscode/
 .idea/

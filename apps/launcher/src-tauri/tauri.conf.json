@@ -26,7 +26,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi", "dmg"],
+    "targets": [
+      "nsis",
+      "msi",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -36,6 +40,11 @@
     ],
     "macOS": {
       "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4NzEwRTNCOUJGMERCMzYKUldRMjIvQ2JPdzV4R0FPaW12NnZPOU1oNFRNVStKYlVFTS9XbU0yd0tDTTkrQUNrazBHT2pEeW0K"
     }
   }
 }

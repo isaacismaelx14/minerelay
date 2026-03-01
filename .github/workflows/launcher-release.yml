@@ -1,0 +1,83 @@
+name: launcher-release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish-launcher:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: --config src-tauri/tauri.release.conf.json --bundles nsis,msi
+          - platform: macos-latest
+            args: --config src-tauri/tauri.release.conf.json --bundles dmg
+
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build shared package
+        run: pnpm --filter @mvl/shared build
+
+      - name: Validate updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY secret. Updater releases require signing." >&2
+            exit 1
+          fi
+          if [ -z "$LAUNCHER_UPDATE_PUBKEY" ]; then
+            echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates." >&2
+            exit 1
+          fi
+
+      - name: Build and publish launcher release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/launcher
+          tagName: ${{ github.ref_name }}
+          releaseName: Launcher ${{ github.ref_name }}
+          releaseBody: Automated launcher release for ${{ github.ref_name }}.
+          releaseDraft: false
+          prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

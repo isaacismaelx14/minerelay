@@ -180,6 +180,27 @@ Outputs:
 - Windows: `.exe` (NSIS) and `.msi`
 - macOS: `.dmg`
 
+## Launcher Auto Updates (GitHub Releases)
+
+The desktop launcher now checks GitHub release updates and can download + install them in-app (`Check App Updates` button).
+
+Required runtime env:
+
+- `LAUNCHER_UPDATE_ENDPOINT` (default: `https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json`)
+- `LAUNCHER_UPDATE_PUBKEY` (public key generated with `tauri signer generate`)
+
+Required GitHub secrets for signed release builds:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (if your key has a password)
+- `LAUNCHER_UPDATE_PUBKEY` (public key string from `.pub`; injected at build time so installed app can verify updates)
+
+Tag-based release flow:
+
+1. Bump launcher versions (`apps/launcher/package.json`, `apps/launcher/src-tauri/Cargo.toml`, `apps/launcher/src-tauri/tauri.conf.json`).
+2. Push a tag like `v0.2.0`.
+3. GitHub Actions workflow `launcher-release` builds Windows + macOS bundles, generates updater artifacts + `latest.json`, and publishes them to the tagged release.
+
 ## Build Fabric Mod
 
 ```bash
