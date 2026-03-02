@@ -44,3 +44,5 @@ apps/launcher/.updater/
 
 # macOS
 .DS_Store
+
+.playwright-cli/

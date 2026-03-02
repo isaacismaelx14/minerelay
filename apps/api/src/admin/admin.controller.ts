@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Patch,
   Post,
   Query,
@@ -17,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   AdminLoginDto,
+  BuildFancyMenuPreviewDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
@@ -31,7 +33,7 @@ import { AdminCsrfGuard } from './auth/admin-csrf.guard';
 import { AdminService } from './admin.service';
 
 @ApiTags('admin')
-@Throttle({ admin_api: { limit: 60, ttl: 60000 } })
+@Throttle({ admin_api: { limit: 180, ttl: 60000 } })
 @UseGuards(AdminSessionGuard, AdminCsrfGuard)
 @Controller()
 export class AdminController {
@@ -53,6 +55,7 @@ export class AdminController {
   @Get('/admin/login/app.js')
   @AdminPublic()
   getLoginScript(@Res() response: Response) {
+    response.setHeader('Cache-Control', 'no-store, max-age=0');
     response.type('application/javascript').send(readLoginScript());
   }
 
@@ -101,6 +104,7 @@ export class AdminController {
 
   @Get('/admin/app.js')
   getAdminScript(@Res() response: Response) {
+    response.setHeader('Cache-Control', 'no-store, max-age=0');
     response.type('application/javascript').send(readAdminScript());
   }
 
@@ -140,8 +144,13 @@ export class AdminController {
   resolveMod(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
+    @Query('versionId') versionId = '',
   ) {
-    return this.adminService.resolveCompatibleMod(projectId, minecraftVersion);
+    return this.adminService.resolveCompatibleMod(
+      projectId,
+      minecraftVersion,
+      versionId || undefined,
+    );
   }
 
   @Get('/v1/admin/mods/analyze')
@@ -153,6 +162,14 @@ export class AdminController {
       projectId,
       minecraftVersion,
     );
+  }
+
+  @Get('/v1/admin/mods/versions')
+  getModVersions(
+    @Query('projectId') projectId = '',
+    @Query('minecraftVersion') minecraftVersion = '',
+  ) {
+    return this.adminService.getModVersions(projectId, minecraftVersion);
   }
 
   @Post('/v1/admin/mods/install')
@@ -235,5 +252,25 @@ export class AdminController {
         : request.protocol;
     const origin = `${protocol}://${host}`;
     return this.adminService.uploadFancyMenuBundle(file, origin);
+  }
+
+  @Post('/v1/admin/fancymenu/preview/build')
+  buildFancyMenuPreview(@Body() payload: BuildFancyMenuPreviewDto) {
+    return this.adminService.buildFancyMenuPreview(payload);
+  }
+
+  @Get('/v1/admin/fancymenu/preview/assets/:token/:assetId')
+  async getFancyMenuPreviewAsset(
+    @Param('token') token: string,
+    @Param('assetId') assetId: string,
+    @Res() response: Response,
+  ) {
+    const payload = await this.adminService.getFancyMenuPreviewAsset(
+      token,
+      assetId,
+    );
+    response.setHeader('content-type', payload.contentType);
+    response.setHeader('cache-control', payload.cacheControl);
+    response.status(200).send(payload.body);
   }
 }

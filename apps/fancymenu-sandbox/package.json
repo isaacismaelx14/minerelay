@@ -1,0 +1,21 @@
+{
+  "name": "@mvl/fancymenu-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yauzl": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/yauzl": "^2.10.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

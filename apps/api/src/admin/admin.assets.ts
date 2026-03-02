@@ -1,13 +1,18 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const assetCache = new Map<string, string>();
-const isProd = process.env.NODE_ENV === 'production';
+type AssetCacheEntry = {
+  content: string;
+  path: string;
+  mtimeMs: number;
+};
+
+const assetCache = new Map<string, AssetCacheEntry>();
 
 function resolveAssetPath(fileName: string): string {
   const candidates = [
-    join(__dirname, 'public', fileName),
     join(process.cwd(), 'apps/api/src/admin/public', fileName),
+    join(__dirname, 'public', fileName),
     join(process.cwd(), 'dist/src/admin/public', fileName),
     join(process.cwd(), 'dist/admin/public', fileName),
   ];
@@ -21,17 +26,23 @@ function resolveAssetPath(fileName: string): string {
 }
 
 function readAsset(fileName: string): string {
-  if (isProd) {
-    const cached = assetCache.get(fileName);
-    if (cached) {
-      return cached;
-    }
+  const path = resolveAssetPath(fileName);
+  const stats = statSync(path);
+  const cached = assetCache.get(fileName);
+  if (
+    cached &&
+    cached.path === path &&
+    Math.trunc(cached.mtimeMs) === Math.trunc(stats.mtimeMs)
+  ) {
+    return cached.content;
   }
 
-  const content = readFileSync(resolveAssetPath(fileName), 'utf8');
-  if (isProd) {
-    assetCache.set(fileName, content);
-  }
+  const content = readFileSync(path, 'utf8');
+  assetCache.set(fileName, {
+    content,
+    path,
+    mtimeMs: stats.mtimeMs,
+  });
   return content;
 }
 

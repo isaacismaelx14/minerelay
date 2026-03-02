@@ -9,6 +9,19 @@ export type AdminMod = {
   sha256: string;
 };
 
+export type CoreModPolicy = {
+  fabricApiProjectId: string;
+  fancyMenuProjectId: string;
+  lockedProjectIds: string[];
+  nonRemovableProjectIds: string[];
+  rules: {
+    fabricApiRequired: true;
+    fabricApiVersionEditable: true;
+    fancyMenuRequiredWhenEnabled: true;
+    fancyMenuEnabled: boolean;
+  };
+};
+
 export type FancyMenuPayload = {
   enabled: boolean;
   mode: 'simple' | 'custom';
@@ -40,6 +53,7 @@ export type BootstrapPayload = {
     loader: string;
     loaderVersion: string;
     mods: AdminMod[];
+    coreModPolicy: CoreModPolicy;
     fancyMenu?: Partial<FancyMenuPayload>;
     branding?: BrandingPayload;
   };
@@ -71,12 +85,28 @@ export type SearchResult = {
 
 export type DependencyAnalysis = {
   projectId: string;
+  versionId: string;
   requiresDependencies: boolean;
   requiredDependencies: string[];
+  dependencyDetails: Array<{ projectId: string; title: string }>;
 };
 
 export type InstallModsPayload = {
+  primary: AdminMod;
+  dependencies: AdminMod[];
   mods: AdminMod[];
+};
+
+export type ModVersionsPayload = {
+  projectId: string;
+  projectTitle: string;
+  minecraftVersion: string;
+  versions: Array<{
+    id: string;
+    name: string;
+    versionType: 'release' | 'beta' | 'alpha';
+    publishedAt: string;
+  }>;
 };
 
 export type SaveSettingsPayload = {
@@ -116,4 +146,40 @@ export type UploadBundlePayload = {
   url: string;
   sha256: string;
   entryCount: number;
+};
+
+export type FancyMenuPreviewAssetRef = {
+  token: string;
+  id: string;
+  contentType: string;
+};
+
+export type FancyMenuPreviewModel = {
+  source: 'simple' | 'custom';
+  mode: 'simple' | 'custom';
+  serverName: string;
+  titleText: string;
+  subtitleText: string;
+  playButtonLabel: string;
+  buttons: Array<{
+    key: 'singleplayer' | 'multiplayer' | 'realms' | 'play' | 'custom';
+    label: string;
+    visible: boolean;
+    primary?: boolean;
+  }>;
+  backgroundUrl?: string;
+  logoUrl?: string;
+  notices: string[];
+  assetToken?: string;
+};
+
+export type FancyMenuPreviewRequest = {
+  serverName?: string;
+  fancyMenu?: Partial<FancyMenuPayload>;
+  branding?: BrandingPayload;
+};
+
+export type FancyMenuPreviewPayload = {
+  model: FancyMenuPreviewModel;
+  expiresAt?: string;
 };

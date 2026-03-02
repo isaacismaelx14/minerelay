@@ -8,6 +8,7 @@ This project does **not** implement Microsoft OAuth and does **not** replace a M
 
 - `apps/launcher`: Tauri v2 + React + TypeScript desktop app
 - `apps/api`: NestJS + Prisma + Postgres profile/version API
+- `apps/fancymenu-sandbox`: isolated FancyMenu zip validation + preview sandbox
 - `packages/shared`: shared lockfile/profile/update schemas
 - `mods/server-lock`: Fabric 1.20.1 client mod (`Play` only -> direct connect)
 - `infra/sample-data`: sample lockfile, metadata, and local artifact jar
@@ -102,7 +103,7 @@ Swagger docs: `/docs`
 pnpm install
 ```
 
-2. Start Postgres on non-default host port `5433`:
+2. Start local infra (Postgres + FancyMenu sandbox):
 
 ```bash
 docker compose up -d

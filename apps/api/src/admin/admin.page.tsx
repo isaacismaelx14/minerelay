@@ -34,10 +34,11 @@ function renderDocument(options: RenderOptions): string {
 }
 
 export function renderAdminLoginPage(): string {
+  const cacheBust = Date.now().toString(36);
   return renderDocument({
     title: 'MSS+ Client Admin Login',
     styles: LOGIN_STYLES,
-    scriptSrc: '/admin/login/app.js',
+    scriptSrc: `/admin/login/app.js?v=${cacheBust}`,
     scriptType: 'module',
     children: (
       <div id="admin-login-root">
@@ -52,10 +53,11 @@ export function renderAdminLoginPage(): string {
 }
 
 export function renderAdminPage(): string {
+  const cacheBust = Date.now().toString(36);
   return renderDocument({
     title: 'MSS+ Client Admin Console',
     styles: ADMIN_STYLES,
-    scriptSrc: '/admin/app.js',
+    scriptSrc: `/admin/app.js?v=${cacheBust}`,
     scriptType: 'module',
     children: (
       <div id="admin-root">

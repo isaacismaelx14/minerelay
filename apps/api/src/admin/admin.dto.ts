@@ -152,10 +152,30 @@ export class InstallModDto {
   @IsString()
   minecraftVersion!: string;
 
+  @IsString()
+  @IsOptional()
+  versionId?: string;
+
   @Type(() => Boolean)
   @IsBoolean()
   @IsOptional()
   includeDependencies?: boolean;
+}
+
+export class BuildFancyMenuPreviewDto {
+  @IsString()
+  @IsOptional()
+  serverName?: string;
+
+  @ValidateNested()
+  @Type(() => FancyMenuDto)
+  @IsOptional()
+  fancyMenu?: FancyMenuDto;
+
+  @ValidateNested()
+  @Type(() => BrandingDto)
+  @IsOptional()
+  branding?: BrandingDto;
 }
 
 export class PublishProfileDto {

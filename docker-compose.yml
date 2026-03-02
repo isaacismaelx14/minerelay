@@ -17,5 +17,18 @@ services:
     volumes:
       - mvl_syncer_pgdata:/var/lib/postgresql/data
 
+  fancymenu-sandbox:
+    build:
+      context: .
+      dockerfile: apps/fancymenu-sandbox/Dockerfile
+    container_name: mvl_fancymenu_sandbox
+    restart: unless-stopped
+    environment:
+      PORT: 3210
+      FANCYMENU_SANDBOX_API_KEY: sandbox-dev-key
+      FANCYMENU_PREVIEW_TTL_SECONDS: 1800
+    expose:
+      - "3210"
+
 volumes:
   mvl_syncer_pgdata:

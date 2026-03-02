@@ -86,9 +86,6 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
-      yauzl:
-        specifier: ^3.2.0
-        version: 3.2.0
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.2.0
@@ -123,9 +120,6 @@ importers:
       '@types/supertest':
         specifier: ^6.0.2
         version: 6.0.3
-      '@types/yauzl':
-        specifier: ^2.10.3
-        version: 2.10.3
       esbuild:
         specifier: ^0.25.10
         version: 0.25.12
@@ -177,6 +171,25 @@ importers:
       typescript-eslint:
         specifier: ^8.20.0
         version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
+
+  apps/fancymenu-sandbox:
+    dependencies:
+      yauzl:
+        specifier: ^3.2.0
+        version: 3.2.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.13
+      '@types/yauzl':
+        specifier: ^2.10.3
+        version: 2.10.3
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
 
   apps/launcher:
     dependencies:

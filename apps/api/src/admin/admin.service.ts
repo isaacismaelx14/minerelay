@@ -10,8 +10,7 @@ import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, extname, posix, resolve } from 'node:path';
-import * as yauzl from 'yauzl';
+import { basename, extname, resolve } from 'node:path';
 import {
   BrandingSchema,
   FancyMenuSettingsSchema,
@@ -23,12 +22,22 @@ import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
 import {
+  BuildFancyMenuPreviewDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
   SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
+import {
+  BundleSandboxClient,
+  SandboxPreviewResponse,
+} from './bundle-sandbox.client';
+import { CoreModPolicyService, ManagedMod } from './core-mod-policy.service';
+import {
+  FancyPreviewAssemblerService,
+  FancyPreviewModel,
+} from './fancy-preview-assembler.service';
 
 import { AdminAuthService } from './auth/admin-auth.service';
 import {
@@ -37,15 +46,11 @@ import {
   REFRESH_COOKIE,
 } from './auth/admin-session.service';
 
-const FANCY_MENU_PROJECT_ID = 'Wq5SjeWM';
 const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
 const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 50 * 1024 * 1024;
-const MAX_FANCY_BUNDLE_ENTRIES = 2000;
-const MAX_FANCY_BUNDLE_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
-const FANCY_MENU_ROOT = 'config/fancymenu';
 
 interface ModrinthSearchResponse {
   hits: Array<{
@@ -68,6 +73,7 @@ interface ModrinthDependency {
 
 interface ModrinthVersion {
   id: string;
+  name?: string;
   version_type: 'release' | 'beta' | 'alpha';
   date_published: string;
   game_versions: string[];
@@ -80,16 +86,7 @@ interface ModrinthVersion {
 }
 
 interface ResolvedModWithDeps {
-  mod: {
-    kind: 'mod';
-    name: string;
-    provider: 'modrinth';
-    side: 'client';
-    projectId: string;
-    versionId: string;
-    url: string;
-    sha256: string;
-  };
+  mod: ManagedMod;
   requiredDependencies: string[];
 }
 
@@ -126,6 +123,9 @@ export class AdminService implements OnModuleInit {
     private readonly authService: AdminAuthService,
     private readonly sessionService: AdminSessionService,
     private readonly signing: SigningService,
+    private readonly sandboxClient: BundleSandboxClient,
+    private readonly coreModPolicy: CoreModPolicyService,
+    private readonly previewAssembler: FancyPreviewAssemblerService,
   ) {}
 
   async onModuleInit() {
@@ -225,11 +225,25 @@ export class AdminService implements OnModuleInit {
     }
 
     const lock = ProfileLockSchema.parse(latest.lockJson);
-    const mods = lock.items.filter((item) => item.kind === 'mod');
+    const lockMods = lock.items.filter((item) => item.kind === 'mod');
 
     const serverFancyMenu = this.extractFancyMenu(server.fancyMenuSettings);
     const profileFancyMenu = this.extractFancyMenu(latest.fancyMenuSettings);
     const lockFancyMenu = this.extractFancyMenu(lock.fancyMenu);
+    const activeFancyMenu =
+      profileFancyMenu ?? serverFancyMenu ?? lockFancyMenu;
+    let normalizedMods = lockMods as ManagedMod[];
+    try {
+      normalizedMods = await this.coreModPolicy.normalizeMods({
+        mods: lockMods as ManagedMod[],
+        minecraftVersion: latest.minecraftVersion,
+        fancyMenuEnabled: activeFancyMenu?.enabled === true,
+        resolveMod: (projectId, minecraftVersion, versionId) =>
+          this.resolveCompatibleMod(projectId, minecraftVersion, versionId),
+      });
+    } catch {
+      normalizedMods = lockMods as ManagedMod[];
+    }
     const lockBrandingResult = BrandingSchema.safeParse(lock.branding);
     const lockBranding = lockBrandingResult.success
       ? lockBrandingResult.data
@@ -255,8 +269,11 @@ export class AdminService implements OnModuleInit {
         minecraftVersion: latest.minecraftVersion,
         loader: latest.loader,
         loaderVersion: latest.loaderVersion,
-        mods,
-        fancyMenu: profileFancyMenu ?? serverFancyMenu ?? lockFancyMenu,
+        mods: normalizedMods,
+        fancyMenu: activeFancyMenu,
+        coreModPolicy: this.coreModPolicy.buildMetadata(
+          activeFancyMenu?.enabled === true,
+        ),
         branding: lockBranding,
       },
       appSettings: settings,
@@ -325,7 +342,9 @@ export class AdminService implements OnModuleInit {
 
   async saveDraft(input: SaveDraftDto) {
     const serverId = this.getServerId();
-    const server = await this.prisma.server.findUnique({ where: { id: serverId } });
+    const server = await this.prisma.server.findUnique({
+      where: { id: serverId },
+    });
     if (!server) {
       throw new NotFoundException(`Server '${serverId}' not found`);
     }
@@ -483,10 +502,27 @@ export class AdminService implements OnModuleInit {
   }
 
   async analyzeModDependencies(projectId: string, minecraftVersion: string) {
+    const projectCache: Record<string, ModrinthProject> = {};
     const resolved = await this.resolveCompatibleModWithDependencies(
       projectId,
       minecraftVersion,
-      {},
+      projectCache,
+    );
+    const dependencyDetails = await Promise.all(
+      resolved.requiredDependencies.map(async (dependencyId) => {
+        try {
+          const project = await this.fetchProject(dependencyId, projectCache);
+          return {
+            projectId: dependencyId,
+            title: project.title,
+          };
+        } catch {
+          return {
+            projectId: dependencyId,
+            title: dependencyId,
+          };
+        }
+      }),
     );
 
     return {
@@ -494,33 +530,106 @@ export class AdminService implements OnModuleInit {
       versionId: resolved.mod.versionId,
       requiresDependencies: resolved.requiredDependencies.length > 0,
       requiredDependencies: resolved.requiredDependencies,
+      dependencyDetails,
     };
   }
 
   async installMod(input: InstallModDto) {
     const includeDependencies = input.includeDependencies ?? true;
     const installed = new Map<string, ResolvedModWithDeps['mod']>();
-
-    await this.collectMod(
+    const primaryResolved = await this.resolveCompatibleModWithDependencies(
       input.projectId,
       input.minecraftVersion,
-      includeDependencies,
-      installed,
-      new Set(),
+      {},
+      input.versionId?.trim() || undefined,
+    );
+    installed.set(
+      primaryResolved.mod.projectId || input.projectId,
+      primaryResolved.mod,
+    );
+
+    if (includeDependencies) {
+      const visited = new Set([input.projectId.trim()]);
+      for (const dependencyId of primaryResolved.requiredDependencies) {
+        await this.collectMod(
+          dependencyId,
+          input.minecraftVersion,
+          true,
+          installed,
+          visited,
+        );
+      }
+    }
+
+    const mods = Array.from(installed.values());
+    const dependencies = mods.filter(
+      (entry) => entry.projectId !== primaryResolved.mod.projectId,
     );
 
     return {
-      mods: Array.from(installed.values()),
+      primary: primaryResolved.mod,
+      dependencies,
+      mods,
     };
   }
 
-  async resolveCompatibleMod(projectId: string, minecraftVersion: string) {
+  async resolveCompatibleMod(
+    projectId: string,
+    minecraftVersion: string,
+    versionId?: string,
+  ) {
     const resolved = await this.resolveCompatibleModWithDependencies(
       projectId,
       minecraftVersion,
       {},
+      versionId,
     );
     return resolved.mod;
+  }
+
+  async getModVersions(projectId: string, minecraftVersion: string) {
+    const cleanProjectId = projectId.trim();
+    const cleanMinecraftVersion = minecraftVersion.trim();
+    if (!cleanProjectId || !cleanMinecraftVersion) {
+      return {
+        projectId: cleanProjectId,
+        minecraftVersion: cleanMinecraftVersion,
+        versions: [],
+      };
+    }
+
+    const project = await this.fetchProject(cleanProjectId, {});
+    const versions = await this.fetchProjectVersions(cleanProjectId);
+    const compatible = versions
+      .filter(
+        (entry) =>
+          entry.loaders.includes('fabric') &&
+          entry.game_versions.includes(cleanMinecraftVersion),
+      )
+      .sort((left, right) => {
+        const leftRank = this.versionTypeRank(left.version_type);
+        const rightRank = this.versionTypeRank(right.version_type);
+        if (leftRank !== rightRank) {
+          return leftRank - rightRank;
+        }
+        return (
+          Date.parse(right.date_published) - Date.parse(left.date_published)
+        );
+      })
+      .slice(0, 25)
+      .map((entry) => ({
+        id: entry.id,
+        name: entry.name?.trim() || entry.id,
+        versionType: entry.version_type,
+        publishedAt: entry.date_published,
+      }));
+
+    return {
+      projectId: cleanProjectId,
+      projectTitle: project.title,
+      minecraftVersion: cleanMinecraftVersion,
+      versions: compatible,
+    };
   }
 
   async generateLockfile(input: GenerateLockfileDto): Promise<ProfileLock> {
@@ -736,7 +845,7 @@ export class AdminService implements OnModuleInit {
       throw new BadGatewayException('FancyMenu bundle must be a .zip file');
     }
 
-    const validation = await this.validateFancyMenuBundleBuffer(file.buffer);
+    const validation = await this.sandboxClient.validateBundle(file.buffer);
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
 
     const root = this.getArtifactsRoot();
@@ -756,6 +865,64 @@ export class AdminService implements OnModuleInit {
       size: file.size,
       entryCount: validation.entryCount,
     };
+  }
+
+  async buildFancyMenuPreview(input: BuildFancyMenuPreviewDto): Promise<{
+    model: FancyPreviewModel;
+    expiresAt?: string;
+  }> {
+    const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
+    const baseline = this.previewAssembler.buildSimplePreview({
+      serverName: input.serverName?.trim() || undefined,
+      fancyMenu,
+      branding: {
+        logoUrl: input.branding?.logoUrl?.trim() || undefined,
+        backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
+      },
+    });
+
+    if (
+      !fancyMenu.enabled ||
+      fancyMenu.mode !== 'custom' ||
+      !fancyMenu.customLayoutUrl ||
+      !fancyMenu.customLayoutSha256
+    ) {
+      return { model: baseline };
+    }
+
+    const bundlePath = this.resolveArtifactPathFromUrl(
+      fancyMenu.customLayoutUrl,
+    );
+    const payload = await readFile(bundlePath).catch(() => null);
+    if (!payload || payload.length === 0) {
+      throw new BadGatewayException(
+        'FancyMenu preview bundle is missing or unreadable',
+      );
+    }
+
+    const actualSha = createHash('sha256').update(payload).digest('hex');
+    if (
+      actualSha.toLowerCase() !== fancyMenu.customLayoutSha256.toLowerCase()
+    ) {
+      throw new BadGatewayException(
+        'FancyMenu preview bundle SHA-256 does not match',
+      );
+    }
+
+    const sandboxPreview: SandboxPreviewResponse =
+      await this.sandboxClient.buildPreview(payload);
+    return {
+      model: this.previewAssembler.mergeCustomPreview(
+        baseline,
+        sandboxPreview,
+        '/v1/admin/fancymenu/preview/assets',
+      ),
+      expiresAt: sandboxPreview.expiresAt,
+    };
+  }
+
+  async getFancyMenuPreviewAsset(token: string, assetId: string) {
+    return this.sandboxClient.fetchPreviewAsset(token, assetId);
   }
 
   private async ensureAdminCredential(): Promise<void> {
@@ -865,7 +1032,7 @@ export class AdminService implements OnModuleInit {
       minecraftVersion,
       {},
     );
-    output.set(resolved.mod.projectId, resolved.mod);
+    output.set(resolved.mod.projectId || normalized, resolved.mod);
 
     if (!includeDependencies) {
       return;
@@ -886,9 +1053,11 @@ export class AdminService implements OnModuleInit {
     projectId: string,
     minecraftVersion: string,
     projectCache: Record<string, ModrinthProject>,
+    versionId?: string,
   ): Promise<ResolvedModWithDeps> {
     const cleanProjectId = projectId.trim();
     const cleanMinecraftVersion = minecraftVersion.trim();
+    const cleanVersionId = versionId?.trim();
 
     const [project, versions] = await Promise.all([
       this.fetchProject(cleanProjectId, projectCache),
@@ -899,6 +1068,7 @@ export class AdminService implements OnModuleInit {
       project.title,
       cleanMinecraftVersion,
       versions,
+      cleanVersionId,
     );
     const file =
       selected.files.find((entry) => entry.primary) ?? selected.files[0];
@@ -990,6 +1160,7 @@ export class AdminService implements OnModuleInit {
     projectName: string,
     minecraftVersion: string,
     versions: ModrinthVersion[],
+    preferredVersionId?: string,
   ): ModrinthVersion {
     const compatible = versions.filter(
       (entry) =>
@@ -1001,6 +1172,18 @@ export class AdminService implements OnModuleInit {
       throw new BadGatewayException(
         `No compatible Fabric version found for '${projectName}' on Minecraft ${minecraftVersion}`,
       );
+    }
+
+    if (preferredVersionId) {
+      const preferred = compatible.find(
+        (entry) => entry.id === preferredVersionId,
+      );
+      if (!preferred) {
+        throw new BadGatewayException(
+          `Version '${preferredVersionId}' is not compatible for '${projectName}' on Minecraft ${minecraftVersion}`,
+        );
+      }
+      return preferred;
     }
 
     compatible.sort((left, right) => {
@@ -1168,27 +1351,19 @@ export class AdminService implements OnModuleInit {
     const fancyMenuSettings = this.normalizeFancyMenuSettings(input.fancyMenu);
     const includeFancyMenu = fancyMenuSettings.enabled;
 
-    const mods = input.mods.filter(
+    const draftMods = input.mods.filter(
       (entry) =>
         !entry.name.toLowerCase().includes('server lock') &&
         !entry.url.includes('server-lock-'),
     );
 
-    if (includeFancyMenu) {
-      const hasFancyMenu = mods.some(
-        (entry) =>
-          entry.projectId === FANCY_MENU_PROJECT_ID ||
-          entry.name.toLowerCase().includes('fancymenu'),
-      );
-
-      if (!hasFancyMenu) {
-        const fancyMenuMod = await this.resolveCompatibleMod(
-          FANCY_MENU_PROJECT_ID,
-          cleanMinecraftVersion,
-        );
-        mods.push(fancyMenuMod);
-      }
-    }
+    const mods = await this.coreModPolicy.normalizeMods({
+      mods: draftMods as ManagedMod[],
+      minecraftVersion: cleanMinecraftVersion,
+      fancyMenuEnabled: includeFancyMenu,
+      resolveMod: (projectId, minecraftVersion, versionId) =>
+        this.resolveCompatibleMod(projectId, minecraftVersion, versionId),
+    });
 
     const configs = [];
     if (includeFancyMenu && fancyMenuSettings.mode === 'custom') {
@@ -1329,7 +1504,7 @@ export class AdminService implements OnModuleInit {
       );
     }
 
-    return this.validateFancyMenuBundleBuffer(payload);
+    return this.sandboxClient.validateBundle(payload);
   }
 
   private resolveArtifactPathFromUrl(url: string): string {
@@ -1356,283 +1531,6 @@ export class AdminService implements OnModuleInit {
     }
 
     return resolve(this.getArtifactsRoot(), safeFileName);
-  }
-
-  private async validateFancyMenuBundleBuffer(
-    payload: Buffer,
-  ): Promise<FancyMenuBundleValidation> {
-    return new Promise((resolveValidation, rejectValidation) => {
-      yauzl.fromBuffer(
-        payload,
-        {
-          lazyEntries: true,
-          validateEntrySizes: true,
-          decodeStrings: true,
-        },
-        (error, zipFile) => {
-          if (error || !zipFile) {
-            rejectValidation(new BadGatewayException('Invalid ZIP archive'));
-            return;
-          }
-
-          let done = false;
-          let entryCount = 0;
-          let totalUncompressedBytes = 0;
-          let hasCustomizableMenus = false;
-          let hasCustomizationTxt = false;
-          let hasCustomizationMainTxt = false;
-          const fileEntries = new Set<string>();
-          const textFiles = new Map<string, string>();
-
-          const fail = (message: string) => {
-            if (done) {
-              return;
-            }
-            done = true;
-            zipFile.close();
-            rejectValidation(new BadGatewayException(message));
-          };
-
-          zipFile.on('error', () => fail('Invalid ZIP archive'));
-
-          zipFile.on('entry', (entry: yauzl.Entry) => {
-            if (done) {
-              return;
-            }
-
-            entryCount += 1;
-            if (entryCount > MAX_FANCY_BUNDLE_ENTRIES) {
-              fail(
-                `FancyMenu bundle exceeds ${MAX_FANCY_BUNDLE_ENTRIES} entries`,
-              );
-              return;
-            }
-
-            const normalizedPath = this.normalizeFancyMenuPath(
-              entry.fileName,
-              true,
-            );
-            if (!normalizedPath.startsWith(`${FANCY_MENU_ROOT}/`)) {
-              fail(
-                `FancyMenu bundle entry is outside ${FANCY_MENU_ROOT}: ${entry.fileName}`,
-              );
-              return;
-            }
-
-            const isDirectory = entry.fileName.endsWith('/');
-            if (isDirectory) {
-              zipFile.readEntry();
-              return;
-            }
-
-            totalUncompressedBytes += entry.uncompressedSize;
-            if (totalUncompressedBytes > MAX_FANCY_BUNDLE_UNCOMPRESSED_BYTES) {
-              fail(
-                `FancyMenu bundle uncompressed size exceeds ${MAX_FANCY_BUNDLE_UNCOMPRESSED_BYTES} bytes`,
-              );
-              return;
-            }
-
-            fileEntries.add(normalizedPath);
-            if (normalizedPath === `${FANCY_MENU_ROOT}/customizablemenus.txt`) {
-              hasCustomizableMenus = true;
-            }
-            if (normalizedPath === `${FANCY_MENU_ROOT}/customization.txt`) {
-              hasCustomizationTxt = true;
-            }
-            if (
-              normalizedPath.toLowerCase() ===
-              `${FANCY_MENU_ROOT}/customization/main.txt`
-            ) {
-              hasCustomizationMainTxt = true;
-            }
-
-            if (!normalizedPath.toLowerCase().endsWith('.txt')) {
-              zipFile.readEntry();
-              return;
-            }
-
-            zipFile.openReadStream(entry, (streamError, stream) => {
-              if (streamError || !stream) {
-                fail(`Failed to read ZIP entry ${entry.fileName}`);
-                return;
-              }
-
-              const chunks: Buffer[] = [];
-              stream.on('data', (chunk: Buffer | string) => {
-                if (Buffer.isBuffer(chunk)) {
-                  chunks.push(chunk);
-                } else {
-                  chunks.push(Buffer.from(chunk, 'utf8'));
-                }
-              });
-              stream.on('error', () =>
-                fail(`Failed to read ZIP entry ${entry.fileName}`),
-              );
-              stream.on('end', () => {
-                if (done) {
-                  return;
-                }
-                textFiles.set(
-                  normalizedPath,
-                  Buffer.concat(chunks).toString('utf8'),
-                );
-                zipFile.readEntry();
-              });
-            });
-          });
-
-          zipFile.on('end', () => {
-            if (done) {
-              return;
-            }
-
-            if (!hasCustomizableMenus) {
-              fail(
-                `FancyMenu bundle is missing ${FANCY_MENU_ROOT}/customizablemenus.txt`,
-              );
-              return;
-            }
-
-            if (hasCustomizationTxt && hasCustomizationMainTxt) {
-              fail(
-                `FancyMenu bundle must not include both ${FANCY_MENU_ROOT}/customization.txt and ${FANCY_MENU_ROOT}/customization/main.txt`,
-              );
-              return;
-            }
-
-            if (!hasCustomizationTxt && !hasCustomizationMainTxt) {
-              fail(
-                `FancyMenu bundle must include ${FANCY_MENU_ROOT}/customization.txt or ${FANCY_MENU_ROOT}/customization/main.txt`,
-              );
-              return;
-            }
-
-            for (const [sourcePath, content] of textFiles.entries()) {
-              const pattern = /\[source:file\]([^\s\r\n]+)/gi;
-              let match = pattern.exec(content);
-              while (match) {
-                const rawReference = match[1]?.trim() ?? '';
-                const resolvedPath = this.resolveFancyMenuSourceFilePath(
-                  sourcePath,
-                  rawReference,
-                );
-                if (!fileEntries.has(resolvedPath)) {
-                  fail(
-                    `FancyMenu reference not found: ${rawReference} (from ${sourcePath})`,
-                  );
-                  return;
-                }
-                match = pattern.exec(content);
-              }
-            }
-
-            done = true;
-            resolveValidation({
-              entryCount,
-              totalUncompressedBytes,
-            });
-          });
-
-          zipFile.readEntry();
-        },
-      );
-    });
-  }
-
-  private resolveFancyMenuSourceFilePath(
-    sourcePath: string,
-    rawReference: string,
-  ): string {
-    const trimmed = rawReference
-      .trim()
-      .replace(/^["']+/, '')
-      .replace(/["']+$/, '');
-    const normalizedReference = trimmed.replace(/\\/g, '/');
-    if (!normalizedReference) {
-      throw new BadGatewayException(
-        `Invalid FancyMenu source:file reference in ${sourcePath}`,
-      );
-    }
-
-    if (normalizedReference.includes('://')) {
-      throw new BadGatewayException(
-        `FancyMenu source:file must be local path, got URL '${rawReference}'`,
-      );
-    }
-
-    const candidate = normalizedReference.startsWith('/')
-      ? normalizedReference.slice(1)
-      : normalizedReference.startsWith('config/') ||
-          normalizedReference.startsWith('fancymenu/')
-        ? normalizedReference
-        : posix.join(posix.dirname(sourcePath), normalizedReference);
-
-    const resolved = this.normalizeFancyMenuPath(candidate, false);
-    if (!resolved.startsWith(`${FANCY_MENU_ROOT}/`)) {
-      throw new BadGatewayException(
-        `FancyMenu source:file reference escapes ${FANCY_MENU_ROOT}: ${rawReference}`,
-      );
-    }
-
-    return resolved;
-  }
-
-  private normalizeFancyMenuPath(value: string, fromZipEntry: boolean): string {
-    const forward = value.replace(/\\/g, '/').trim();
-    const cleaned = forward.endsWith('/') ? forward.slice(0, -1) : forward;
-    if (!cleaned || cleaned.startsWith('/')) {
-      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
-    }
-
-    if (this.containsControlChar(cleaned)) {
-      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
-    }
-    if (cleaned.includes(':')) {
-      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
-    }
-
-    const normalized = posix.normalize(cleaned);
-    if (
-      normalized === '.' ||
-      normalized === '..' ||
-      normalized.startsWith('../') ||
-      normalized.includes('/../')
-    ) {
-      throw new BadGatewayException(`Unsafe ZIP path '${value}'`);
-    }
-
-    if (normalized.startsWith(`${FANCY_MENU_ROOT}/`)) {
-      return normalized;
-    }
-
-    if (normalized === 'config/fancymenu') {
-      return FANCY_MENU_ROOT;
-    }
-
-    if (normalized.startsWith('fancymenu/')) {
-      return `${FANCY_MENU_ROOT}/${normalized.slice('fancymenu/'.length)}`;
-    }
-
-    if (normalized === 'fancymenu') {
-      return FANCY_MENU_ROOT;
-    }
-
-    if (fromZipEntry) {
-      return `${FANCY_MENU_ROOT}/${normalized}`;
-    }
-
-    return posix.join(FANCY_MENU_ROOT, normalized);
-  }
-
-  private containsControlChar(value: string): boolean {
-    for (let i = 0; i < value.length; i += 1) {
-      const code = value.charCodeAt(i);
-      if (code <= 31 || code === 127) {
-        return true;
-      }
-    }
-    return false;
   }
 
   private extractFancyMenu(value: unknown) {

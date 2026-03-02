@@ -1,0 +1,121 @@
+name: fancymenu-sandbox-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/fancymenu-sandbox/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - '.github/workflows/fancymenu-sandbox-build.yml'
+  pull_request:
+    paths:
+      - 'apps/fancymenu-sandbox/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - '.github/workflows/fancymenu-sandbox-build.yml'
+
+jobs:
+  build-fancymenu-sandbox:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build FancyMenu sandbox
+        run: pnpm --filter @mvl/fancymenu-sandbox build
+
+  deploy-fancymenu-sandbox:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-fancymenu-sandbox
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy FancyMenu sandbox to Railway
+        run: |
+          set -euo pipefail
+
+          PROJECT_ID="${RAILWAY_PROJECT_ID:-2e1199e7-8617-445e-a258-0e17212cadfc}"
+          BEFORE_DEPLOY_ID="$(railway service status -s fancymenu-sandbox --json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{const j=JSON.parse(s);process.stdout.write(j.deploymentId||'')}catch{process.stdout.write('')}})")"
+          echo "Previous deployment ID: ${BEFORE_DEPLOY_ID:-<none>}"
+
+          DEPLOY_OUTPUT="$(railway up \
+            --service fancymenu-sandbox \
+            --environment production \
+            --project "$PROJECT_ID" \
+            --detach 2>&1)"
+          echo "$DEPLOY_OUTPUT"
+
+          DEPLOY_ID="$(printf '%s\n' "$DEPLOY_OUTPUT" | sed -n 's/.*id=\([0-9a-f-]\{36\}\).*/\1/p' | head -n 1)"
+          if [ -z "${DEPLOY_ID:-}" ]; then
+            echo "Could not parse deployment ID from railway up output."
+            DEPLOY_ID="$BEFORE_DEPLOY_ID"
+          fi
+          echo "Triggered deployment ID: ${DEPLOY_ID:-<unknown>}"
+
+          for i in $(seq 1 90); do
+            STATUS_JSON="$(railway service status -s fancymenu-sandbox --json)"
+            CURRENT_ID="$(printf '%s' "$STATUS_JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.deploymentId||'')})")"
+            CURRENT_STATUS="$(printf '%s' "$STATUS_JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.status||'')})")"
+
+            echo "Poll $i: deployment=$CURRENT_ID status=$CURRENT_STATUS"
+
+            if [ -n "${DEPLOY_ID:-}" ] && [ "$CURRENT_ID" != "$DEPLOY_ID" ]; then
+              sleep 5
+              continue
+            fi
+
+            case "$CURRENT_STATUS" in
+              SUCCESS|SLEEPING)
+                echo "Railway deployment succeeded."
+                exit 0
+                ;;
+              FAILED|CRASHED|REMOVED|CANCELED)
+                echo "Railway deployment failed with status=$CURRENT_STATUS"
+                echo "Build logs:"
+                railway service logs -s fancymenu-sandbox --build -n 200 "$CURRENT_ID" || true
+                echo "Runtime logs:"
+                railway service logs -s fancymenu-sandbox --deployment -n 120 "$CURRENT_ID" || true
+                exit 1
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for Railway deployment to reach a terminal state."
+          exit 1

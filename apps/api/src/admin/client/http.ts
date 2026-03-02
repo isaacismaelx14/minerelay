@@ -1,5 +1,10 @@
 export type RequestMethod = 'GET' | 'POST' | 'PATCH';
 
+const GET_CACHE_TTL_MS = 15_000;
+const PREVIEW_POST_CACHE_TTL_MS = 15_000;
+const inFlightRequests = new Map<string, Promise<unknown>>();
+const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
+
 export async function readError(
   response: Response,
   fallback: string,
@@ -65,17 +70,72 @@ export async function requestJson<T>(
   method: RequestMethod,
   body?: unknown,
 ): Promise<T> {
-  const response = await authFetch(url, {
-    method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!response.ok) {
-    throw new Error(await readError(response, `Request failed: ${url}`));
+  const dedupeKey = buildDedupeKey(url, method, body);
+  if (dedupeKey) {
+    const now = Date.now();
+    const cached = responseCache.get(dedupeKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.data as T;
+    }
+    const pending = inFlightRequests.get(dedupeKey);
+    if (pending) {
+      return (await pending) as T;
+    }
   }
 
-  return (await response.json()) as T;
+  const request = (async () => {
+    const response = await authFetch(url, {
+      method,
+      headers: body ? { 'content-type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!response.ok) {
+      throw new Error(await readError(response, `Request failed: ${url}`));
+    }
+
+    const payload = (await response.json()) as T;
+    if (dedupeKey) {
+      responseCache.set(dedupeKey, {
+        data: payload,
+        expiresAt: Date.now() + dedupeTtlMs(url, method),
+      });
+    }
+    return payload;
+  })();
+
+  if (dedupeKey) {
+    inFlightRequests.set(dedupeKey, request as Promise<unknown>);
+  }
+
+  try {
+    return await request;
+  } finally {
+    if (dedupeKey) {
+      inFlightRequests.delete(dedupeKey);
+    }
+  }
+}
+
+function buildDedupeKey(
+  url: string,
+  method: RequestMethod,
+  body?: unknown,
+): string | null {
+  if (method === 'GET') {
+    return `GET ${url}`;
+  }
+  if (method === 'POST' && url === '/v1/admin/fancymenu/preview/build') {
+    return `POST ${url} ${JSON.stringify(body ?? {})}`;
+  }
+  return null;
+}
+
+function dedupeTtlMs(url: string, method: RequestMethod): number {
+  if (method === 'POST' && url === '/v1/admin/fancymenu/preview/build') {
+    return PREVIEW_POST_CACHE_TTL_MS;
+  }
+  return GET_CACHE_TTL_MS;
 }
 
 export async function uploadForm<T>(url: string, form: FormData): Promise<T> {
