@@ -9,6 +9,7 @@ import { BundleSandboxClient } from './bundle-sandbox.client';
 import { CoreModPolicyService } from './core-mod-policy.service';
 import { FancyPreviewAssemblerService } from './fancy-preview-assembler.service';
 import { ArtifactsModule } from '../artifacts/artifacts.module';
+import { ExarotonApiClient } from './exaroton/exaroton-api.client';
 
 @Module({
   imports: [ArtifactsModule],
@@ -20,6 +21,7 @@ import { ArtifactsModule } from '../artifacts/artifacts.module';
     AdminSessionService,
     AdminCsrfGuard,
     BundleSandboxClient,
+    ExarotonApiClient,
     CoreModPolicyService,
     FancyPreviewAssemblerService,
   ],

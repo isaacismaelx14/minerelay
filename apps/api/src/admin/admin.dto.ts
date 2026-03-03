@@ -246,3 +246,19 @@ export class SaveDraftDto {
   @Type(() => ResolvedModDto)
   mods?: ResolvedModDto[];
 }
+
+export class ConnectExarotonDto {
+  @IsString()
+  apiKey!: string;
+}
+
+export class SelectExarotonServerDto {
+  @IsString()
+  serverId!: string;
+}
+
+export class ExarotonServerActionDto {
+  @IsString()
+  @IsIn(['start', 'stop', 'restart'])
+  action!: 'start' | 'stop' | 'restart';
+}

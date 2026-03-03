@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Patch,
   Post,
@@ -17,6 +18,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   AdminLoginDto,
+  ConnectExarotonDto,
+  ExarotonServerActionDto,
+  SelectExarotonServerDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
@@ -119,6 +123,36 @@ export class AdminController {
   @Patch('/v1/admin/draft')
   saveDraft(@Body() payload: SaveDraftDto) {
     return this.adminService.saveDraft(payload);
+  }
+
+  @Post('/v1/admin/exaroton/connect')
+  connectExaroton(@Body() payload: ConnectExarotonDto) {
+    return this.adminService.connectExaroton(payload.apiKey);
+  }
+
+  @Delete('/v1/admin/exaroton/disconnect')
+  disconnectExaroton() {
+    return this.adminService.disconnectExaroton();
+  }
+
+  @Get('/v1/admin/exaroton/status')
+  getExarotonStatus() {
+    return this.adminService.getExarotonStatus();
+  }
+
+  @Get('/v1/admin/exaroton/servers')
+  listExarotonServers() {
+    return this.adminService.listExarotonServers();
+  }
+
+  @Post('/v1/admin/exaroton/server/select')
+  selectExarotonServer(@Body() payload: SelectExarotonServerDto) {
+    return this.adminService.selectExarotonServer(payload.serverId);
+  }
+
+  @Post('/v1/admin/exaroton/server/action')
+  exarotonServerAction(@Body() payload: ExarotonServerActionDto) {
+    return this.adminService.exarotonServerAction(payload.action);
   }
 
   @Get('/v1/admin/fabric/versions')

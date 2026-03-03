@@ -21,6 +21,10 @@ import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
 import {
+  decryptExarotonApiKey,
+  encryptExarotonApiKey,
+} from './crypto/exaroton-crypto';
+import {
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
@@ -30,6 +34,10 @@ import {
 import { BundleSandboxClient } from './bundle-sandbox.client';
 import { CoreModPolicyService, ManagedMod } from './core-mod-policy.service';
 import { ArtifactsStorageService } from '../artifacts/artifacts-storage.service';
+import {
+  ExarotonApiClient,
+  ExarotonServer,
+} from './exaroton/exaroton-api.client';
 
 import { AdminAuthService } from './auth/admin-auth.service';
 import {
@@ -40,6 +48,7 @@ import {
 
 const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
+const EXAROTON_INTEGRATION_ID = 'global';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
 const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -125,6 +134,7 @@ export class AdminService implements OnModuleInit {
     private readonly sandboxClient: BundleSandboxClient,
     private readonly coreModPolicy: CoreModPolicyService,
     private readonly artifactsStorage: ArtifactsStorageService,
+    private readonly exarotonClient: ExarotonApiClient,
   ) {}
 
   async onModuleInit() {
@@ -208,13 +218,14 @@ export class AdminService implements OnModuleInit {
 
   async getBootstrap() {
     const serverId = this.getServerId();
-    const [server, latest, settings] = await Promise.all([
+    const [server, latest, settings, exaroton] = await Promise.all([
       this.prisma.server.findUnique({ where: { id: serverId } }),
       this.prisma.profileVersion.findFirst({
         where: { serverId },
         orderBy: { version: 'desc' },
       }),
       this.getAppSettings(),
+      this.getExarotonBootstrapState(),
     ]);
 
     if (!server || !latest) {
@@ -283,6 +294,7 @@ export class AdminService implements OnModuleInit {
       },
       appSettings: settings,
       draft,
+      exaroton,
     };
   }
 
@@ -426,6 +438,144 @@ export class AdminService implements OnModuleInit {
         patch: setting.releasePatch,
       }),
       draft,
+    };
+  }
+
+  async connectExaroton(apiKey: string) {
+    const exarotonIntegration = (this.prisma as any).exarotonIntegration;
+    const encryptionKey = this.requireExarotonEncryptionKey();
+    const cleanApiKey = apiKey.trim();
+    if (!cleanApiKey) {
+      throw new BadRequestException('Exaroton API key is required');
+    }
+
+    const [account, servers, existing] = await Promise.all([
+      this.exarotonClient.getAccount(cleanApiKey),
+      this.exarotonClient.listServers(cleanApiKey),
+      exarotonIntegration.findUnique({
+        where: { id: EXAROTON_INTEGRATION_ID },
+      }),
+    ]);
+
+    const encrypted = encryptExarotonApiKey(cleanApiKey, encryptionKey);
+    const selected = existing?.selectedServerId
+      ? servers.find((entry: ExarotonServer) => entry.id === existing.selectedServerId) || null
+      : null;
+
+    await exarotonIntegration.upsert({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      create: {
+        id: EXAROTON_INTEGRATION_ID,
+        apiKeyCiphertext: encrypted.ciphertext,
+        apiKeyIv: encrypted.iv,
+        apiKeyAuthTag: encrypted.authTag,
+        accountName: account.name,
+        accountEmail: account.email,
+        selectedServerId: selected?.id ?? null,
+        selectedServerName: selected?.name ?? null,
+        selectedServerAddress: selected?.address ?? null,
+        connectedAt: new Date(),
+      },
+      update: {
+        apiKeyCiphertext: encrypted.ciphertext,
+        apiKeyIv: encrypted.iv,
+        apiKeyAuthTag: encrypted.authTag,
+        accountName: account.name,
+        accountEmail: account.email,
+        selectedServerId: selected?.id ?? null,
+        selectedServerName: selected?.name ?? null,
+        selectedServerAddress: selected?.address ?? null,
+        connectedAt: new Date(),
+      },
+    });
+
+    return {
+      configured: true,
+      connected: true,
+      account,
+      servers: servers.map((entry: ExarotonServer) => this.mapExarotonServer(entry)),
+      selectedServer: selected ? this.mapExarotonServer(selected) : null,
+    };
+  }
+
+  async disconnectExaroton() {
+    await (this.prisma as any).exarotonIntegration.deleteMany({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+
+    return { success: true };
+  }
+
+  async getExarotonStatus() {
+    return this.getExarotonBootstrapState();
+  }
+
+  async listExarotonServers() {
+    const { apiKey } = await this.requireExarotonConnection();
+    const servers = await this.exarotonClient.listServers(apiKey);
+    return {
+      servers: servers.map((entry) => this.mapExarotonServer(entry)),
+    };
+  }
+
+  async selectExarotonServer(serverId: string) {
+    const cleanServerId = serverId.trim();
+    if (!cleanServerId) {
+      throw new BadRequestException('Exaroton server ID is required');
+    }
+
+    const { apiKey } = await this.requireExarotonConnection();
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      cleanServerId,
+    );
+
+    await (this.prisma as any).exarotonIntegration.update({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      data: {
+        selectedServerId: selectedServer.id,
+        selectedServerName: selectedServer.name,
+        selectedServerAddress: selectedServer.address,
+      },
+    });
+
+    return {
+      selectedServer: this.mapExarotonServer(selectedServer),
+    };
+  }
+
+  async exarotonServerAction(action: 'start' | 'stop' | 'restart') {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    if (action === 'start') {
+      await this.exarotonClient.startServer(apiKey, selectedServerId);
+    } else if (action === 'stop') {
+      await this.exarotonClient.stopServer(apiKey, selectedServerId);
+    } else {
+      await this.exarotonClient.restartServer(apiKey, selectedServerId);
+    }
+
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
+
+    await (this.prisma as any).exarotonIntegration.update({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      data: {
+        selectedServerName: selectedServer.name,
+        selectedServerAddress: selectedServer.address,
+      },
+    });
+
+    return {
+      success: true,
+      action,
+      selectedServer: this.mapExarotonServer(selectedServer),
     };
   }
 
@@ -996,6 +1146,165 @@ export class AdminService implements OnModuleInit {
         patch: setting.releasePatch,
       }),
       publishDraft: setting.publishDraft,
+    };
+  }
+
+  private exarotonStatusLabel(status: number): string {
+    if (status === 0) return 'OFFLINE';
+    if (status === 1) return 'ONLINE';
+    if (status === 2) return 'STARTING';
+    if (status === 3) return 'STOPPING';
+    if (status === 4) return 'RESTARTING';
+    if (status === 5) return 'SAVING';
+    if (status === 6) return 'LOADING';
+    if (status === 7) return 'CRASHED';
+    if (status === 8) return 'PENDING';
+    if (status === 9) return 'TRANSFERRING';
+    if (status === 10) return 'PREPARING';
+    return 'UNKNOWN';
+  }
+
+  private mapExarotonServer(server: ExarotonServer) {
+    return {
+      id: server.id,
+      name: server.name,
+      address: server.address,
+      motd: server.motd,
+      status: server.status,
+      statusLabel: this.exarotonStatusLabel(server.status),
+      players: {
+        max: server.players?.max ?? 0,
+        count: server.players?.count ?? 0,
+      },
+      software: server.software
+        ? {
+            id: server.software.id,
+            name: server.software.name,
+            version: server.software.version,
+          }
+        : null,
+      shared: server.shared,
+    };
+  }
+
+  private getExarotonEncryptionKey(): string | null {
+    const value = this.config.get<string>('EXAROTON_ENCRYPTION_KEY')?.trim();
+    return value && value.length > 0 ? value : null;
+  }
+
+  private requireExarotonEncryptionKey(): string {
+    const encryptionKey = this.getExarotonEncryptionKey();
+    if (!encryptionKey) {
+      throw new BadRequestException(
+        'Exaroton integration is not configured: EXAROTON_ENCRYPTION_KEY is missing',
+      );
+    }
+    return encryptionKey;
+  }
+
+  private async requireExarotonConnection() {
+    const integration = await (this.prisma as any).exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+    if (!integration) {
+      throw new NotFoundException('Exaroton account is not connected');
+    }
+
+    const encryptionKey = this.requireExarotonEncryptionKey();
+    const apiKey = decryptExarotonApiKey(
+      {
+        ciphertext: integration.apiKeyCiphertext,
+        iv: integration.apiKeyIv,
+        authTag: integration.apiKeyAuthTag,
+      },
+      encryptionKey,
+    );
+
+    if (!apiKey) {
+      throw new BadGatewayException('Exaroton API key could not be decrypted');
+    }
+
+    return { integration, apiKey };
+  }
+
+  private async getExarotonBootstrapState() {
+    const encryptionKey = this.getExarotonEncryptionKey();
+    if (!encryptionKey) {
+      return {
+        configured: false,
+        connected: false,
+        account: null,
+        selectedServer: null,
+        error:
+          'EXAROTON_ENCRYPTION_KEY is not configured. Set it to enable this feature.',
+      };
+    }
+
+    const integration = await (this.prisma as any).exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+
+    if (!integration) {
+      return {
+        configured: true,
+        connected: false,
+        account: null,
+        selectedServer: null,
+        error: null,
+      };
+    }
+
+    let apiKey = '';
+    try {
+      apiKey = decryptExarotonApiKey(
+        {
+          ciphertext: integration.apiKeyCiphertext,
+          iv: integration.apiKeyIv,
+          authTag: integration.apiKeyAuthTag,
+        },
+        encryptionKey,
+      );
+    } catch {
+      return {
+        configured: true,
+        connected: false,
+        account: null,
+        selectedServer: null,
+        error: 'Stored Exaroton credentials could not be decrypted',
+      };
+    }
+
+    const selectedServerId = integration.selectedServerId?.trim();
+    let selectedServer = null;
+
+    if (selectedServerId) {
+      try {
+        const live = await this.exarotonClient.getServer(apiKey, selectedServerId);
+        selectedServer = this.mapExarotonServer(live);
+      } catch {
+        selectedServer = {
+          id: selectedServerId,
+          name: integration.selectedServerName || selectedServerId,
+          address: integration.selectedServerAddress || '',
+          motd: '',
+          status: 0,
+          statusLabel: this.exarotonStatusLabel(0),
+          players: { max: 0, count: 0 },
+          software: null,
+          shared: false,
+        };
+      }
+    }
+
+    return {
+      configured: true,
+      connected: true,
+      account: {
+        name: integration.accountName || null,
+        email: integration.accountEmail || null,
+      },
+      selectedServer,
+      error: null,
     };
   }
 

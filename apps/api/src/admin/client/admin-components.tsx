@@ -18,6 +18,15 @@ function statusClass(tone: 'idle' | 'ok' | 'error'): string {
   return 'status';
 }
 
+function exarotonStatusClass(status: number): string {
+  if (status === 1) return 'status-chip status-chip-online';
+  if (status === 7) return 'status-chip status-chip-crashed';
+  if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status)) {
+    return 'status-chip status-chip-busy';
+  }
+  return 'status-chip status-chip-offline';
+}
+
 const DataList = memo(function DataList({ children }: { children: ReactNode }) {
   return <div className="data-list">{children}</div>;
 });
@@ -238,8 +247,211 @@ const Sidebar = memo(function Sidebar() {
           </svg>
           <span>Fancy Menu</span>
         </button>
+        <button
+          className={`nav-item ${view === 'exaroton' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setView('exaroton')}
+        >
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 18a4.6 4.4 0 0 1 0-9 5.5 5.5 0 0 1 10.7-1.2A4 4 0 1 1 18 18"></path>
+            <path d="M12 12v6"></path>
+            <path d="M9.5 15.5 12 18l2.5-2.5"></path>
+          </svg>
+          <span>Exaroton</span>
+        </button>
       </nav>
     </aside>
+  );
+});
+
+const ExarotonPage = memo(function ExarotonPage() {
+  const { exaroton, statuses, actions } = useAdminContext();
+
+  return (
+    <section className="grid exaroton-grid">
+      <article className="panel exaroton-panel">
+        <h2>Exaroton Integration</h2>
+        <p className="hint">
+          Optionally connect your Exaroton account to manage your selected server from this panel.
+        </p>
+
+        {!exaroton.configured ? (
+          <div className="exaroton-warning">
+            <strong>Integration not configured</strong>
+            <p>
+              Set <code>EXAROTON_ENCRYPTION_KEY</code> on the API server first.
+            </p>
+          </div>
+        ) : null}
+
+        {!exaroton.connected ? (
+          <div className="exaroton-connect-box">
+            <p className="hint">
+              Generate your API token at{' '}
+              <a href="https://exaroton.com/account/" target="_blank" rel="noreferrer">
+                exaroton.com/account
+              </a>
+            </p>
+
+            <label>
+              Exaroton API Key
+              <div className="key-row">
+                <input
+                  name="exarotonApiKey"
+                  type={exaroton.showApiKey ? 'text' : 'password'}
+                  value={exaroton.apiKeyInput}
+                  placeholder="Enter your Exaroton API key"
+                  onChange={(event) =>
+                    actions.setExarotonApiKey(event.currentTarget.value)
+                  }
+                  disabled={!exaroton.configured || exaroton.busy}
+                />
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => actions.toggleExarotonApiKeyVisibility()}
+                  disabled={!exaroton.configured || exaroton.busy}
+                >
+                  {exaroton.showApiKey ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </label>
+
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
+              <button
+                className="btn"
+                type="button"
+                disabled={!exaroton.configured || exaroton.busy}
+                onClick={() => void actions.connectExaroton()}
+              >
+                {exaroton.busy ? 'Connecting...' : 'Connect'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="exaroton-account-row">
+              <div>
+                <strong>{exaroton.accountName || 'Connected account'}</strong>
+                <p className="hint">{exaroton.accountEmail || 'Email unavailable'}</p>
+              </div>
+              <div className="row">
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={exaroton.busy}
+                  onClick={() => void actions.refreshExarotonStatus()}
+                >
+                  Refresh
+                </button>
+                <button
+                  className="btn danger"
+                  type="button"
+                  disabled={exaroton.busy}
+                  onClick={() => void actions.disconnectExaroton()}
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0 }}>Select Server</h3>
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={exaroton.busy}
+                onClick={() => void actions.listExarotonServers()}
+              >
+                Reload Servers
+              </button>
+            </div>
+
+            <div className="exaroton-server-list" role="list">
+              {exaroton.servers.map((server) => (
+                <button
+                  key={server.id}
+                  type="button"
+                  className={`exaroton-server-item ${
+                    exaroton.selectedServer?.id === server.id ? 'active' : ''
+                  }`}
+                  onClick={() => void actions.selectExarotonServer(server.id)}
+                  disabled={exaroton.busy}
+                >
+                  <div>
+                    <strong>{server.name}</strong>
+                    <p>{server.address}</p>
+                  </div>
+                  <span className={exarotonStatusClass(server.status)}>
+                    {server.statusLabel}
+                  </span>
+                </button>
+              ))}
+              {!exaroton.servers.length ? (
+                <p className="hint">No servers loaded yet. Click “Reload Servers”.</p>
+              ) : null}
+            </div>
+
+            {exaroton.selectedServer ? (
+              <article className="exaroton-selected-card">
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3>{exaroton.selectedServer.name}</h3>
+                    <p className="hint">{exaroton.selectedServer.address}</p>
+                  </div>
+                  <span className={exarotonStatusClass(exaroton.selectedServer.status)}>
+                    {exaroton.selectedServer.statusLabel}
+                  </span>
+                </div>
+                <DataList>
+                  <DataItem
+                    label="Players"
+                    value={`${exaroton.selectedServer.players.count}/${exaroton.selectedServer.players.max}`}
+                  />
+                  <DataItem
+                    label="Software"
+                    value={
+                      exaroton.selectedServer.software
+                        ? `${exaroton.selectedServer.software.name} ${exaroton.selectedServer.software.version}`
+                        : 'Unknown'
+                    }
+                  />
+                </DataList>
+                <div className="row" style={{ justifyContent: 'flex-end' }}>
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={exaroton.busy}
+                    onClick={() => void actions.exarotonAction('start')}
+                  >
+                    Start
+                  </button>
+                  <button
+                    className="btn ghost"
+                    type="button"
+                    disabled={exaroton.busy}
+                    onClick={() => void actions.exarotonAction('restart')}
+                  >
+                    Restart
+                  </button>
+                  <button
+                    className="btn danger"
+                    type="button"
+                    disabled={exaroton.busy}
+                    onClick={() => void actions.exarotonAction('stop')}
+                  >
+                    Stop
+                  </button>
+                </div>
+              </article>
+            ) : null}
+          </>
+        )}
+
+        <div className={statusClass(statuses.exaroton.tone)}>{statuses.exaroton.text}</div>
+        {exaroton.error ? <p className="hint">{exaroton.error}</p> : null}
+      </article>
+    </section>
   );
 });
 
@@ -1563,6 +1775,7 @@ export const AdminApp = memo(function AdminApp() {
           {view === 'identity' ? <IdentityPage /> : null}
           {view === 'mods' ? <ModManagerPage /> : null}
           {view === 'fancy' ? <FancyMenuPage /> : null}
+          {view === 'exaroton' ? <ExarotonPage /> : null}
         </section>
       </main>
     </div>

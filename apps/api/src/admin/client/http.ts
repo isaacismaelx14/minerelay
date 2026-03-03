@@ -1,4 +1,4 @@
-export type RequestMethod = 'GET' | 'POST' | 'PATCH';
+export type RequestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 const GET_CACHE_TTL_MS = 15_000;
 const PREVIEW_POST_CACHE_TTL_MS = 15_000;

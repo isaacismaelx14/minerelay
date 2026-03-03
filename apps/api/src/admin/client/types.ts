@@ -41,6 +41,36 @@ export type BrandingPayload = {
   newsUrl?: string;
 };
 
+export type ExarotonServerPayload = {
+  id: string;
+  name: string;
+  address: string;
+  motd: string;
+  status: number;
+  statusLabel: string;
+  players: {
+    max: number;
+    count: number;
+  };
+  software: {
+    id: string;
+    name: string;
+    version: string;
+  } | null;
+  shared: boolean;
+};
+
+export type ExarotonStatusPayload = {
+  configured: boolean;
+  connected: boolean;
+  account: {
+    name: string | null;
+    email: string | null;
+  } | null;
+  selectedServer: ExarotonServerPayload | null;
+  error: string | null;
+};
+
 export type BootstrapPayload = {
   server: {
     id: string;
@@ -71,6 +101,7 @@ export type BootstrapPayload = {
     fancyMenu?: Partial<FancyMenuPayload> | null;
     branding?: BrandingPayload | null;
   } | null;
+  exaroton: ExarotonStatusPayload;
 };
 
 export type FabricVersionsPayload = {
@@ -153,6 +184,33 @@ export type UploadBundlePayload = {
   url: string;
   sha256: string;
   entryCount: number;
+};
+
+export type ConnectExarotonPayload = {
+  configured: boolean;
+  connected: boolean;
+  account: {
+    name: string;
+    email: string;
+    verified: boolean;
+    credits: number;
+  };
+  servers: ExarotonServerPayload[];
+  selectedServer: ExarotonServerPayload | null;
+};
+
+export type ExarotonServersPayload = {
+  servers: ExarotonServerPayload[];
+};
+
+export type ExarotonSelectPayload = {
+  selectedServer: ExarotonServerPayload;
+};
+
+export type ExarotonActionPayload = {
+  success: boolean;
+  action: 'start' | 'stop' | 'restart';
+  selectedServer: ExarotonServerPayload;
 };
 
 export type FancyMenuPreviewAssetRef = {

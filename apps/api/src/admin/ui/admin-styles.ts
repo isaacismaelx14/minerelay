@@ -1502,5 +1502,141 @@ export const ADMIN_STYLES = `
     font-size: 1.75rem;
     margin-bottom: 4px;
   }
+
+  .exaroton-grid {
+    display: grid;
+  }
+
+  .exaroton-panel {
+    display: grid;
+    gap: 16px;
+  }
+
+  .exaroton-warning {
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+  }
+
+  .exaroton-warning p {
+    margin-top: 6px;
+  }
+
+  .exaroton-connect-box {
+    display: grid;
+    gap: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 14px;
+  }
+
+  .key-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .exaroton-account-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 12px 14px;
+  }
+
+  .exaroton-server-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .exaroton-server-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--text-primary);
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .exaroton-server-item:hover:not(:disabled) {
+    border-color: var(--line-strong);
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .exaroton-server-item.active {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18);
+  }
+
+  .exaroton-server-item p {
+    margin: 4px 0 0 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  .status-chip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .status-chip-online {
+    color: var(--success);
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.1);
+  }
+
+  .status-chip-offline {
+    color: var(--text-secondary);
+    border-color: var(--line);
+    background: rgba(148, 163, 184, 0.12);
+  }
+
+  .status-chip-busy {
+    color: var(--warning);
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .status-chip-crashed {
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .exaroton-selected-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: rgba(0, 0, 0, 0.22);
+    padding: 14px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .exaroton-selected-card h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .exaroton-selected-card .data-list {
+    margin-top: 0;
+  }
 `;
 

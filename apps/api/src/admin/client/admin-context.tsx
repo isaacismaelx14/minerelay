@@ -15,8 +15,14 @@ import type {
   AdminMod,
   BootstrapPayload,
   BrandingPayload,
+  ConnectExarotonPayload,
   CoreModPolicy,
   DependencyAnalysis,
+  ExarotonActionPayload,
+  ExarotonSelectPayload,
+  ExarotonServerPayload,
+  ExarotonServersPayload,
+  ExarotonStatusPayload,
   FabricVersionsPayload,
   FancyMenuPayload,
   InstallModsPayload,
@@ -43,6 +49,20 @@ type StatusState = {
   mods: StatusMessage;
   publish: StatusMessage;
   fancy: StatusMessage;
+  exaroton: StatusMessage;
+};
+
+type ExarotonState = {
+  configured: boolean;
+  connected: boolean;
+  accountName: string;
+  accountEmail: string;
+  apiKeyInput: string;
+  showApiKey: boolean;
+  servers: ExarotonServerPayload[];
+  selectedServer: ExarotonServerPayload | null;
+  busy: boolean;
+  error: string;
 };
 
 type LoaderOption = {
@@ -97,8 +117,10 @@ type PublishSnapshot = {
 };
 
 type AdminContextValue = {
-  view: 'overview' | 'identity' | 'mods' | 'fancy';
-  setView: (view: 'overview' | 'identity' | 'mods' | 'fancy') => void;
+  view: 'overview' | 'identity' | 'mods' | 'fancy' | 'exaroton';
+  setView: (
+    view: 'overview' | 'identity' | 'mods' | 'fancy' | 'exaroton',
+  ) => void;
   form: FormState;
   setTextFieldFromEvent: (
     event: ChangeEvent<
@@ -113,6 +135,7 @@ type AdminContextValue = {
   modVersionOptions: Record<string, ModVersionsPayload['versions']>;
   loaderOptions: LoaderOption[];
   statuses: StatusState;
+  exaroton: ExarotonState;
   sessionState: 'pending' | 'active';
   hasPendingPublish: boolean;
   rail: RailState;
@@ -145,6 +168,14 @@ type AdminContextValue = {
     uploadFancyBundle: (file: File | null) => Promise<void>;
     setFancyMenuMode: (mode: 'simple' | 'custom') => void;
     setFancyMenuEnabled: (enabled: boolean) => void;
+    setExarotonApiKey: (value: string) => void;
+    toggleExarotonApiKeyVisibility: () => void;
+    connectExaroton: () => Promise<void>;
+    disconnectExaroton: () => Promise<void>;
+    refreshExarotonStatus: () => Promise<void>;
+    listExarotonServers: () => Promise<void>;
+    selectExarotonServer: (serverId: string) => Promise<void>;
+    exarotonAction: (action: 'start' | 'stop' | 'restart') => Promise<void>;
   };
   baselineRuntime: {
     minecraftVersion: string;
@@ -165,6 +196,20 @@ const DEFAULT_STATUS: StatusState = {
   mods: { text: 'Ready.', tone: 'idle' },
   publish: { text: 'Ready.', tone: 'idle' },
   fancy: { text: 'Ready.', tone: 'idle' },
+  exaroton: { text: 'Optional integration is available.', tone: 'idle' },
+};
+
+const DEFAULT_EXAROTON: ExarotonState = {
+  configured: true,
+  connected: false,
+  accountName: '',
+  accountEmail: '',
+  apiKeyInput: '',
+  showApiKey: false,
+  servers: [],
+  selectedServer: null,
+  busy: false,
+  error: '',
 };
 
 const DEFAULT_FORM: FormState = {
@@ -382,6 +427,24 @@ function mapBootstrapToForm(payload: BootstrapPayload): FormState {
   };
 }
 
+function mapStatusToExarotonState(
+  payload: ExarotonStatusPayload,
+  previous?: ExarotonState,
+): ExarotonState {
+  return {
+    configured: payload.configured,
+    connected: payload.connected,
+    accountName: payload.account?.name ?? '',
+    accountEmail: payload.account?.email ?? '',
+    apiKeyInput: previous?.apiKeyInput ?? '',
+    showApiKey: previous?.showApiKey ?? false,
+    servers: previous?.servers ?? [],
+    selectedServer: payload.selectedServer,
+    busy: false,
+    error: payload.error ?? '',
+  };
+}
+
 
 function normalizeBrandingForCompare(
   payload: BrandingPayload,
@@ -447,9 +510,9 @@ function isValidUrl(val: string): boolean {
 }
 
 export function AdminProvider({ children }: PropsWithChildren): ReactElement {
-  const [view, setView] = useState<'overview' | 'identity' | 'mods' | 'fancy'>(
-    'overview',
-  );
+  const [view, setView] = useState<
+    'overview' | 'identity' | 'mods' | 'fancy' | 'exaroton'
+  >('overview');
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [selectedMods, setSelectedMods] = useState<AdminMod[]>([]);
   const [coreModPolicy, setCoreModPolicy] =
@@ -469,6 +532,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     'pending',
   );
   const [statuses, setStatuses] = useState<StatusState>(DEFAULT_STATUS);
+  const [exaroton, setExaroton] = useState<ExarotonState>(DEFAULT_EXAROTON);
   const [busyBootstrap, setBusyBootstrap] = useState(false);
   const [busySearch, setBusySearch] = useState(false);
   const [busyPublish, setBusyPublish] = useState(false);
@@ -495,6 +559,203 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       }));
     },
     [],
+  );
+
+  const refreshExarotonStatus = useCallback(async () => {
+    setExaroton((current) => ({ ...current, busy: true }));
+    setStatus('exaroton', 'Refreshing Exaroton status...');
+    try {
+      const payload = await requestJson<ExarotonStatusPayload>(
+        '/v1/admin/exaroton/status',
+        'GET',
+      );
+      setExaroton((current) => mapStatusToExarotonState(payload, current));
+      setStatus('exaroton', 'Exaroton status updated.', 'ok');
+    } catch (error) {
+      setExaroton((current) => ({
+        ...current,
+        busy: false,
+        error: (error as Error).message || 'Could not refresh Exaroton status.',
+      }));
+      setStatus(
+        'exaroton',
+        (error as Error).message || 'Could not refresh Exaroton status.',
+        'error',
+      );
+    }
+  }, [setStatus]);
+
+  const listExarotonServers = useCallback(async () => {
+    setExaroton((current) => ({ ...current, busy: true }));
+    setStatus('exaroton', 'Loading Exaroton servers...');
+    try {
+      const payload = await requestJson<ExarotonServersPayload>(
+        '/v1/admin/exaroton/servers',
+        'GET',
+      );
+      setExaroton((current) => ({
+        ...current,
+        busy: false,
+        servers: payload.servers ?? [],
+      }));
+      setStatus('exaroton', 'Server list updated.', 'ok');
+    } catch (error) {
+      setExaroton((current) => ({
+        ...current,
+        busy: false,
+        error: (error as Error).message || 'Could not load Exaroton servers.',
+      }));
+      setStatus(
+        'exaroton',
+        (error as Error).message || 'Could not load Exaroton servers.',
+        'error',
+      );
+    }
+  }, [setStatus]);
+
+  const connectExaroton = useCallback(async () => {
+    const apiKey = exaroton.apiKeyInput.trim();
+    if (!apiKey) {
+      setStatus('exaroton', 'Enter your Exaroton API key first.', 'error');
+      return;
+    }
+
+    setExaroton((current) => ({ ...current, busy: true, error: '' }));
+    setStatus('exaroton', 'Validating API key with Exaroton...');
+    try {
+      const payload = await requestJson<ConnectExarotonPayload>(
+        '/v1/admin/exaroton/connect',
+        'POST',
+        { apiKey },
+      );
+
+      setExaroton((current) => ({
+        ...current,
+        configured: payload.configured,
+        connected: payload.connected,
+        accountName: payload.account?.name ?? '',
+        accountEmail: payload.account?.email ?? '',
+        apiKeyInput: '',
+        showApiKey: false,
+        servers: payload.servers ?? [],
+        selectedServer: payload.selectedServer ?? null,
+        busy: false,
+        error: '',
+      }));
+      setStatus('exaroton', 'Exaroton account connected.', 'ok');
+    } catch (error) {
+      setExaroton((current) => ({
+        ...current,
+        busy: false,
+        error: (error as Error).message || 'Failed to connect Exaroton account.',
+      }));
+      setStatus(
+        'exaroton',
+        (error as Error).message || 'Failed to connect Exaroton account.',
+        'error',
+      );
+    }
+  }, [exaroton.apiKeyInput, setStatus]);
+
+  const disconnectExaroton = useCallback(async () => {
+    setExaroton((current) => ({ ...current, busy: true }));
+    setStatus('exaroton', 'Disconnecting Exaroton account...');
+    try {
+      await requestJson<{ success: boolean }>(
+        '/v1/admin/exaroton/disconnect',
+        'DELETE',
+      );
+      setExaroton((current) => ({
+        ...current,
+        connected: false,
+        accountName: '',
+        accountEmail: '',
+        servers: [],
+        selectedServer: null,
+        busy: false,
+        error: '',
+      }));
+      setStatus('exaroton', 'Exaroton account disconnected.', 'ok');
+    } catch (error) {
+      setExaroton((current) => ({
+        ...current,
+        busy: false,
+        error: (error as Error).message || 'Failed to disconnect Exaroton account.',
+      }));
+      setStatus(
+        'exaroton',
+        (error as Error).message || 'Failed to disconnect Exaroton account.',
+        'error',
+      );
+    }
+  }, [setStatus]);
+
+  const selectExarotonServer = useCallback(
+    async (serverId: string) => {
+      const cleanServerId = serverId.trim();
+      if (!cleanServerId) {
+        return;
+      }
+      setExaroton((current) => ({ ...current, busy: true }));
+      setStatus('exaroton', 'Selecting Exaroton server...');
+      try {
+        const payload = await requestJson<ExarotonSelectPayload>(
+          '/v1/admin/exaroton/server/select',
+          'POST',
+          { serverId: cleanServerId },
+        );
+        setExaroton((current) => ({
+          ...current,
+          busy: false,
+          selectedServer: payload.selectedServer,
+        }));
+        setStatus('exaroton', 'Server selected.', 'ok');
+      } catch (error) {
+        setExaroton((current) => ({
+          ...current,
+          busy: false,
+          error: (error as Error).message || 'Failed to select server.',
+        }));
+        setStatus(
+          'exaroton',
+          (error as Error).message || 'Failed to select server.',
+          'error',
+        );
+      }
+    },
+    [setStatus],
+  );
+
+  const exarotonAction = useCallback(
+    async (action: 'start' | 'stop' | 'restart') => {
+      setExaroton((current) => ({ ...current, busy: true }));
+      setStatus('exaroton', `Sending ${action} action...`);
+      try {
+        const payload = await requestJson<ExarotonActionPayload>(
+          '/v1/admin/exaroton/server/action',
+          'POST',
+          { action },
+        );
+        setExaroton((current) => ({
+          ...current,
+          busy: false,
+          selectedServer: payload.selectedServer,
+        }));
+        setStatus('exaroton', `Server ${action} action sent.`, 'ok');
+      } catch (error) {
+        setExaroton((current) => ({
+          ...current,
+          busy: false,
+          error: (error as Error).message || `Failed to ${action} server.`,
+        }));
+        setStatus(
+          'exaroton',
+          (error as Error).message || `Failed to ${action} server.`,
+          'error',
+        );
+      }
+    },
+    [setStatus],
   );
 
   const setTextFieldFromEvent = useCallback(
@@ -661,6 +922,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       const payload = await readBootstrapPayload();
       const nextForm = mapBootstrapToForm(payload);
       setForm(nextForm);
+      setExaroton((current) => mapStatusToExarotonState(payload.exaroton, current));
       setCoreModPolicy(payload.latestProfile.coreModPolicy ?? DEFAULT_POLICY);
       setSelectedMods(payload.latestProfile.mods ?? []);
       latestProfileModsRef.current = payload.latestProfile.mods ?? [];
@@ -678,6 +940,18 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         nextForm.minecraftVersion,
       );
       setSelectedMods(syncedMods);
+      if (payload.exaroton.connected) {
+        const serverPayload = await requestJson<ExarotonServersPayload>(
+          '/v1/admin/exaroton/servers',
+          'GET',
+        ).catch(() => null);
+        if (serverPayload) {
+          setExaroton((current) => ({
+            ...current,
+            servers: serverPayload.servers ?? [],
+          }));
+        }
+      }
       lastPublishedSnapshotRef.current = buildPublishSnapshot(
         nextForm,
         syncedMods,
@@ -698,6 +972,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     collectFancyMenuPayload,
     ensureCoreMods,
     loadFabricVersions,
+    listExarotonServers,
     setStatus,
   ]);
 
@@ -1454,6 +1729,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       modVersionOptions,
       loaderOptions,
       statuses,
+      exaroton,
       sessionState,
       hasPendingPublish,
       rail,
@@ -1490,6 +1766,19 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
             ...prev,
             fancyMenuEnabled: enabled ? 'true' : 'false',
           })),
+        setExarotonApiKey: (value: string) =>
+          setExaroton((prev) => ({ ...prev, apiKeyInput: value })),
+        toggleExarotonApiKeyVisibility: () =>
+          setExaroton((prev) => ({
+            ...prev,
+            showApiKey: !prev.showApiKey,
+          })),
+        connectExaroton,
+        disconnectExaroton,
+        refreshExarotonStatus,
+        listExarotonServers,
+        selectExarotonServer,
+        exarotonAction,
       },
     }),
     [
@@ -1499,10 +1788,15 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       busySearch,
       confirmInstall,
       coreModPolicy,
+      connectExaroton,
+      disconnectExaroton,
       effectiveCorePolicy,
       dependencyMap,
+      exaroton,
+      exarotonAction,
       form,
       hasPendingPublish,
+      listExarotonServers,
       loadFabricVersions,
       loadModVersions,
       loaderOptions,
@@ -1517,9 +1811,11 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       saveSettings,
       searchMods,
       selectedMods,
+      selectExarotonServer,
       sessionState,
       setTextFieldFromEvent,
       statuses,
+      refreshExarotonStatus,
       uploadBrandingImage,
       uploadFancyBundle,
       view,
