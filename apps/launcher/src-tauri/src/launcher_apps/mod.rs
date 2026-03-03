@@ -170,12 +170,6 @@ pub fn pick_manual_launcher_path() -> Option<String> {
 
   #[cfg(target_os = "macos")]
   {
-    if let Some(app_path) = rfd::FileDialog::new().set_directory("/Applications").pick_folder() {
-      if app_path.extension().and_then(|ext| ext.to_str()) == Some("app") {
-        return Some(app_path.to_string_lossy().to_string());
-      }
-    }
-
     return rfd::FileDialog::new()
       .set_directory("/Applications")
       .pick_file()
@@ -212,7 +206,7 @@ pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]
   })
 }
 
-pub fn bootstrap_prism_instance(lock: &ProfileLock) -> LauncherResult<LauncherBootstrapResult> {
+pub async fn bootstrap_prism_instance(state: &crate::state::AppState, lock: &ProfileLock) -> LauncherResult<LauncherBootstrapResult> {
   let prism_root = prism_root_dir()?;
   let instances_root = prism_root.join("instances");
   fs::create_dir_all(&instances_root)?;
@@ -247,6 +241,26 @@ pub fn bootstrap_prism_instance(lock: &ProfileLock) -> LauncherResult<LauncherBo
     "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n"
   );
   fs::write(instance_dir.join("instance.cfg"), cfg)?;
+
+  #[cfg(target_os = "macos")]
+  let minecraft_folder = "minecraft";
+  #[cfg(not(target_os = "macos"))]
+  let minecraft_folder = ".minecraft";
+  
+  let minecraft_dir = instance_dir.join(minecraft_folder);
+  let icon_path = minecraft_dir.join("icon.png");
+
+  if let Some(logo_url) = lock.branding.logo_url.as_deref() {
+    let client = state.http.clone();
+    if let Ok(response) = client.get(logo_url).send().await {
+      if response.status().is_success() {
+        if let Ok(bytes) = response.bytes().await {
+          let _ = fs::create_dir_all(&minecraft_dir);
+          let _ = fs::write(&icon_path, bytes);
+        }
+      }
+    }
+  }
 
   Ok(LauncherBootstrapResult {
     launcher_id: "prism".to_string(),
@@ -607,7 +621,7 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
 
     pending_bootstrap = Some(match (selected_id.as_deref(), lock) {
       (Some("prism"), Some(lock)) => {
-        crate::launcher_apps::bootstrap_prism_instance(&lock).map_err(|e| format!("{e}"))?
+        crate::launcher_apps::bootstrap_prism_instance(&state, &lock).await.map_err(|e| format!("{e}"))?
       }
       (Some("official"), Some(lock)) => crate::launcher_apps::bootstrap_official_version(
         &lock,

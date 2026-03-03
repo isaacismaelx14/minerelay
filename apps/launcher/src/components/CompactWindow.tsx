@@ -5,7 +5,8 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
   const {
     APP_NAME, SERVER_ID, catalog, sessionStatus, lastCheckAt, isChecking,
     canRenderLogo, markLogoAsBroken, serverInitial, compactPlaying,
-    runSyncCycle, openLauncherFromCompact, openSetupWindow
+    runSyncCycle, openLauncherFromCompact, openSetupWindow,
+    settings, launchers, updateLauncherSelection
   } = core;
 
     const compactHasServerInfo = catalog !== null;
@@ -24,7 +25,7 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
     return (
       <main className="compact-shell">
         <div className="compact-frame">
-          <header className="compact-head">
+          <header className="compact-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div className="compact-server-row">
               {canRenderLogo ? (
                 <img
@@ -46,6 +47,31 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
                 </p>
               </div>
             </div>
+
+            {settings && launchers.length > 0 && (
+              <select
+                className="select"
+                style={{ fontSize: '0.75rem', padding: '0.25rem 1.6rem 0.25rem 0.6rem', width: 'auto', backgroundPositionY: '50%', backgroundColor: 'rgba(7, 18, 38, 0.84)', border: '1px solid rgba(81, 130, 186, 0.32)', color: '#9eb6d4' }}
+                value={settings?.selectedLauncherId ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  void updateLauncherSelection(value);
+                  if (value === "custom") {
+                    void openSetupWindow();
+                  }
+                }}
+              >
+                <option value="">Select Launcher</option>
+                {launchers
+                  .filter((candidate) => candidate.id !== "custom")
+                  .map((candidate) => (
+                    <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                <option value="custom">Custom path...</option>
+              </select>
+            )}
           </header>
 
           <section className={`compact-core${compactPlaying ? " is-playing" : ""}`}>

@@ -126,7 +126,8 @@ pub async fn ensure_fabric_and_bootstrap(state: &crate::state::AppState, server_
   let managed_version_id = crate::launcher_apps::server_release_version_id(&remote);
 
   let bootstrap = if selected_id.as_deref() == Some("prism") {
-    crate::launcher_apps::bootstrap_prism_instance(&remote)
+    crate::launcher_apps::bootstrap_prism_instance(state, &remote)
+      .await
       .map_err(|e| format!("{e}"))?
   } else {
     crate::launcher_apps::bootstrap_official_version(&remote, &minecraft_root, &minecraft_root)

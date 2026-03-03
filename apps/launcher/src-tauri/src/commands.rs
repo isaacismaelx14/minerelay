@@ -83,10 +83,25 @@ pub fn launcher_detect(state: State<'_, Arc<AppState>>) -> Vec<LauncherCandidate
 }
 
 #[tauri::command]
-pub async fn launcher_detect_with_timeout(timeout_ms: Option<u64>) -> Result<LauncherDetectionResult, String> {
-  launcher_apps::detect_with_timeout(timeout_ms.unwrap_or(5_000))
+pub async fn launcher_detect_with_timeout(state: State<'_, Arc<AppState>>, timeout_ms: Option<u64>) -> Result<LauncherDetectionResult, String> {
+  let mut result = launcher_apps::detect_with_timeout(timeout_ms.unwrap_or(5_000))
     .await
-    .map_err(|e| format!("{e}"))
+    .map_err(|e| format!("{e}"))?;
+
+  if let Some(custom) = state.settings.lock().custom_launcher_path.clone() {
+    let trimmed = custom.trim().to_string();
+    if !trimmed.is_empty() {
+      if !result.candidates.iter().any(|c| c.id == "custom") {
+        result.candidates.push(LauncherCandidate {
+          id: "custom".to_string(),
+          name: "Custom Executable".to_string(),
+          path: trimmed,
+        });
+      }
+    }
+  }
+
+  Ok(result)
 }
 
 #[tauri::command]
