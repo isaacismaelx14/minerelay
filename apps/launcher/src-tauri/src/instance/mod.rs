@@ -1,3 +1,4 @@
+use crate::{utils::*, types::VersionReadiness};
 use std::{
   fs,
   path::{Path, PathBuf},
@@ -125,4 +126,89 @@ pub fn ensure_default_server(paths: &InstancePaths, server: &DefaultServer) -> L
 
 pub fn resolve_target_path(paths: &InstancePaths, relative: &str) -> PathBuf {
   paths.minecraft_dir.join(Path::new(relative))
+}
+
+pub async fn check_version_readiness(state: &crate::state::AppState, server_id: &str) -> Result<crate::types::VersionReadiness, String> {
+
+  let effective_server = effective_server_id(state, server_id);
+  let settings = state.settings.lock().clone();
+  let remote = crate::profile::fetch_remote_lock(state, &effective_server)
+    .await
+    .map_err(|e| format!("{e}"))?;
+  let metadata = crate::profile::fetch_profile_metadata(state, &effective_server).await.ok();
+
+  let allowed_minecraft_versions = allowed_versions(metadata.as_ref(), &remote.minecraft_version);
+  let allowlisted = allowed_minecraft_versions
+    .iter()
+    .any(|value| value == &remote.minecraft_version);
+
+  let paths = InstancePaths::new(
+    &state.config,
+    &effective_server,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )
+  .map_err(|e| format!("{e}"))?;
+  ensure_layout(&paths).map_err(|e| format!("{e}"))?;
+
+  let (minecraft_root, using_override_root) =
+    resolve_launcher_minecraft_root(&settings).map_err(|e| format!("{e}"))?;
+  let versions_dir = minecraft_root.join("versions");
+
+  let expected_fabric = crate::runtime::fabric_version_id(&remote.minecraft_version, &remote.loader_version);
+  let fabric_present = versions_dir
+    .join(&expected_fabric)
+    .join(format!("{expected_fabric}.json"))
+    .exists();
+
+  let expected_managed = crate::launcher_apps::server_release_version_id(&remote);
+  let selected_launcher = settings.selected_launcher_id.as_deref().unwrap_or("official");
+  let requires_managed_version = selected_launcher != "prism";
+
+  let managed_version_present = if requires_managed_version {
+    crate::launcher_apps::managed_version_exists(&minecraft_root, &expected_managed)
+  } else {
+    true
+  };
+
+  let found = fabric_present && managed_version_present;
+
+  let guidance = if !allowlisted {
+    format!(
+      "Minecraft {} is not allowlisted for this server. Allowed: {}",
+      remote.minecraft_version,
+      allowed_minecraft_versions.join(", ")
+    )
+  } else if !fabric_present {
+    format!(
+      "Fabric runtime '{}' is missing in your minecraft root. Use onboarding Step 3 to install it.",
+      expected_fabric
+    )
+  } else if !managed_version_present {
+    format!(
+      "Managed launcher version '{}' is missing. Use onboarding Step 3 to create/update it.",
+      expected_managed
+    )
+  } else {
+    "Fabric runtime and managed launcher version look available. Sync stays in app-managed storage; live Minecraft files are swapped only while playing."
+      .to_string()
+  };
+
+  Ok(VersionReadiness {
+    minecraft_version: remote.minecraft_version,
+    loader: remote.loader,
+    loader_version: remote.loader_version,
+    managed_minecraft_dir: paths.minecraft_dir.to_string_lossy().to_string(),
+    live_minecraft_root: minecraft_root.to_string_lossy().to_string(),
+    minecraft_root: minecraft_root.to_string_lossy().to_string(),
+    found_in_minecraft_root_dir: found,
+    using_override_root,
+    allowlisted,
+    allowed_minecraft_versions,
+    expected_fabric_version_id: expected_fabric,
+    expected_managed_version_id: expected_managed,
+    managed_version_present,
+    guidance,
+  })
+
 }

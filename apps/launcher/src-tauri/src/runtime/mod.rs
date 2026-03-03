@@ -1,3 +1,4 @@
+use crate::{instance::{InstancePaths, ensure_layout, resolve_launcher_minecraft_root}, utils::*, launcher_apps::selected_launcher_id};
 use std::path::Path;
 
 use serde_json::{json, Value};
@@ -81,4 +82,60 @@ pub async fn ensure_fabric_runtime(
     managed_version_id: String::new(),
     managed_message: String::new(),
   })
+}
+
+pub async fn ensure_fabric_and_bootstrap(state: &crate::state::AppState, server_id: &str) -> Result<crate::types::FabricRuntimeStatus, String> {
+
+  let effective_server = effective_server_id(state, server_id);
+  let settings = state.settings.lock().clone();
+  let remote = crate::profile::fetch_remote_lock(state, &effective_server)
+    .await
+    .map_err(|e| format!("{e}"))?;
+
+  let _ = ensure_allowlisted(state, &effective_server, &remote).await?;
+
+  let (minecraft_root, _) = resolve_launcher_minecraft_root(&settings).map_err(|e| format!("{e}"))?;
+  std::fs::create_dir_all(&minecraft_root).map_err(|e| format!("{e}"))?;
+
+  let fabric_status = crate::runtime::ensure_fabric_runtime(
+    state,
+    &minecraft_root,
+    &remote.minecraft_version,
+    &remote.loader_version,
+  )
+  .await
+  .map_err(|e| format!("{e}"))?;
+
+  let paths = InstancePaths::new(
+    &state.config,
+    &effective_server,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )
+  .map_err(|e| format!("{e}"))?;
+  ensure_layout(&paths).map_err(|e| format!("{e}"))?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected_id = selected_launcher_id(&settings, &detected);
+  let managed_version_id = crate::launcher_apps::server_release_version_id(&remote);
+
+  let bootstrap = if selected_id.as_deref() == Some("prism") {
+    crate::launcher_apps::bootstrap_prism_instance(&remote, &minecraft_root)
+      .map_err(|e| format!("{e}"))?
+  } else {
+    crate::launcher_apps::bootstrap_official_version(&remote, &minecraft_root, &minecraft_root)
+      .map_err(|e| format!("{e}"))?
+  };
+
+  Ok(FabricRuntimeStatus {
+    minecraft_version: fabric_status.minecraft_version,
+    loader_version: fabric_status.loader_version,
+    version_id: fabric_status.version_id,
+    minecraft_root: fabric_status.minecraft_root,
+    present_before: fabric_status.present_before,
+    installed_now: fabric_status.installed_now,
+    managed_version_id,
+    managed_message: bootstrap.message,
+  })
+
 }

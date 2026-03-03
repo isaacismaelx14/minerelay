@@ -2,18 +2,19 @@ mod commands;
 mod config;
 mod error;
 mod events;
-mod instance;
-mod launcher_apps;
-mod notifications;
-mod profile;
-mod providers;
-mod runtime;
-mod session;
-mod settings;
-mod state;
-mod sync;
-mod telemetry;
-mod types;
+pub mod instance;
+pub mod launcher_apps;
+pub mod notifications;
+pub mod profile;
+pub mod providers;
+pub mod runtime;
+pub mod session;
+pub mod settings;
+pub mod state;
+pub mod sync;
+pub mod telemetry;
+pub mod types;
+pub mod utils;
 
 use std::{
   sync::{
