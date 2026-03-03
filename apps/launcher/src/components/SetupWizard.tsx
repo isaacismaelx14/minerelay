@@ -51,18 +51,27 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
                 }))
               }
             />
-            <input
-              className="wizard-input"
-              type="text"
-              value={profileSourceDraft.profileLockUrl}
-              placeholder="Optional direct lock URL"
-              onChange={(event) =>
-                setProfileSourceDraft((current) => ({
-                  ...current,
-                  profileLockUrl: event.target.value,
-                }))
-              }
-            />
+            <details className="advanced-options" open={!!profileSourceDraft.profileLockUrl || undefined}>
+              <summary className="advanced-summary">Advanced: Direct Lock URL</summary>
+              <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                <p className="wizard-meta" style={{ margin: 0 }}>
+                  Optional. Override the API and fetch the modpack directly from a URL.
+                  Useful for static hosting or testing unreleased versions.
+                </p>
+                <input
+                  className="wizard-input"
+                  type="text"
+                  value={profileSourceDraft.profileLockUrl}
+                  placeholder="https://example.com/lock.json"
+                  onChange={(event) =>
+                    setProfileSourceDraft((current) => ({
+                      ...current,
+                      profileLockUrl: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </details>
             <div className="actions-row">
               <button
                 className="btn primary"
@@ -141,37 +150,44 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
               ) : null}
             </div>
 
-            <div className="wizard-box">
-              <p className="small-dark">Minecraft launcher directory</p>
-              <input
-                className="wizard-input"
-                type="text"
-                value={wizardMinecraftRootPath}
-                placeholder="/Users/.../Library/Application Support/minecraft"
-                onChange={(event) =>
-                  setWizardMinecraftRootPath(event.target.value)
-                }
-              />
-              <div className="actions-row">
-                <button
-                  className="btn ghost"
-                  onClick={() => void pickWizardMinecraftRootPath()}
-                >
-                  Pick Minecraft Dir
-                </button>
-                <button
-                  className="btn ghost"
-                  onClick={() => void startWizardDetection()}
-                >
-                  Rescan
-                </button>
+            <details className="advanced-options">
+              <summary className="advanced-summary">Advanced: Override Minecraft Directory</summary>
+              <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <p className="wizard-meta" style={{ marginBottom: '4px', marginTop: 0 }}>
+                  By default, the sync tool automatically targets the default configuration folder
+                  of the launcher you selected above. Use this option ONLY if you want to override that behavior 
+                  and force a custom absolute data path (like a portable USB drive or multiple specific instances).
+                </p>
+                <input
+                  className="wizard-input"
+                  type="text"
+                  value={wizardMinecraftRootPath}
+                  placeholder="/Users/.../Library/Application Support/minecraft"
+                  onChange={(event) =>
+                    setWizardMinecraftRootPath(event.target.value)
+                  }
+                />
+                <div className="actions-row">
+                  <button
+                    className="btn ghost"
+                    onClick={() => void pickWizardMinecraftRootPath()}
+                  >
+                    Pick Minecraft Dir
+                  </button>
+                  <button
+                    className="btn ghost"
+                    onClick={() => void startWizardDetection()}
+                  >
+                    Rescan
+                  </button>
+                </div>
+                <p className="wizard-meta">
+                  {wizardMinecraftRootStatus?.exists
+                    ? "Detected path exists."
+                    : "Detected path not found. Select manually."}
+                </p>
               </div>
-              <p className="wizard-meta">
-                {wizardMinecraftRootStatus?.exists
-                  ? "Detected path exists."
-                  : "Detected path not found. Select manually."}
-              </p>
-            </div>
+            </details>
 
             <div className="actions-row">
               <button
@@ -183,8 +199,9 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
               <button
                 className="btn primary"
                 onClick={() => void continueWizardRuntimeStep()}
+                disabled={wizardProgress < 100}
               >
-                Continue to Runtime Check
+                {wizardProgress < 100 ? "Detecting Launcher..." : "Continue to Runtime Check"}
               </button>
             </div>
           </div>
@@ -198,35 +215,38 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
               {versionReadiness?.loader ?? "--"}{" "}
               {versionReadiness?.loaderVersion ?? "--"}
             </p>
-            <p className="wizard-meta">
-              Live minecraft dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
-            </p>
-            <p className="wizard-meta">
-              Managed sync dir: {versionReadiness?.managedMinecraftDir ?? "--"}
-            </p>
-            <p className="wizard-meta">
-              Allowlisted versions:{" "}
-              {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
-            </p>
-            <p className="wizard-meta">
-              Fabric target id:{" "}
-              {versionReadiness?.expectedFabricVersionId ?? "--"}
-            </p>
-            <p className="wizard-meta">
-              Managed version target:{" "}
-              {versionReadiness?.expectedManagedVersionId ?? "--"} (
-              {versionReadiness?.managedVersionPresent ? "present" : "missing"})
-            </p>
+
+            <details className="advanced-options">
+              <summary className="advanced-summary">Advanced: Technical Details</summary>
+              <div className="advanced-content">
+                <p className="wizard-meta">
+                  Live minecraft dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
+                </p>
+                <p className="wizard-meta">
+                  Managed sync dir: {versionReadiness?.managedMinecraftDir ?? "--"}
+                </p>
+                <p className="wizard-meta">
+                  Allowlisted versions:{" "}
+                  {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
+                </p>
+                <p className="wizard-meta">
+                  Fabric target id:{" "}
+                  {versionReadiness?.expectedFabricVersionId ?? "--"}
+                </p>
+                <p className="wizard-meta">
+                  Managed version target:{" "}
+                  {versionReadiness?.expectedManagedVersionId ?? "--"} (
+                  {versionReadiness?.managedVersionPresent ? "present" : "missing"})
+                </p>
+              </div>
+            </details>
+
             <p className="wizard-meta">
               {versionReadiness?.guidance ??
                 "Checking runtime compatibility..."}
             </p>
-            <p className="wizard-meta">
-              Note: menu customization appears after Step 4 sync installs
-              FancyMenu files (simple managed layout or custom bundle).
-            </p>
             {catalog?.fancyMenuEnabled && !hasFancyMenuMod ? (
-              <p className="wizard-meta" style={{ color: "#b84e4e" }}>
+              <p className="wizard-meta" style={{ color: "var(--danger)" }}>
                 FancyMenu mod is missing in server profile. Custom menu will not
                 apply.
               </p>
@@ -235,7 +255,7 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
             hasFancyMenuMod &&
             fancyMenuMode === "custom" &&
             !hasFancyMenuCustomBundle ? (
-              <p className="wizard-meta" style={{ color: "#b84e4e" }}>
+              <p className="wizard-meta" style={{ color: "var(--danger)" }}>
                 FancyMenu is in custom mode, but the custom bundle is missing in
                 profile configs.
               </p>
@@ -288,31 +308,33 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
 
         {wizardStep === "sync" ? (
           <div className="wizard-panel">
-            {canRenderLogo ? (
-              <img
-                className="wizard-logo"
-                src={catalog?.logoUrl}
-                alt={`${catalog?.serverName ?? SERVER_ID} logo`}
-                onError={() => markLogoAsBroken(catalog?.logoUrl)}
-              />
-            ) : (
-              <div className="wizard-logo logo-fallback" aria-hidden="true">
-                {serverInitial}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: '8px' }}>
+              {canRenderLogo ? (
+                <img
+                  className="wizard-logo"
+                  src={catalog?.logoUrl}
+                  style={{ width: '48px', height: '48px', borderRadius: '12px', margin: 0 }}
+                  alt={`${catalog?.serverName ?? SERVER_ID} logo`}
+                  onError={() => markLogoAsBroken(catalog?.logoUrl)}
+                />
+              ) : (
+                <div className="wizard-logo logo-fallback" style={{ width: '48px', height: '48px', borderRadius: '12px', fontSize: '1.2rem', margin: 0 }} aria-hidden="true">
+                  {serverInitial}
+                </div>
+              )}
+              <div>
+                <h2 style={{ fontSize: '1.1rem', marginBottom: '2px' }}>Step 4: Initial Sync</h2>
+                <p className="small" style={{ opacity: 0.7 }}>
+                  {catalog?.serverName ?? SERVER_ID}
+                </p>
               </div>
-            )}
-            <h2>Step 4: Initial Sync</h2>
-            <p>
-              Server: {catalog?.serverName ?? SERVER_ID} (
-              {catalog?.serverAddress ?? "--"})
-            </p>
-            <p className="wizard-meta">
-              Mods {catalog?.mods.length ?? 0} | Resourcepacks{" "}
-              {catalog?.resourcepacks.length ?? 0} | Shaders{" "}
-              {catalog?.shaderpacks.length ?? 0} | Configs{" "}
-              {catalog?.configs.length ?? 0}
+            </div>
+
+            <p className="wizard-meta" style={{ fontSize: '0.85rem' }}>
+              Profile contains <strong>{catalog?.mods.length ?? 0}</strong> mods and <strong>{catalog?.configs.length ?? 0}</strong> configs.
             </p>
 
-            <ul className="summary-grid">
+            <ul className="summary-grid compact">
               <li>
                 <strong>{catalog?.summary.add ?? 0}</strong>
                 <span>Add</span>
@@ -332,7 +354,7 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
             </ul>
 
             {wizardSyncing ? (
-              <>
+              <div style={{ display: 'grid', gap: '8px' }}>
                 <div
                   className="meter"
                   aria-valuemin={0}
@@ -351,16 +373,16 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
                     }}
                   />
                 </div>
-                <p className="wizard-meta">
+                <p className="wizard-meta" style={{ marginTop: '4px' }}>
                   {sync.currentFile ?? "Applying sync..."}{" "}
                   {hasSyncTotal ? `(${progressPercent}%)` : ""}
                 </p>
-                <div className="metrics-row">
+                <div className="metrics-row" style={{ marginTop: '0' }}>
                   <span>{syncBytesLabel}</span>
                   <span>{bytesToHuman(sync.speedBps)}/s</span>
                   <span>ETA {formatEta(sync.etaSec)}</span>
                 </div>
-              </>
+              </div>
             ) : null}
 
             <div className="actions-row">

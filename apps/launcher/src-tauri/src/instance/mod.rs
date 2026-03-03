@@ -191,42 +191,44 @@ pub async fn check_version_readiness(state: &crate::state::AppState, server_id: 
   let versions_dir = minecraft_root.join("versions");
 
   let expected_fabric = crate::runtime::fabric_version_id(&remote.minecraft_version, &remote.loader_version);
-  let fabric_present = versions_dir
-    .join(&expected_fabric)
-    .join(format!("{expected_fabric}.json"))
-    .exists();
+  
+  let is_prism = selected.as_deref() == Some("prism");
+
+  let fabric_present = if is_prism {
+    true // Prism manages its own loader components via mmc-pack.json
+  } else {
+    versions_dir
+      .join(&expected_fabric)
+      .join(format!("{expected_fabric}.json"))
+      .exists()
+  };
 
   let expected_managed = crate::launcher_apps::server_release_version_id(&remote);
-  let selected_launcher = settings.selected_launcher_id.as_deref().unwrap_or("official");
-  let requires_managed_version = selected_launcher != "prism";
-
-  let managed_version_present = if requires_managed_version {
-    crate::launcher_apps::managed_version_exists(&minecraft_root, &expected_managed)
-  } else {
+  let managed_version_present = if is_prism {
     true
+  } else {
+    crate::launcher_apps::managed_version_exists(&minecraft_root, &expected_managed)
   };
 
   let found = fabric_present && managed_version_present;
 
   let guidance = if !allowlisted {
     format!(
-      "Minecraft {} is not allowlisted for this server. Allowed: {}",
-      remote.minecraft_version,
-      allowed_minecraft_versions.join(", ")
+      "Minecraft {} is not allowlisted for this server.",
+      remote.minecraft_version
     )
   } else if !fabric_present {
-    format!(
-      "Fabric runtime '{}' is missing in your minecraft root. Use onboarding Step 3 to install it.",
-      expected_fabric
-    )
+    "The required Fabric runtime is missing. Click the button below to install it.".to_string()
   } else if !managed_version_present {
-    format!(
-      "Managed launcher version '{}' is missing. Use onboarding Step 3 to create/update it.",
-      expected_managed
-    )
+    "Launcher configuration needs preparation. Click the button below to continue.".to_string()
   } else {
-    "Fabric runtime and managed launcher version look available. Sync stays in app-managed storage; live Minecraft files are swapped only while playing."
-      .to_string()
+    "The required Fabric runtime is ready. You can now proceed to sync your profile.".to_string()
+  };
+
+  let live_minecraft_root = if is_prism {
+    paths.minecraft_dir.clone()
+  } else {
+    minecraft_root.clone()
   };
 
   Ok(VersionReadiness {
@@ -234,7 +236,7 @@ pub async fn check_version_readiness(state: &crate::state::AppState, server_id: 
     loader: remote.loader,
     loader_version: remote.loader_version,
     managed_minecraft_dir: paths.minecraft_dir.to_string_lossy().to_string(),
-    live_minecraft_root: minecraft_root.to_string_lossy().to_string(),
+    live_minecraft_root: live_minecraft_root.to_string_lossy().to_string(),
     minecraft_root: minecraft_root.to_string_lossy().to_string(),
     found_in_minecraft_root_dir: found,
     using_override_root,

@@ -5,19 +5,24 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
   const {
     APP_NAME, SERVER_ID, catalog, sessionStatus, lastCheckAt, isChecking,
     canRenderLogo, markLogoAsBroken, serverInitial, compactPlaying,
-    runSyncCycle, openLauncherFromCompact, openSetupWindow,
+    runSyncCycle, openLauncherFromCompact, openSetupWindow, cancelSession,
     settings, launchers, updateLauncherSelection
   } = core;
 
     const compactHasServerInfo = catalog !== null;
     const compactNeedsConnect = !compactHasServerInfo;
-    const statusTitle = compactPlaying
+    const isAwaiting = sessionStatus.phase === "awaiting_game_start";
+    const statusTitle = isAwaiting 
+      ? "Awaiting Launch"
+      : compactPlaying
       ? "Playing"
       : compactNeedsConnect
         ? "Disconnected"
         : "Ready";
-    const statusSubtitle = compactPlaying
-      ? `Playing in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}`
+    const statusSubtitle = isAwaiting
+      ? "Waiting for the game process to be detected..."
+      : compactPlaying
+      ? "Game session is currently active."
       : compactNeedsConnect
         ? "Server info unavailable. Connect to refresh profile data."
         : `Server ${catalog?.serverName ?? SERVER_ID} is synced and ready.`;
@@ -25,7 +30,7 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
     return (
       <main className="compact-shell">
         <div className="compact-frame">
-          <header className="compact-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <header className="compact-head">
             <div className="compact-server-row">
               {canRenderLogo ? (
                 <img
@@ -40,64 +45,75 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
                 </div>
               )}
               <div className="compact-server-meta">
-                <p className="compact-app">{APP_NAME}</p>
-                <p className="compact-server">{catalog?.serverName ?? `Server ${SERVER_ID}`}</p>
-                <p className="compact-version">
+                <div className="compact-app-row">
+                  <p className="compact-app">{APP_NAME}</p>
+                  {settings && launchers.length > 0 && (
+                    <select
+                      className="select compact-launcher-select"
+                      value={settings?.selectedLauncherId ?? ""}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        void updateLauncherSelection(value);
+                        if (value === "custom") {
+                          void openSetupWindow();
+                        }
+                      }}
+                    >
+                      <option value="">Select Launcher</option>
+                      {launchers
+                        .filter((candidate) => candidate.id !== "custom")
+                        .map((candidate) => (
+                          <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
+                            {candidate.name}
+                          </option>
+                        ))}
+                      <option value="custom">Custom path...</option>
+                    </select>
+                  )}
+                </div>
+                <p className="compact-server" title={catalog?.serverName ?? `Server ${SERVER_ID}`}>
+                  {catalog?.serverName ?? `Server ${SERVER_ID}`}
+                </p>
+                <p className="compact-version" title={`MC ${catalog?.minecraftVersion ?? "--"} · ${catalog?.loader ?? "fabric"} ${catalog?.loaderVersion ?? "--"}`}>
                   MC {catalog?.minecraftVersion ?? "--"} · {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
                 </p>
               </div>
             </div>
-
-            {settings && launchers.length > 0 && (
-              <select
-                className="select"
-                style={{ fontSize: '0.75rem', padding: '0.25rem 1.6rem 0.25rem 0.6rem', width: 'auto', backgroundPositionY: '50%', backgroundColor: 'rgba(7, 18, 38, 0.84)', border: '1px solid rgba(81, 130, 186, 0.32)', color: '#9eb6d4' }}
-                value={settings?.selectedLauncherId ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  void updateLauncherSelection(value);
-                  if (value === "custom") {
-                    void openSetupWindow();
-                  }
-                }}
-              >
-                <option value="">Select Launcher</option>
-                {launchers
-                  .filter((candidate) => candidate.id !== "custom")
-                  .map((candidate) => (
-                    <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
-                      {candidate.name}
-                    </option>
-                  ))}
-                <option value="custom">Custom path...</option>
-              </select>
-            )}
           </header>
 
-          <section className={`compact-core${compactPlaying ? " is-playing" : ""}`}>
-            <div className="compact-ring" aria-hidden="true">
-              <div className="compact-ring-inner" />
+          <section className={`compact-core${isAwaiting ? " is-awaiting" : compactPlaying ? " is-playing" : compactNeedsConnect ? " is-disconnected" : " is-ready"}`}>
+            <div className="status-header">
+              <span className="status-dot"></span>
+              <h2>{statusTitle}</h2>
             </div>
-            <h2>{statusTitle}</h2>
             <p>{statusSubtitle}</p>
             <div className="actions-row compact-actions">
-              <button
-                className={compactNeedsConnect ? "btn connect" : "btn primary"}
-                onClick={() =>
-                  compactNeedsConnect
-                    ? void runSyncCycle(false)
-                    : void openLauncherFromCompact()
-                }
-                disabled={compactNeedsConnect ? isChecking : compactPlaying}
-              >
-                {compactNeedsConnect
-                  ? isChecking
-                    ? "Connecting..."
-                    : "Connect"
-                  : compactPlaying
-                    ? "Playing"
-                    : "Play"}
-              </button>
+              {isAwaiting ? (
+                <button
+                  className="btn cancel-session"
+                  onClick={() => void cancelSession()}
+                >
+                  Cancel Launch
+                </button>
+              ) : (
+                <button
+                  className={compactNeedsConnect ? "btn connect" : "btn primary"}
+                  onClick={() =>
+                    compactNeedsConnect
+                      ? void runSyncCycle(false)
+                      : void openLauncherFromCompact()
+                  }
+                  disabled={compactNeedsConnect ? isChecking : compactPlaying}
+                >
+                  {compactNeedsConnect
+                    ? isChecking
+                      ? "Connecting..."
+                      : "Connect"
+                    : compactPlaying
+                      ? "Playing"
+                      : "Play"}
+                </button>
+              )}
               <button className="btn ghost" onClick={() => void openSetupWindow()}>
                 Overview
               </button>

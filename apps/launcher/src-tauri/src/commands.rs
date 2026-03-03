@@ -1,14 +1,11 @@
 use crate::{utils::*, launcher_apps::selected_launcher_id};
-use std::{
-  path::Path,
-  sync::{
-    atomic::Ordering,
-    Arc,
-  },
+use std::sync::{
+  atomic::Ordering,
+  Arc,
 };
 
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
@@ -19,17 +16,16 @@ use crate::{
   launcher_apps,
   profile,
   providers::validate_service_url,
-  runtime,
   session,
   settings,
   state::AppState,
   sync,
   types::{
     AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
-    GameSessionPhase, GameSessionStatus, InstanceState, LauncherBootstrapResult,
+    GameSessionPhase, GameSessionStatus, InstanceState, 
     LauncherCandidate, LauncherDetectionResult, LauncherUpdateInstallResponse,
     LauncherUpdateStatus, MinecraftRootStatus, OpenLauncherResponse,
-    ProfileMetadataResponse, SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
+    SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
   },
 };
 
@@ -57,10 +53,13 @@ pub fn settings_get(state: State<'_, Arc<AppState>>) -> AppSettings {
 }
 
 #[tauri::command]
-pub fn settings_set(state: State<'_, Arc<AppState>>, settings_payload: AppSettings) -> Result<AppSettings, String> {
+pub fn settings_set(app: AppHandle, state: State<'_, Arc<AppState>>, settings_payload: AppSettings) -> Result<AppSettings, String> {
   let sanitized = sanitize_settings_payload(settings_payload)?;
   settings::save(&state.config.settings_path(), &sanitized).map_err(|e| format!("{e}"))?;
   *state.settings.lock() = sanitized.clone();
+  
+  let _ = app.emit("settings://updated", &sanitized);
+  
   Ok(sanitized)
 }
 

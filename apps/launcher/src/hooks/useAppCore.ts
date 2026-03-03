@@ -489,7 +489,9 @@ export function useAppCore() {
       setWizardMinecraftRootPath(rootStatus.path);
       setWizardProgress(100);
 
-      if (detected.candidates.length > 0) {
+      if (settings?.selectedLauncherId) {
+        setWizardSelectedLauncherId(settings.selectedLauncherId);
+      } else if (detected.candidates.length > 0) {
         const official = detected.candidates.find(
           (entry) => entry.id === "official",
         );
@@ -568,12 +570,27 @@ export function useAppCore() {
       stopSessionListener = off;
     });
 
+    let stopSettingsListener: UnlistenFn | undefined;
+    void listen<AppSettings>("settings://updated", (event) => {
+      setSettings(event.payload);
+      setProfileSourceDraft({
+        apiBaseUrl: event.payload.apiBaseUrl ?? "",
+        profileLockUrl: event.payload.profileLockUrl ?? "",
+      });
+      // Important cross-window sync: refresh state when settings change
+      void refreshDashboardState();
+      void refreshVersionReadiness();
+    }).then((off) => {
+      stopSettingsListener = off;
+    });
+
     return () => {
       stopSyncListener?.();
       stopErrorListener?.();
       stopSessionListener?.();
+      stopSettingsListener?.();
     };
-  }, []);
+  }, [refreshDashboardState, refreshVersionReadiness]);
 
   const requestSystemCloseModal = useCallback(async () => {
     if (closePromptBusyRef.current) {
@@ -897,6 +914,14 @@ export function useAppCore() {
     }
   }, []);
 
+  const cancelSession = useCallback(async () => {
+    try {
+      await invoke("session_restore_now");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, []);
+
   const openLauncherFromCompact = useCallback(async () => {
     if (compactPlaying) {
       return;
@@ -1075,7 +1100,7 @@ export function useAppCore() {
     saveSettings, loadSettingsAndLaunchers, refreshSessionStatus, refreshVersionReadiness, refreshDashboardState,
     executeSyncApply, installLauncherUpdate, checkLauncherUpdate, runSyncCycle, startWizardDetection,
     bootstrap, installFabricRuntime, continueWizardSyncStep, completeWizard,
-    returnToMainWindow, openSetupWindow, openLauncherFromCompact, updateLauncherSelection,
+    cancelSession, returnToMainWindow, openSetupWindow, openLauncherFromCompact, updateLauncherSelection,
     updateCustomPath, pickManualLauncherFromSettings, pickMinecraftRootFromSettings,
     saveProfileSource, beginWizardPathsStep, continueWizardRuntimeStep,
     pickWizardManualLauncherPath, pickWizardMinecraftRootPath, sourceLabel,

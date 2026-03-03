@@ -121,11 +121,28 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
           </section>
 
           <section className="panel-card">
-            <h3>Current Settings</h3>
+            <h3>Environment</h3>
             <p className="small-dark">Launcher: {settings?.selectedLauncherId ?? "--"}</p>
-            <p className="small-dark">Custom launcher path: {settings?.customLauncherPath ?? "--"}</p>
-            <p className="small-dark">Live minecraft root: {versionReadiness?.liveMinecraftRoot ?? "--"}</p>
-            <p className="small-dark">Managed sync dir: {instance?.minecraftDir ?? "--"}</p>
+            <p className="small-dark">
+              Target: {catalog?.minecraftVersion ?? "--"} / {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
+            </p>
+            
+            <details className="advanced-options" style={{ marginTop: '8px' }}>
+              <summary className="advanced-summary" style={{ padding: '8px 12px' }}>Technical Paths</summary>
+              <div className="advanced-content" style={{ padding: '12px' }}>
+                <p className="small-dark" style={{ wordBreak: 'break-all' }}>
+                  Live Minecraft: {versionReadiness?.liveMinecraftRoot ?? "--"}
+                </p>
+                <p className="small-dark" style={{ wordBreak: 'break-all', marginTop: '4px' }}>
+                  Managed Sync: {instance?.minecraftDir ?? "--"}
+                </p>
+                {settings?.customLauncherPath && (
+                  <p className="small-dark" style={{ wordBreak: 'break-all', marginTop: '4px' }}>
+                    Custom Launcher: {settings.customLauncherPath}
+                  </p>
+                )}
+              </div>
+            </details>
           </section>
 
           <section className="panel-card">
@@ -193,18 +210,25 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                 }))
               }
             />
-            <input
-              className="input"
-              type="text"
-              value={profileSourceDraft.profileLockUrl}
-              placeholder="Optional direct lock URL"
-              onChange={(event) =>
-                setProfileSourceDraft((current) => ({
-                  ...current,
-                  profileLockUrl: event.target.value,
-                }))
-              }
-            />
+            <details className="advanced-options" open={!!profileSourceDraft.profileLockUrl || undefined}>
+              <summary className="advanced-summary">Advanced: Direct Lock URL</summary>
+              <p className="pane-subtitle" style={{ marginTop: '8px', marginBottom: '8px', fontSize: '0.75rem' }}>
+                Optional. Override the API and fetch the modpack directly from a URL.
+                Useful for static hosting or testing unreleased versions.
+              </p>
+              <input
+                className="input"
+                type="text"
+                value={profileSourceDraft.profileLockUrl}
+                placeholder="https://example.com/lock.json"
+                onChange={(event) =>
+                  setProfileSourceDraft((current) => ({
+                    ...current,
+                    profileLockUrl: event.target.value,
+                  }))
+                }
+              />
+            </details>
             <button className="btn primary" onClick={() => void saveProfileSource()}>
               Save Source
             </button>
@@ -247,53 +271,52 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
           </section>
 
           <section className="panel-card">
-            <h3>Live Minecraft Root</h3>
-            <input
-              className="input"
-              type="text"
-              value={settings?.minecraftRootOverride ?? ""}
-              placeholder="Leave empty for default launcher dir"
-              onChange={(event) =>
-                settings
-                  ? void saveSettings({
-                      ...settings,
-                      minecraftRootOverride: event.target.value.trim() || null,
-                    })
-                  : undefined
-              }
-            />
-            <div className="actions-row">
-              <button
-                className="btn ghost"
-                onClick={() => void pickMinecraftRootFromSettings()}
-              >
-                Pick Minecraft Dir
-              </button>
-              <button className="btn ghost" onClick={() => void refreshVersionReadiness()}>
-                Refresh Readiness
-              </button>
-            </div>
-            <p className="small-dark">
-              Readiness:{" "}
-              {versionReadiness?.foundInMinecraftRootDir
-                ? "runtime found"
-                : "runtime missing"}
-            </p>
-            <p className="small-dark">
-              Allowlisted: {versionReadiness?.allowlisted ? "yes" : "no"}
-            </p>
-          </section>
-
-          <section className="panel-card">
-            <h3>Instance Paths</h3>
+            <h3>Paths</h3>
             <p className="small-dark">Root: {instance?.instanceRoot ?? "--"}</p>
             <p className="small-dark">Managed game dir: {instance?.minecraftDir ?? "--"}</p>
             <p className="small-dark">
               Live game dir: {versionReadiness?.liveMinecraftRoot ?? "--"}
             </p>
-            <p className="small-dark">
-              Sync writes only to managed game dir. Live Minecraft files are swapped during active play sessions.
-            </p>
+            
+            <details className="advanced-options">
+              <summary className="advanced-summary">Advanced: Override Live Directory</summary>
+              <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                <p className="pane-subtitle" style={{ fontSize: '0.75rem', marginBottom: '8px', marginTop: 0 }}>
+                  By default, the sync tool targets the standard data folder of your chosen launcher. 
+                  Specify an absolute path below to force a different live directory.
+                </p>
+                <input
+                  className="input"
+                  type="text"
+                  value={settings?.minecraftRootOverride ?? ""}
+                  placeholder="Leave empty for default launcher dir"
+                  onChange={(event) =>
+                    settings
+                      ? void saveSettings({
+                          ...settings,
+                          minecraftRootOverride: event.target.value.trim() || null,
+                        })
+                      : undefined
+                  }
+                />
+                <div className="actions-row">
+                  <button
+                    className="btn ghost"
+                    onClick={() => void pickMinecraftRootFromSettings()}
+                  >
+                    Pick Dir
+                  </button>
+                  <button className="btn ghost" onClick={() => void refreshVersionReadiness()}>
+                    Refresh
+                  </button>
+                </div>
+                <p className="small-dark">
+                  Readiness:{" "}
+                  {versionReadiness?.foundInMinecraftRootDir ? "runtime found" : "runtime missing"}
+                  {" | Allowlisted: "}{versionReadiness?.allowlisted ? "yes" : "no"}
+                </p>
+              </div>
+            </details>
           </section>
         </div>
       </div>
