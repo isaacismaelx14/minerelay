@@ -442,7 +442,6 @@ export class AdminService implements OnModuleInit {
   }
 
   async connectExaroton(apiKey: string) {
-    const exarotonIntegration = (this.prisma as any).exarotonIntegration;
     const encryptionKey = this.requireExarotonEncryptionKey();
     const cleanApiKey = apiKey.trim();
     if (!cleanApiKey) {
@@ -452,17 +451,23 @@ export class AdminService implements OnModuleInit {
     const [account, servers, existing] = await Promise.all([
       this.exarotonClient.getAccount(cleanApiKey),
       this.exarotonClient.listServers(cleanApiKey),
-      exarotonIntegration.findUnique({
+      this.prisma.exarotonIntegration.findUnique({
         where: { id: EXAROTON_INTEGRATION_ID },
       }),
     ]);
+
+    if (existing && existing.apiKeyCiphertext) {
+      throw new BadRequestException(
+        'An Exaroton account is already connected. Disconnect it first.',
+      );
+    }
 
     const encrypted = encryptExarotonApiKey(cleanApiKey, encryptionKey);
     const selected = existing?.selectedServerId
       ? servers.find((entry: ExarotonServer) => entry.id === existing.selectedServerId) || null
       : null;
 
-    await exarotonIntegration.upsert({
+    await this.prisma.exarotonIntegration.upsert({
       where: { id: EXAROTON_INTEGRATION_ID },
       create: {
         id: EXAROTON_INTEGRATION_ID,
@@ -499,7 +504,7 @@ export class AdminService implements OnModuleInit {
   }
 
   async disconnectExaroton() {
-    await (this.prisma as any).exarotonIntegration.deleteMany({
+    await this.prisma.exarotonIntegration.deleteMany({
       where: { id: EXAROTON_INTEGRATION_ID },
     });
 
@@ -530,7 +535,7 @@ export class AdminService implements OnModuleInit {
       cleanServerId,
     );
 
-    await (this.prisma as any).exarotonIntegration.update({
+    await this.prisma.exarotonIntegration.update({
       where: { id: EXAROTON_INTEGRATION_ID },
       data: {
         selectedServerId: selectedServer.id,
@@ -564,7 +569,7 @@ export class AdminService implements OnModuleInit {
       selectedServerId,
     );
 
-    await (this.prisma as any).exarotonIntegration.update({
+    await this.prisma.exarotonIntegration.update({
       where: { id: EXAROTON_INTEGRATION_ID },
       data: {
         selectedServerName: selectedServer.name,
@@ -1202,8 +1207,21 @@ export class AdminService implements OnModuleInit {
     return encryptionKey;
   }
 
-  private async requireExarotonConnection() {
-    const integration = await (this.prisma as any).exarotonIntegration.findUnique({
+  private async requireExarotonConnection(): Promise<{
+    apiKey: string;
+    integration: {
+      id: string;
+      accountName: string | null;
+      accountEmail: string | null;
+      apiKeyCiphertext: string;
+      apiKeyIv: string;
+      apiKeyAuthTag: string;
+      selectedServerId: string | null;
+      selectedServerName: string | null;
+      selectedServerAddress: string | null;
+    };
+  }> {
+    const integration = await this.prisma.exarotonIntegration.findUnique({
       where: { id: EXAROTON_INTEGRATION_ID },
     });
     if (!integration) {
@@ -1224,7 +1242,20 @@ export class AdminService implements OnModuleInit {
       throw new BadGatewayException('Exaroton API key could not be decrypted');
     }
 
-    return { integration, apiKey };
+    return {
+      apiKey,
+      integration: {
+        id: integration.id,
+        accountName: integration.accountName,
+        accountEmail: integration.accountEmail,
+        apiKeyCiphertext: integration.apiKeyCiphertext,
+        apiKeyIv: integration.apiKeyIv,
+        apiKeyAuthTag: integration.apiKeyAuthTag,
+        selectedServerId: integration.selectedServerId,
+        selectedServerName: integration.selectedServerName,
+        selectedServerAddress: integration.selectedServerAddress,
+      },
+    };
   }
 
   private async getExarotonBootstrapState() {
@@ -1240,7 +1271,7 @@ export class AdminService implements OnModuleInit {
       };
     }
 
-    const integration = await (this.prisma as any).exarotonIntegration.findUnique({
+    const integration = await this.prisma.exarotonIntegration.findUnique({
       where: { id: EXAROTON_INTEGRATION_ID },
     });
 

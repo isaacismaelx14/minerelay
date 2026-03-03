@@ -55,24 +55,61 @@ export class ExarotonApiClient {
   }
 
   async startServer(token: string, serverId: string): Promise<void> {
-    await this.request<string>(
+    await this.requestAction(
       token,
-      `/servers/${encodeURIComponent(serverId.trim())}/start/`,
+      `/servers/${encodeURIComponent(serverId.trim())}/start`,
     );
   }
 
   async stopServer(token: string, serverId: string): Promise<void> {
-    await this.request<string>(
+    await this.requestAction(
       token,
-      `/servers/${encodeURIComponent(serverId.trim())}/stop/`,
+      `/servers/${encodeURIComponent(serverId.trim())}/stop`,
     );
   }
 
   async restartServer(token: string, serverId: string): Promise<void> {
-    await this.request<string>(
+    await this.requestAction(
       token,
-      `/servers/${encodeURIComponent(serverId.trim())}/restart/`,
+      `/servers/${encodeURIComponent(serverId.trim())}/restart`,
     );
+  }
+
+  /** For action endpoints (start/stop/restart) that return data: null on success */
+  private async requestAction(token: string, path: string): Promise<void> {
+    const authToken = token.trim();
+    if (!authToken) {
+      throw new UnauthorizedException('Exaroton API key is missing');
+    }
+
+    const response = await fetch(`${EXAROTON_API_BASE}${path}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'User-Agent': EXAROTON_USER_AGENT,
+      },
+    }).catch(() => null);
+
+    if (!response) {
+      throw new BadGatewayException('Could not reach Exaroton API');
+    }
+
+    let body: ExarotonEnvelope<unknown> | null = null;
+    try {
+      body = (await response.json()) as ExarotonEnvelope<unknown>;
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok || !body || body.success !== true) {
+      const apiError = body?.error?.trim() || '';
+      if (response.status === 401 || response.status === 403) {
+        throw new UnauthorizedException(apiError || 'Invalid Exaroton API key');
+      }
+      throw new BadGatewayException(
+        apiError || `Exaroton API request failed (${response.status})`,
+      );
+    }
   }
 
   private async request<T>(token: string, path: string): Promise<T> {

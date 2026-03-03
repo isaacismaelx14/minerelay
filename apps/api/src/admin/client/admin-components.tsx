@@ -6,11 +6,71 @@ import {
   useRef,
   useState,
   type ChangeEventHandler,
+  type CSSProperties,
 } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useAdminContext } from './admin-context';
 import { requestJson } from './http';
+import type { ExarotonServerPayload } from './types';
+
+
+const ExarotonLogo = memo(function ExarotonLogo({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <svg
+      className={className}
+      style={style}
+      viewBox="0 0 1049.8 200.4"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Exaroton"
+    >
+      <path
+        fill="#FFFFFF"
+        d="M640.1,47.1h-6.5c-9.6,0-18.9,3.8-24.9,9.8c-1.3,1.3-3.5,0.4-3.5-1.4v-4.3c0-1.1-0.9-2-2-2h-20.5c-1.1,0-2,0.9-2,2v98c0,1.1,0.9,2,2,2h20.5c1.1,0,2-0.9,2-2V90.8c0-13.7,10.8-22.9,27.1-22.9h7.8c1.1,0,2-0.9,2-2V49.1C642.1,48,641.2,47.1,640.1,47.1z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M822.3,133.7h-15.7c-5.3,0-9-3.5-9-8.6V68.4c0-1.1,0.9-2,2-2h21.7c1.1,0,2-0.9,2-2V48c0-1.1-0.9-2-2-2h-21.7c-1.1,0-2-0.9-2-2V20.2c0-1.1-0.9-2-2-2h-20.5c-1.1,0-2,0.9-2,2V44c0,1.1-0.9,2-2,2h-14.8c-1.1,0-2,0.9-2,2v16.4c0,1.1,0.9,2,2,2h14.8c1.1,0,2,0.9,2,2v56.7c0,17.3,13.7,29,33.9,29h15.3c1.1,0,2-0.9,2-2v-16.4C824.3,134.5,823.4,133.7,822.3,133.7z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M1004.6,46.3c-12.7,0-21.3,6.4-25.7,10.7c-1.3,1.3-3.4,0.4-3.4-1.4v-4.4c0-1.1-0.9-2-2-2H953c-1.1,0-2,0.9-2,2v98c0,1.1,0.9,2,2,2h20.5c1.1,0,2-0.9,2-2V90.6c0-13.5,11.2-22.6,26.1-22.6c13.8,0,23.7,9.2,23.7,22.6v58.6c0,1.1,0.9,2,2,2h20.5c1.1,0,2-0.9,2-2V87.7C1049.7,62.8,1030.2,46.3,1004.6,46.3z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M411.7,98.5c-0.5-0.7-0.5-1.7,0-2.4l32.5-43.8c1-1.3,0-3.2-1.6-3.2h-24.9c-0.7,0-1.3,0.3-1.7,0.9l-17.5,27.2c-0.8,1.2-2.6,1.2-3.4,0l-17.9-27.1c-0.4-0.6-1-0.9-1.7-0.9h-24.7c-1.6,0-2.6,1.9-1.6,3.2l32.5,43.8c0.5,0.7,0.5,1.7,0,2.4l-36.4,49.5c-1,1.3,0,3.2,1.6,3.2h25c0.7,0,1.3-0.3,1.7-0.9l21.6-32.7c0.8-1.2,2.6-1.2,3.3,0l21.4,32.7c0.4,0.6,1,0.9,1.7,0.9h25c1.6,0,2.6-1.9,1.6-3.2L411.7,98.5z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M345.4,100.2c0-32.2-22.2-53.9-55.3-53.9s-55.3,21.6-55.3,53.9c0,32.2,22.2,53.9,55.3,53.9c23.9,0,44.4-13.9,52-34.9c0.5-1.3-0.5-2.7-1.9-2.7h-20.9c-0.7,0-1.2,0.3-1.6,0.9c-4.7,8.8-13.9,14.9-24.6,14.9h-5.6c-12.9,0-23.8-8.9-26.9-20.9h0.1c-0.2-0.6-0.4-1.3-0.5-2c-0.3-1.3,0.7-2.5,2-2.5h81.3c1.1,0,2-0.9,2-2L345.4,100.2L345.4,100.2z M315.8,86.5h-51.4c-1.5,0-2.5-1.6-1.8-2.9c5.1-10.2,15.7-16.9,27.5-16.9s22.3,6.7,27.5,16.9C318.3,84.9,317.3,86.5,315.8,86.5z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M559,49.2h-20.5c-1.1,0-2,0.9-2,2v5.9c0,1.8-2.1,2.7-3.4,1.4c-7.6-7.6-19.3-12.1-29.6-12.1c-31.8,0-53.1,21.6-53.1,53.9c0,32.2,21.2,53.9,53.1,53.9c10.2,0,22.4-5.3,29.6-12.4c1.3-1.3,3.4-0.4,3.4,1.4v6.1c0,1.1,0.9,2,2,2H559c1.1,0,2-0.9,2-2v-98C561,50.1,560.2,49.2,559,49.2z M536.2,107c0,13.6-11.1,24.6-24.6,24.6h-11.3c-13.6,0-24.6-11.1-24.6-24.6V93.1c0-13.6,11.1-24.6,24.6-24.6h11.3c13.6,0,24.6,11.1,24.6,24.6V107z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M697.4,46.3c-33.1,0-55.3,21.6-55.3,53.9c0,32.2,22.2,53.9,55.3,53.9s55.3-21.6,55.3-53.9C752.7,67.9,730.5,46.3,697.4,46.3z M727.7,107c0,13.6-11.1,24.6-24.6,24.6h-11.3c-13.6,0-24.6-11.1-24.6-24.6V93.1c0-13.6,11.1-24.6,24.6-24.6h11.3c13.6,0,24.6,11.1,24.6,24.6V107z"
+      />
+      <path
+        fill="#FFFFFF"
+        d="M883,46.3c-33.1,0-55.3,21.6-55.3,53.9c0,32.2,22.2,53.9,55.3,53.9s55.3-21.6,55.3-53.9C938.3,67.9,916,46.3,883,46.3z M913.2,107c0,13.6-11.1,24.6-24.6,24.6h-11.3c-13.6,0-24.6-11.1-24.6-24.6V93.1c0-13.6,11.1-24.6,24.6-24.6h11.3c13.6,0,24.6,11.1,24.6,24.6V107z"
+      />
+      <path
+        fill="#19BA19"
+        d="M198,73.3c2.9-2.9,2.9-7.6,0-10.5L137.4,2.2c-2.9-2.9-7.6-2.9-10.5,0l-21.7,21.7c-2.9,2.9-7.6,2.9-10.5,0L73.2,2.3c-2.9-2.9-7.6-2.9-10.5,0L2.2,62.9c-2.9,2.9-2.9,7.6,0,10.5l21.7,21.7c2.9,2.9,2.9,7.6,0,10.5L2.2,127.1c-2.9,2.9-2.9,7.6,0,10.5l60.6,60.6c2.9,2.9,7.6,2.9,10.5,0L95,176.5c2.9-2.9,7.6-2.9,10.5,0l21.7,21.7c2.9,2.9,7.6,2.9,10.5,0l60.6-60.6c2.9-2.9,2.9-7.6,0-10.5l-21.7-21.7c-2.9-2.9-2.9-7.6,0-10.5L198,73.3z M154.3,112.1c0,23.3-19,42.3-42.3,42.3H88.2c-23.3,0-42.3-19-42.3-42.3V88.3C45.9,65,64.9,46,88.2,46H112c23.3,0,42.3,19,42.3,42.3V112.1z"
+      />
+    </svg>
+  );
+});
 
 function statusClass(tone: 'idle' | 'ok' | 'error'): string {
   if (tone === 'ok') return 'status ok';
@@ -19,12 +79,19 @@ function statusClass(tone: 'idle' | 'ok' | 'error'): string {
 }
 
 function exarotonStatusClass(status: number): string {
+  // 0: OFFLINE, 1: ONLINE, 2: STARTING, 3: STOPPING, 4: RESTARTING, 5: SAVING, 6: LOADING, 7: CRASHED, 8: PENDING, 9: TRANSFERRING, 10: PREPARING
   if (status === 1) return 'status-chip status-chip-online';
   if (status === 7) return 'status-chip status-chip-crashed';
   if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status)) {
     return 'status-chip status-chip-busy';
   }
   return 'status-chip status-chip-offline';
+}
+
+function getExarotonStatusTone(status: number): 'ok' | 'error' | 'idle' {
+  if (status === 1) return 'ok';
+  if (status === 7) return 'error';
+  return 'idle';
 }
 
 const DataList = memo(function DataList({ children }: { children: ReactNode }) {
@@ -73,7 +140,8 @@ const ModalShell = memo(function ModalShell({
     window.addEventListener('keydown', onKeyDown);
 
     // Focus the first input if available, otherwise the first focusable
-    const inputs = cardRef.current?.querySelectorAll<HTMLElement>('input,textarea');
+    const inputs =
+      cardRef.current?.querySelectorAll<HTMLElement>('input,textarea');
     const firstInput = inputs?.[0];
     if (firstInput) {
       firstInput.focus();
@@ -131,7 +199,6 @@ const ModalShell = memo(function ModalShell({
     document.body,
   );
 });
-
 
 const TextInput = memo(function TextInput({
   name,
@@ -191,7 +258,8 @@ const SelectInput = memo(function SelectInput({
 });
 
 const Sidebar = memo(function Sidebar() {
-  const { view, setView } = useAdminContext();
+  const { view, setView, rail, selectedMods, hasPendingPublish } =
+    useAdminContext();
 
   return (
     <aside className="nav">
@@ -206,7 +274,15 @@ const Sidebar = memo(function Sidebar() {
           type="button"
           onClick={() => setView('overview')}
         >
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect x="3" y="3" width="7" height="7"></rect>
             <rect x="14" y="3" width="7" height="7"></rect>
             <rect x="14" y="14" width="7" height="7"></rect>
@@ -219,7 +295,15 @@ const Sidebar = memo(function Sidebar() {
           type="button"
           onClick={() => setView('identity')}
         >
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
           </svg>
           <span>Identity</span>
@@ -229,7 +313,15 @@ const Sidebar = memo(function Sidebar() {
           type="button"
           onClick={() => setView('mods')}
         >
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
           </svg>
           <span>Mod Manager</span>
@@ -239,7 +331,15 @@ const Sidebar = memo(function Sidebar() {
           type="button"
           onClick={() => setView('fancy')}
         >
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
             <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
             <path d="M2 2l7.5 1.5"></path>
@@ -248,229 +348,608 @@ const Sidebar = memo(function Sidebar() {
           <span>Fancy Menu</span>
         </button>
         <button
-          className={`nav-item ${view === 'exaroton' ? 'active' : ''}`}
+          className={`nav-item ${view === 'servers' ? 'active' : ''}`}
           type="button"
-          onClick={() => setView('exaroton')}
+          onClick={() => setView('servers')}
         >
-          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7 18a4.6 4.4 0 0 1 0-9 5.5 5.5 0 0 1 10.7-1.2A4 4 0 1 1 18 18"></path>
-            <path d="M12 12v6"></path>
-            <path d="M9.5 15.5 12 18l2.5-2.5"></path>
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
           </svg>
-          <span>Exaroton</span>
+          <span>Servers</span>
         </button>
       </nav>
+
+      <div className="nav-status">
+        <div className="rail-chip">
+          <b>MC</b> {rail.minecraft}
+        </div>
+        <div className="rail-chip">
+          <b>Loader</b> {rail.fabric}
+        </div>
+        <div className="rail-chip">{selectedMods.length} mods</div>
+        {hasPendingPublish && (
+          <div
+            className="rail-chip"
+            style={{
+              color: 'var(--warning)',
+              borderColor: 'var(--warning)',
+              background: 'rgba(245,158,11,0.05)',
+              fontWeight: 600,
+            }}
+          >
+            Requires Publish
+          </div>
+        )}
+      </div>
     </aside>
   );
 });
 
-const ExarotonPage = memo(function ExarotonPage() {
+const ServersLanding = memo(function ServersLanding({
+  onSelect,
+  connectedIntegration,
+}: {
+  onSelect: (id: string) => void;
+  connectedIntegration?: string | null;
+}) {
+  return (
+    <div className="integrations-grid">
+      <button
+        className={`integration-card ${connectedIntegration === 'exaroton' ? 'active-integration' : ''}`}
+        onClick={() => onSelect('exaroton')}
+        type="button"
+      >
+        <div className="integration-logo-wrapper">
+          <ExarotonLogo style={{ height: 32 }} />
+        </div>
+        <div className="integration-info">
+          <h3>Exaroton</h3>
+          <p>
+            {connectedIntegration === 'exaroton'
+              ? 'Account connected. Click to manage servers or change selection.'
+              : 'Connect your Exaroton account to manage your servers directly.'}
+          </p>
+        </div>
+        {connectedIntegration === 'exaroton' && (
+          <div className="connection-badge">Connected</div>
+        )}
+      </button>
+
+      <div className="integration-card disabled">
+        <div className="integration-logo-wrapper">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ width: 28, height: 28, opacity: 0.5 }}
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        </div>
+        <div className="integration-info">
+          <h3>Coming Soon</h3>
+          <p>We are working to bring you more integrations in the future.</p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const ServersPage = memo(function ServersPage() {
   const { exaroton, statuses, actions } = useAdminContext();
+  const [confirmDisconnect, setConfirmDisconnect] = useState('');
+  const [selectedIntegration, setSelectedIntegration] = useState<string | null>(
+    null,
+  );
+
+  const inSetupFlow = selectedIntegration === 'exaroton' && !exaroton.connected;
+  const isKeyStep = inSetupFlow && exaroton.connectionStep === 'key';
+  const isServersStep =
+    (exaroton.connectionStep === 'servers' || !exaroton.selectedServer) &&
+    exaroton.connected;
+  const isSuccessStep =
+    exaroton.connectionStep === 'success' && exaroton.connected;
+
+  const setupStepIndex = !selectedIntegration
+    ? 0
+    : !exaroton.connected
+      ? 1
+      : !exaroton.selectedServer
+        ? 2
+        : 3;
+
+  const openExarotonSetup = () => {
+    setSelectedIntegration('exaroton');
+    if (!exaroton.connected) {
+      actions.setExarotonStep('key');
+    }
+  };
+
+  if (!exaroton.configured) {
+    return (
+      <section className="exaroton-wizard">
+        <div className="alert-box danger">
+          <strong>Integration not configured</strong>
+          <p>
+            Set <code>EXAROTON_ENCRYPTION_KEY</code> on the API server first to
+            enable this feature.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section className="grid exaroton-grid">
-      <article className="panel exaroton-panel">
-        <h2>Exaroton Integration</h2>
-        <p className="hint">
-          Optionally connect your Exaroton account to manage your selected server from this panel.
-        </p>
-
-        {!exaroton.configured ? (
-          <div className="exaroton-warning">
-            <strong>Integration not configured</strong>
-            <p>
-              Set <code>EXAROTON_ENCRYPTION_KEY</code> on the API server first.
-            </p>
+    <section className="exaroton-wizard">
+      {!exaroton.connected && !selectedIntegration && (
+        <>
+          <div className="step-header">
+            <h2>Select Integration</h2>
+            <p>Choose a service to manage your game servers.</p>
           </div>
-        ) : null}
+          <ServersLanding
+            onSelect={(id) => {
+              if (id === 'exaroton') {
+                openExarotonSetup();
+                return;
+              }
+              setSelectedIntegration(id);
+            }}
+            connectedIntegration={exaroton.connected ? 'exaroton' : null}
+          />
+        </>
+      )}
 
-        {!exaroton.connected ? (
-          <div className="exaroton-connect-box">
-            <p className="hint">
-              Generate your API token at{' '}
-              <a href="https://exaroton.com/account/" target="_blank" rel="noreferrer">
-                exaroton.com/account
+      {selectedIntegration === 'exaroton' && (
+        <div className="wizard-step">
+          <div className="wizard-steps">
+            <span className={`step ${setupStepIndex >= 1 ? 'active' : ''}`}>
+              1. API Key
+            </span>
+            <span className={`step ${setupStepIndex >= 2 ? 'active' : ''}`}>
+              2. Select Server
+            </span>
+            <span className={`step ${setupStepIndex >= 3 ? 'done' : ''}`}>
+              3. Connected
+            </span>
+          </div>
+
+          {isKeyStep ? (
+            <>
+          <div className="step-header">
+            <h2>Connect Exaroton Account</h2>
+            <p>
+              Obtain your API key from{' '}
+              <a
+                href="https://exaroton.com/account/settings/"
+                target="_blank"
+                rel="noreferrer"
+                className="link-premium"
+              >
+                exaroton.com/account/settings/
               </a>
             </p>
-
-            <label>
-              Exaroton API Key
-              <div className="key-row">
-                <input
-                  name="exarotonApiKey"
-                  type={exaroton.showApiKey ? 'text' : 'password'}
-                  value={exaroton.apiKeyInput}
-                  placeholder="Enter your Exaroton API key"
-                  onChange={(event) =>
-                    actions.setExarotonApiKey(event.currentTarget.value)
-                  }
-                  disabled={!exaroton.configured || exaroton.busy}
-                />
-                <button
-                  className="btn ghost"
-                  type="button"
-                  onClick={() => actions.toggleExarotonApiKeyVisibility()}
-                  disabled={!exaroton.configured || exaroton.busy}
-                >
-                  {exaroton.showApiKey ? 'Hide' : 'Show'}
-                </button>
-              </div>
-            </label>
-
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button
-                className="btn"
-                type="button"
-                disabled={!exaroton.configured || exaroton.busy}
-                onClick={() => void actions.connectExaroton()}
-              >
-                {exaroton.busy ? 'Connecting...' : 'Connect'}
-              </button>
-            </div>
           </div>
-        ) : (
-          <>
-            <div className="exaroton-account-row">
-              <div>
-                <strong>{exaroton.accountName || 'Connected account'}</strong>
-                <p className="hint">{exaroton.accountEmail || 'Email unavailable'}</p>
-              </div>
-              <div className="row">
-                <button
-                  className="btn ghost"
-                  type="button"
-                  disabled={exaroton.busy}
-                  onClick={() => void actions.refreshExarotonStatus()}
-                >
-                  Refresh
-                </button>
-                <button
-                  className="btn danger"
-                  type="button"
-                  disabled={exaroton.busy}
-                  onClick={() => void actions.disconnectExaroton()}
-                >
-                  Disconnect
-                </button>
-              </div>
-            </div>
 
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h3 style={{ margin: 0 }}>Select Server</h3>
+          <div className="security-banner">
+            <div className="security-banner-icon">🛡️</div>
+            <p>
+              <b>Your privacy is our priority.</b> Your API key is encrypted
+              and stored securely on our servers. We never share your
+              credentials with third parties.
+            </p>
+          </div>
+
+          <div className="api-key-container">
+            <label className="label">Exaroton API Key</label>
+            <input
+              className="api-key-input"
+              type="password"
+              placeholder="Paste your secret API key here..."
+              value={exaroton.apiKeyInput}
+              onChange={(e) => actions.setExarotonApiKey(e.target.value)}
+            />
+          </div>
+
+          <div
+            className="row"
+            style={{ justifyContent: 'flex-end', gap: 12, marginTop: 12 }}
+          >
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={() => {
+                actions.setExarotonStep('idle');
+                setSelectedIntegration(null);
+              }}
+            >
+              Back
+            </button>
+            <button
+              className="btn primary"
+              type="button"
+              style={{ padding: '12px 32px' }}
+              disabled={!exaroton.apiKeyInput || exaroton.busy}
+              onClick={() => void actions.connectExaroton()}
+            >
+              {exaroton.busy ? 'Connecting...' : 'Connect Account'}
+            </button>
+          </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {isServersStep && (
+        <div className="wizard-step">
+          <div className="step-header">
+            <h2>Select Server</h2>
+            <p>Choose the server you want to manage within the client.</p>
+          </div>
+
+          <div className="exaroton-server-grid">
+            {exaroton.servers.map((server: ExarotonServerPayload) => (
               <button
-                className="btn ghost"
-                type="button"
+                key={server.id}
+                className={`server-card ${exaroton.selectedServer?.id === server.id ? 'active' : ''}`}
+                onClick={() => void actions.selectExarotonServer(server.id)}
                 disabled={exaroton.busy}
-                onClick={() => void actions.listExarotonServers()}
+                type="button"
               >
-                Reload Servers
-              </button>
-            </div>
-
-            <div className="exaroton-server-list" role="list">
-              {exaroton.servers.map((server) => (
-                <button
-                  key={server.id}
-                  type="button"
-                  className={`exaroton-server-item ${
-                    exaroton.selectedServer?.id === server.id ? 'active' : ''
-                  }`}
-                  onClick={() => void actions.selectExarotonServer(server.id)}
-                  disabled={exaroton.busy}
-                >
-                  <div>
-                    <strong>{server.name}</strong>
-                    <p>{server.address}</p>
-                  </div>
+                <div className="server-name-row">
+                  <strong>{server.name}</strong>
                   <span className={exarotonStatusClass(server.status)}>
                     {server.statusLabel}
                   </span>
-                </button>
-              ))}
-              {!exaroton.servers.length ? (
-                <p className="hint">No servers loaded yet. Click “Reload Servers”.</p>
-              ) : null}
+                </div>
+                <p className="hint">{server.address}</p>
+                <div className="meta">
+                  {server.players.count} / {server.players.max} players online
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {!exaroton.servers.length && (
+            <div className="alert-box">
+              <p>
+                No servers found on this account. Please create one on Exaroton
+                first.
+              </p>
             </div>
+          )}
 
-            {exaroton.selectedServer ? (
-              <article className="exaroton-selected-card">
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3>{exaroton.selectedServer.name}</h3>
-                    <p className="hint">{exaroton.selectedServer.address}</p>
+          <div
+            className="row"
+            style={{ justifyContent: 'space-between', marginTop: 12 }}
+          >
+            <button
+              className="btn ghost"
+              style={{ padding: '10px 20px' }}
+              onClick={() => {
+                if (!exaroton.connected) {
+                  actions.setExarotonStep('key');
+                } else {
+                  setSelectedIntegration(null);
+                }
+              }}
+            >
+              {exaroton.connected ? 'Back' : 'Back to API Key'}
+            </button>
+            <button
+              className="btn"
+              style={{ padding: '10px 24px' }}
+              onClick={() => void actions.listExarotonServers()}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ opacity: 0.7 }}
+              >
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Refresh List
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(isSuccessStep ||
+        (exaroton.connected &&
+          exaroton.selectedServer &&
+          exaroton.connectionStep !== 'servers')) && (
+        <div className="exaroton-wizard">
+          {isSuccessStep && (
+            <div className="success-step">
+              <div className="success-icon-wrapper">
+                <span>✓</span>
+              </div>
+              <div className="success-content">
+                <h2>Successfully Connected!</h2>
+                <p>
+                  Your server <b>{exaroton.selectedServer?.name}</b> is now
+                  fully integrated with the MSS+ Client Center.
+                </p>
+              </div>
+              <button
+                className="finish-btn"
+                onClick={() => actions.setExarotonStep('idle')}
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          )}
+
+          {!isSuccessStep && exaroton.connected && (
+            <div className="grid two">
+              <article className="panel">
+                <h3>Connected Account</h3>
+                <div
+                  className="exaroton-account-row"
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div className="exaroton-account-info">
+                    <strong>{exaroton.accountName}</strong>
+                    <span>{exaroton.accountEmail}</span>
                   </div>
-                  <span className={exarotonStatusClass(exaroton.selectedServer.status)}>
-                    {exaroton.selectedServer.statusLabel}
-                  </span>
-                </div>
-                <DataList>
-                  <DataItem
-                    label="Players"
-                    value={`${exaroton.selectedServer.players.count}/${exaroton.selectedServer.players.max}`}
-                  />
-                  <DataItem
-                    label="Software"
-                    value={
-                      exaroton.selectedServer.software
-                        ? `${exaroton.selectedServer.software.name} ${exaroton.selectedServer.software.version}`
-                        : 'Unknown'
-                    }
-                  />
-                </DataList>
-                <div className="row" style={{ justifyContent: 'flex-end' }}>
                   <button
-                    className="btn"
-                    type="button"
-                    disabled={exaroton.busy}
-                    onClick={() => void actions.exarotonAction('start')}
+                    className="btn danger ghost"
+                    style={{ padding: '10px 20px' }}
+                    onClick={() => setConfirmDisconnect('PENDING')}
                   >
-                    Start
-                  </button>
-                  <button
-                    className="btn ghost"
-                    type="button"
-                    disabled={exaroton.busy}
-                    onClick={() => void actions.exarotonAction('restart')}
-                  >
-                    Restart
-                  </button>
-                  <button
-                    className="btn danger"
-                    type="button"
-                    disabled={exaroton.busy}
-                    onClick={() => void actions.exarotonAction('stop')}
-                  >
-                    Stop
+                    Disconnect Account
                   </button>
                 </div>
-              </article>
-            ) : null}
-          </>
-        )}
 
-        <div className={statusClass(statuses.exaroton.tone)}>{statuses.exaroton.text}</div>
-        {exaroton.error ? <p className="hint">{exaroton.error}</p> : null}
-      </article>
+                {confirmDisconnect && (
+                  <ModalShell onClose={() => setConfirmDisconnect('')}>
+                    <div className="step-header">
+                      <h2>Confirm Disconnection</h2>
+                      <p>
+                        To disconnect, please type the name of the connected
+                        server: <b>{exaroton.selectedServer?.name}</b>
+                      </p>
+                    </div>
+                    <TextInput
+                      name="confirm"
+                      label="Type server name to confirm"
+                      value={
+                        confirmDisconnect === 'PENDING' ? '' : confirmDisconnect
+                      }
+                      onChange={(e) =>
+                        setConfirmDisconnect(e.currentTarget.value)
+                      }
+                      placeholder={exaroton.selectedServer?.name}
+                    />
+                    <div
+                      className="row"
+                      style={{
+                        justifyContent: 'flex-end',
+                        gap: 12,
+                        marginTop: 20,
+                      }}
+                    >
+                      <button
+                        className="btn ghost"
+                        onClick={() => setConfirmDisconnect('')}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="btn danger"
+                        disabled={
+                          confirmDisconnect !== exaroton.selectedServer?.name
+                        }
+                        onClick={() => {
+                          void actions.disconnectExaroton();
+                          setConfirmDisconnect('');
+                        }}
+                      >
+                        Confirm Disconnect
+                      </button>
+                    </div>
+                  </ModalShell>
+                )}
+              </article>
+
+              {exaroton.selectedServer && (
+                <article className="panel">
+                  <div
+                    className="row"
+                    style={{ justifyContent: 'space-between' }}
+                  >
+                    <h3>Selected Server</h3>
+                    <button
+                      className="btn ghost"
+                      onClick={() => void actions.listExarotonServers()}
+                    >
+                      Change Server
+                    </button>
+                  </div>
+                  <div
+                    className="exaroton-selected-card"
+                    style={{
+                      background: 'rgba(99,102,241,0.05)',
+                      borderColor: 'var(--brand-primary)',
+                    }}
+                  >
+                    <div
+                      className="row"
+                      style={{ justifyContent: 'space-between' }}
+                    >
+                      <div>
+                        <strong>{exaroton.selectedServer.name}</strong>
+                        <p className="hint">
+                          {exaroton.selectedServer.address}
+                        </p>
+                      </div>
+                      <span
+                        className={exarotonStatusClass(
+                          exaroton.selectedServer.status,
+                        )}
+                      >
+                        {exaroton.selectedServer.statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="row" style={{ justifyContent: 'flex-start' }}>
+        <div className={statusClass(statuses.exaroton.tone)}>
+          {statuses.exaroton.text}
+        </div>
+      </div>
+      {exaroton.error ? (
+        <div className="alert-box danger" style={{ marginTop: 12 }}>
+          <p>{exaroton.error}</p>
+        </div>
+      ) : null}
     </section>
+  );
+});
+
+const ExarotonWidget = memo(function ExarotonWidget() {
+  const { exaroton, actions } = useAdminContext();
+
+  if (!exaroton.connected || !exaroton.selectedServer) return null;
+
+  const server = exaroton.selectedServer;
+  const statusTone = getExarotonStatusTone(server.status);
+
+  return (
+    <div className="exaroton-widget">
+      <div className="widget-status">
+        <span
+          className={`widget-dot ${statusTone}`}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background:
+              statusTone === 'ok'
+                ? 'var(--success)'
+                : statusTone === 'error'
+                  ? 'var(--danger)'
+                  : 'var(--text-muted)',
+          }}
+        />
+        <span className="widget-server-name">{server.name}:</span>
+        <span className={exarotonStatusClass(server.status)}>
+          {server.statusLabel}
+        </span>
+      </div>
+      <div className="widget-controls">
+        <button
+          className="control-btn"
+          type="button"
+          title="Start Server"
+          disabled={exaroton.busy || server.status !== 0}
+          onClick={() => void actions.exarotonAction('start')}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </button>
+        <button
+          className="control-btn"
+          type="button"
+          title="Restart Server"
+          disabled={exaroton.busy || server.status === 0}
+          onClick={() => void actions.exarotonAction('restart')}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M23 4v6h-6"></path>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+        </button>
+        <button
+          className="control-btn"
+          type="button"
+          title="Stop Server"
+          disabled={exaroton.busy || server.status === 0}
+          onClick={() => void actions.exarotonAction('stop')}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="6" y="6" width="12" height="12"></rect>
+          </svg>
+        </button>
+      </div>
+    </div>
   );
 });
 
 const TopBar = memo(function TopBar() {
   const {
     sessionState,
-    hasPendingPublish,
-    actions,
-    isBusy,
     selectedMods,
+    hasPendingPublish,
+    isBusy,
+    actions,
     statuses,
-  } =
-    useAdminContext();
+  } = useAdminContext();
 
   return (
     <section className="topbar">
       <div className="topbar-meta">
-        Authenticated Session <b>{sessionState}</b>
-        <span className="meta">Total Mods: {selectedMods.length}</span>
+        <ExarotonWidget />
+        <div className="session-info">
+          Authenticated Session <b>{sessionState}</b>
+          <span className="meta">Mods: {selectedMods.length}</span>
+        </div>
       </div>
       <div className="topbar-actions">
         <button
@@ -496,32 +975,16 @@ const TopBar = memo(function TopBar() {
           <span className="publish-clean">All changes published</span>
         )}
         <button
-          className="btn danger"
+          className="btn danger ghost"
           type="button"
+          style={{ padding: '8px 12px' }}
           onClick={() => void actions.logout()}
         >
           Logout
         </button>
       </div>
-      <div className={statusClass(statuses.draft.tone)}>{statuses.draft.text}</div>
-    </section>
-  );
-});
-
-const CompatibilityRail = memo(function CompatibilityRail() {
-  const { rail, selectedMods, hasPendingPublish } = useAdminContext();
-
-  return (
-    <section className="panel">
-      <h2>Compatibility Rail</h2>
-      <div className="chips" aria-live="polite">
-        <span className="chip">{rail.minecraft}</span>
-        <span className="chip">{rail.fabric}</span>
-        <span className="chip">{rail.nextRelease}</span>
-        <span className="chip">Mods: {selectedMods.length}</span>
-        {hasPendingPublish ? (
-          <span className="chip warning-chip">Changes require publish</span>
-        ) : null}
+      <div className={statusClass(statuses.draft.tone)}>
+        {statuses.draft.text}
       </div>
     </section>
   );
@@ -548,107 +1011,80 @@ const SupportMatrixModal = memo(function SupportMatrixModal({
 
   return (
     <ModalShell onClose={onClose}>
-        <button
-          className="modal-close-icon"
-          type="button"
-          onClick={onClose}
-          title="Close"
+      <button
+        className="modal-close-icon"
+        type="button"
+        onClick={onClose}
+        title="Close"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 18, height: 18 }}
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ width: 18, height: 18 }}
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
 
-        <div className="modal-head">
-          <div className="modal-brand">
-            <h3>Support Matrix</h3>
-            <p className="meta">Internal Runtime Settings</p>
-          </div>
+      <div className="modal-head">
+        <div className="modal-brand">
+          <h3>Support Matrix</h3>
+          <p className="meta">Internal Runtime Settings</p>
         </div>
-        <div className="alert-box danger">
-          <strong>Risk Warning</strong>
-          <p>
-            Altering support matrix values can break launcher bootup and runtime
-            compatibility. This action requires server-side validation.
-          </p>
-        </div>
-        <div className="grid two">
-          <TextInput
-            name="minecraftVersion"
-            label="Selected Minecraft Version"
-            value={form.minecraftVersion}
-            placeholder="1.21.1"
+      </div>
+      <div className="alert-box danger">
+        <strong>Risk Warning</strong>
+        <p>
+          Altering support matrix values can break launcher bootup and runtime
+          compatibility. This action requires server-side validation.
+        </p>
+      </div>
+      <div className="grid two">
+        <TextInput
+          name="minecraftVersion"
+          label="Selected Minecraft Version"
+          value={form.minecraftVersion}
+          placeholder="1.21.1"
+          onChange={setTextFieldFromEvent}
+        />
+        <div className="data-item">
+          <span className="data-label">Fabric Loader Version</span>
+          <select
+            id="loaderVersion"
+            name="loaderVersion"
+            value={form.loaderVersion}
             onChange={setTextFieldFromEvent}
-          />
-          <div className="data-item">
-            <span className="data-label">Fabric Loader Version</span>
-            <select
-                id="loaderVersion"
-                name="loaderVersion"
-                value={form.loaderVersion}
-                onChange={setTextFieldFromEvent}
-              >
-                <option value="">Select loader version</option>
-                {loaderOptions.map((entry) => {
-                  const suffix = entry.stable ? ' (stable)' : '';
-                  return (
-                    <option key={entry.version} value={entry.version}>
-                      {entry.version}
-                      {suffix}
-                    </option>
-                  );
-                })}
-              </select>
-          </div>
+          >
+            <option value="">Select loader version</option>
+            {loaderOptions.map((entry) => {
+              const suffix = entry.stable ? ' (stable)' : '';
+              return (
+                <option key={entry.version} value={entry.version}>
+                  {entry.version}
+                  {suffix}
+                </option>
+              );
+            })}
+          </select>
         </div>
+      </div>
 
-        {hasChanges ? (
-          <>
-            <label className="check danger">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(event) => setConfirmed(event.currentTarget.checked)}
-              />
-              <span>I understand this change can break the system.</span>
-            </label>
+      {hasChanges ? (
+        <>
+          <label className="check danger">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(event) => setConfirmed(event.currentTarget.checked)}
+            />
+            <span>I understand this change can break the system.</span>
+          </label>
 
-            <div className="row">
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => void actions.refreshLoaders()}
-              >
-                Refresh Loader List
-              </button>
-              <div className="btn-wrapper">
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!confirmed}
-                  onClick={() => {
-                    void actions.saveSettings();
-                    onClose();
-                  }}
-                >
-                  Save Matrix
-                </button>
-                {!confirmed && (
-                  <span className="btn-tooltip">Confirm to enable save</span>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
           <div className="row">
             <button
               type="button"
@@ -657,24 +1093,45 @@ const SupportMatrixModal = memo(function SupportMatrixModal({
             >
               Refresh Loader List
             </button>
+            <div className="btn-wrapper">
+              <button
+                type="button"
+                className="btn"
+                disabled={!confirmed}
+                onClick={() => {
+                  void actions.saveSettings();
+                  onClose();
+                }}
+              >
+                Save Matrix
+              </button>
+              {!confirmed && (
+                <span className="btn-tooltip">Confirm to enable save</span>
+              )}
+            </div>
           </div>
-        )}
-
-        <div className={statusClass(statuses.settings.tone)}>
-          {statuses.settings.text}
+        </>
+      ) : (
+        <div className="row">
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => void actions.refreshLoaders()}
+          >
+            Refresh Loader List
+          </button>
         </div>
+      )}
+
+      <div className={statusClass(statuses.settings.tone)}>
+        {statuses.settings.text}
+      </div>
     </ModalShell>
   );
 });
 
 const OverviewPage = memo(function OverviewPage() {
-  const {
-    form,
-    selectedMods,
-    setView,
-    summaryStats,
-    rail,
-  } = useAdminContext();
+  const { form, selectedMods, setView, summaryStats, rail } = useAdminContext();
 
   return (
     <>
@@ -701,11 +1158,16 @@ const OverviewPage = memo(function OverviewPage() {
         <article className="panel">
           <div className="panel-header">
             <h3>Instance Profile</h3>
-            <button className="btn ghost" onClick={() => setView('identity')}>Edit</button>
+            <button className="btn ghost" onClick={() => setView('identity')}>
+              Edit
+            </button>
           </div>
           <DataList>
             <DataItem label="Profile Name" value={form.serverName} />
-            <DataItem label="Runtime" value={`${rail.minecraft} | ${rail.fabric}`} />
+            <DataItem
+              label="Runtime"
+              value={`${rail.minecraft} | ${rail.fabric}`}
+            />
             <DataItem label="Endpoint" value={form.serverAddress} />
           </DataList>
         </article>
@@ -713,24 +1175,46 @@ const OverviewPage = memo(function OverviewPage() {
         <article className="panel">
           <div className="panel-header">
             <h3>Content Catalog</h3>
-            <button className="btn ghost" onClick={() => setView('mods')}>Manage</button>
+            <button className="btn ghost" onClick={() => setView('mods')}>
+              Manage
+            </button>
           </div>
           <DataList>
             <DataItem label="Total Mods" value={selectedMods.length} />
             <DataItem label="Core Mods" value="2 (Locked)" />
-            <DataItem label="Update Status" value={summaryStats.update > 0 ? `${summaryStats.update} pending` : 'All current'} />
+            <DataItem
+              label="Update Status"
+              value={
+                summaryStats.update > 0
+                  ? `${summaryStats.update} pending`
+                  : 'All current'
+              }
+            />
           </DataList>
         </article>
 
         <article className="panel">
           <div className="panel-header">
             <h3>Display & Menu</h3>
-            <button className="btn ghost" onClick={() => setView('fancy')}>Setup</button>
+            <button className="btn ghost" onClick={() => setView('fancy')}>
+              Setup
+            </button>
           </div>
           <DataList>
-            <DataItem label="Status" value={form.fancyMenuEnabled === 'true' ? 'Active' : 'Bypass'} />
-            <DataItem label="Mode" value={form.fancyMenuMode === 'custom' ? 'Custom Bundle' : 'Simplified'} />
-            <DataItem label="Custom Brand" value={form.brandingLogoUrl ? 'Logo Set' : 'Default'} />
+            <DataItem
+              label="Status"
+              value={form.fancyMenuEnabled === 'true' ? 'Active' : 'Bypass'}
+            />
+            <DataItem
+              label="Mode"
+              value={
+                form.fancyMenuMode === 'custom' ? 'Custom Bundle' : 'Simplified'
+              }
+            />
+            <DataItem
+              label="Custom Brand"
+              value={form.brandingLogoUrl ? 'Logo Set' : 'Default'}
+            />
           </DataList>
         </article>
 
@@ -967,16 +1451,18 @@ const AddModsModal = memo(function AddModsModal({
       minecraftVersion: mcVersion,
     });
 
-    requestJson<Array<{
-      projectId: string;
-      slug: string;
-      title: string;
-      description: string;
-      author: string;
-      iconUrl?: string;
-      categories?: string[];
-      latestVersion?: string;
-    }>>(`/v1/admin/mods/search?${searchParams}`, 'GET')
+    requestJson<
+      Array<{
+        projectId: string;
+        slug: string;
+        title: string;
+        description: string;
+        author: string;
+        iconUrl?: string;
+        categories?: string[];
+        latestVersion?: string;
+      }>
+    >(`/v1/admin/mods/search?${searchParams}`, 'GET')
       .then((results) => {
         // The backend already returns the data in the correct format
         const mappedResults = results.map((h) => ({
@@ -997,17 +1483,27 @@ const AddModsModal = memo(function AddModsModal({
           setPopularResults(mappedResults);
         }
       })
-      .catch(() => { /* silent */ })
+      .catch(() => {
+        /* silent */
+      })
       .finally(() => setIsLoadingPopular(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [popularResults, setPopularResults] = useState<typeof searchResults>([]);
-  const displayResults = localQuery ? searchResults : (searchResults.length > 0 ? searchResults : popularResults);
-  const isPopularView = !localQuery && searchResults.length === 0 && popularResults.length > 0;
+  const [popularResults, setPopularResults] = useState<typeof searchResults>(
+    [],
+  );
+  const displayResults = localQuery
+    ? searchResults
+    : searchResults.length > 0
+      ? searchResults
+      : popularResults;
+  const isPopularView =
+    !localQuery && searchResults.length === 0 && popularResults.length > 0;
 
   const installedIds = useMemo(
-    () => new Set(selectedMods.map((m) => m.projectId).filter(Boolean) as string[]),
+    () =>
+      new Set(selectedMods.map((m) => m.projectId).filter(Boolean) as string[]),
     [selectedMods],
   );
 
@@ -1027,7 +1523,8 @@ const AddModsModal = memo(function AddModsModal({
   };
 
   const addToCart = async (result: (typeof searchResults)[number]) => {
-    if (cartIds.has(result.projectId) || installedIds.has(result.projectId)) return;
+    if (cartIds.has(result.projectId) || installedIds.has(result.projectId))
+      return;
 
     let deps: Array<{ projectId: string; title: string }> = [];
     const fromCache = dependencyMap[result.projectId];
@@ -1079,15 +1576,31 @@ const AddModsModal = memo(function AddModsModal({
   return (
     <ModalShell onClose={onClose} cardClassName="modal-card wide">
       {/* Header */}
-      <div className="modal-head" style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div
+        className="modal-head"
+        style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid var(--line)',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
         <h3 style={{ margin: 0 }}>Add Mods</h3>
-        <button className="modal-close-icon" type="button" onClick={onClose} aria-label="Close">
+        <button
+          className="modal-close-icon"
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+        >
           ✕
         </button>
       </div>
 
-        {wasRestored.current && cart.length > 0 && (
-          <div style={{
+      {wasRestored.current && cart.length > 0 && (
+        <div
+          style={{
             padding: '8px 20px',
             fontSize: '0.75rem',
             color: 'var(--warning)',
@@ -1097,228 +1610,253 @@ const AddModsModal = memo(function AddModsModal({
             alignItems: 'center',
             gap: '6px',
             flexShrink: 0,
-          }}>
-            ⚡ Cart restored from previous session.
-          </div>
-        )}
+          }}
+        >
+          ⚡ Cart restored from previous session.
+        </div>
+      )}
 
-        {/* Main layout: search pane | cart pane */}
-        <div className="add-mods-layout" style={{ flex: 1, minHeight: 0 }}>
-          {/* Left: Search */}
-          <div className="add-mods-search-pane">
-            <div className="add-mods-search-bar">
-              <input
-                id="addModsSearch"
-                value={localQuery}
-                onChange={handleQueryChange}
-                placeholder="Search Modrinth..."
-                style={{ flex: 1 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (debounceRef.current) clearTimeout(debounceRef.current);
-                    void actions.searchMods();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                style={{ padding: '8px 14px', flexShrink: 0 }}
-                onClick={() => void actions.searchMods()}
-                disabled={isBusy.search}
-              >
-                {isBusy.search ? (
-                  <span className="search-spinner" />
-                ) : (
-                  'Search'
-                )}
-              </button>
-            </div>
-
-            <div className={statusClass(statuses.mods.tone)} style={{ flexShrink: 0 }}>
-              {isPopularView ? '⭐ Most popular mods (by followers)' : statuses.mods.text}
-            </div>
-
-            <div className="add-mods-search-results">
-              {isLoadingPopular ? (
-                <p className="hint" style={{ margin: 0 }}>Loading popular mods...</p>
-              ) : displayResults.length === 0 ? (
-                <p className="hint" style={{ margin: 0 }}>
-                  {localQuery ? 'No results. Try a different query.' : 'Search for a mod to get started.'}
-                </p>
-              ) : (
-                displayResults.map((result) => {
-                  const dep = dependencyMap[result.projectId];
-                  const inCart = cartIds.has(result.projectId);
-                  const installed = installedIds.has(result.projectId);
-                  return (
-                    <div
-                      key={result.projectId}
-                      className={`search-result-card${inCart ? ' in-cart' : ''}${installed ? ' already-installed' : ''}`}
-                    >
-                      <img
-                        src={result.iconUrl || 'https://modrinth.com/favicon.ico'}
-                        alt={result.title}
-                        className="search-result-icon"
-                        onError={(e) => (e.currentTarget.src = 'https://modrinth.com/favicon.ico')}
-                      />
-                      <div className="search-result-info">
-                        <div className="search-result-name">
-                          <a
-                            href={`https://modrinth.com/mod/${result.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="modrinth-title-link"
-                            title="View on Modrinth"
-                          >
-                            {result.title}
-                            <ExternalLinkIcon />
-                          </a>
-                        </div>
-                        <div className="search-result-sub">
-                          {result.author && <span>by {result.author}</span>}
-                          {result.latestVersion && <span>{result.latestVersion}</span>}
-                          {dep ? (
-                            dep.requiresDependencies ? (
-                              <span className="dep-badge has-deps">+{dep.dependencyDetails.length} deps</span>
-                            ) : (
-                              <span className="dep-badge no-deps">No deps</span>
-                            )
-                          ) : null}
-                          {installed && <span style={{ color: 'var(--success)' }}>✓ Installed</span>}
-                          {inCart && !installed && <span style={{ color: 'var(--brand-primary)' }}>✓ In cart</span>}
-                        </div>
-                      </div>
-                      <div>
-                        {installed ? (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Installed</span>
-                        ) : inCart ? (
-                          <button
-                            type="button"
-                            className="btn danger"
-                            style={{ padding: '5px 10px', fontSize: '0.75rem' }}
-                            onClick={() => removeFromCart(result.projectId)}
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn"
-                            style={{ padding: '5px 10px', fontSize: '0.75rem' }}
-                            onClick={() => void addToCart(result)}
-                          >
-                            Add
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+      {/* Main layout: search pane | cart pane */}
+      <div className="add-mods-layout" style={{ flex: 1, minHeight: 0 }}>
+        {/* Left: Search */}
+        <div className="add-mods-search-pane">
+          <div className="add-mods-search-bar">
+            <input
+              id="addModsSearch"
+              value={localQuery}
+              onChange={handleQueryChange}
+              placeholder="Search Modrinth..."
+              style={{ flex: 1 }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (debounceRef.current) clearTimeout(debounceRef.current);
+                  void actions.searchMods();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ padding: '8px 14px', flexShrink: 0 }}
+              onClick={() => void actions.searchMods()}
+              disabled={isBusy.search}
+            >
+              {isBusy.search ? <span className="search-spinner" /> : 'Search'}
+            </button>
           </div>
 
-          {/* Right: Cart */}
-          <div className="add-mods-cart-pane">
-            <div className="add-mods-cart-title">
-              Queue
-              {cart.length > 0 && (
-                <span className="cart-count-badge">{cart.length}</span>
-              )}
-            </div>
+          <div
+            className={statusClass(statuses.mods.tone)}
+            style={{ flexShrink: 0 }}
+          >
+            {isPopularView
+              ? '⭐ Most popular mods (by followers)'
+              : statuses.mods.text}
+          </div>
 
-            {cart.length === 0 ? (
-              <div className="cart-empty">
-                <span style={{ fontSize: '2rem' }}>🧺</span>
-                <span>Add mods from search to queue them for install.</span>
-              </div>
+          <div className="add-mods-search-results">
+            {isLoadingPopular ? (
+              <p className="hint" style={{ margin: 0 }}>
+                Loading popular mods...
+              </p>
+            ) : displayResults.length === 0 ? (
+              <p className="hint" style={{ margin: 0 }}>
+                {localQuery
+                  ? 'No results. Try a different query.'
+                  : 'Search for a mod to get started.'}
+              </p>
             ) : (
-              <div className="add-mods-cart-list">
-                {cart.map((entry) => (
-                  <div key={entry.projectId} className="cart-item">
+              displayResults.map((result) => {
+                const dep = dependencyMap[result.projectId];
+                const inCart = cartIds.has(result.projectId);
+                const installed = installedIds.has(result.projectId);
+                return (
+                  <div
+                    key={result.projectId}
+                    className={`search-result-card${inCart ? ' in-cart' : ''}${installed ? ' already-installed' : ''}`}
+                  >
                     <img
-                      src={entry.iconUrl || 'https://modrinth.com/favicon.ico'}
-                      alt={entry.title}
-                      className="cart-item-icon"
-                      onError={(e) => (e.currentTarget.src = 'https://modrinth.com/favicon.ico')}
+                      src={result.iconUrl || 'https://modrinth.com/favicon.ico'}
+                      alt={result.title}
+                      className="search-result-icon"
+                      onError={(e) =>
+                        (e.currentTarget.src =
+                          'https://modrinth.com/favicon.ico')
+                      }
                     />
-                    <div className="cart-item-info" style={{ minWidth: 0 }}>
-                      <div className="cart-item-name">
+                    <div className="search-result-info">
+                      <div className="search-result-name">
                         <a
-                          href={`https://modrinth.com/mod/${entry.slug ?? entry.projectId}`}
+                          href={`https://modrinth.com/mod/${result.slug}`}
                           target="_blank"
                           rel="noreferrer"
                           className="modrinth-title-link"
                           title="View on Modrinth"
                         >
-                          {entry.title}
+                          {result.title}
                           <ExternalLinkIcon />
                         </a>
                       </div>
-                      {entry.deps.length > 0 && (
-                        <div className="cart-item-deps">+{entry.deps.length} deps</div>
+                      <div className="search-result-sub">
+                        {result.author && <span>by {result.author}</span>}
+                        {result.latestVersion && (
+                          <span>{result.latestVersion}</span>
+                        )}
+                        {dep ? (
+                          dep.requiresDependencies ? (
+                            <span className="dep-badge has-deps">
+                              +{dep.dependencyDetails.length} deps
+                            </span>
+                          ) : (
+                            <span className="dep-badge no-deps">No deps</span>
+                          )
+                        ) : null}
+                        {installed && (
+                          <span style={{ color: 'var(--success)' }}>
+                            ✓ Installed
+                          </span>
+                        )}
+                        {inCart && !installed && (
+                          <span style={{ color: 'var(--brand-primary)' }}>
+                            ✓ In cart
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      {installed ? (
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            color: 'var(--text-muted)',
+                          }}
+                        >
+                          Installed
+                        </span>
+                      ) : inCart ? (
+                        <button
+                          type="button"
+                          className="btn danger"
+                          style={{ padding: '5px 10px', fontSize: '0.75rem' }}
+                          onClick={() => removeFromCart(result.projectId)}
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ padding: '5px 10px', fontSize: '0.75rem' }}
+                          onClick={() => void addToCart(result)}
+                        >
+                          Add
+                        </button>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      style={{ padding: '3px 7px', fontSize: '0.7rem' }}
-                      onClick={() => removeFromCart(entry.projectId)}
-                      title="Remove from cart"
-                    >
-                      ✕
-                    </button>
                   </div>
-                ))}
-              </div>
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="add-mods-footer">
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        {/* Right: Cart */}
+        <div className="add-mods-cart-pane">
+          <div className="add-mods-cart-title">
+            Queue
+            {cart.length > 0 && (
+              <span className="cart-count-badge">{cart.length}</span>
+            )}
+          </div>
+
+          {cart.length === 0 ? (
+            <div className="cart-empty">
+              <span style={{ fontSize: '2rem' }}>🧺</span>
+              <span>Add mods from search to queue them for install.</span>
+            </div>
+          ) : (
+            <div className="add-mods-cart-list">
+              {cart.map((entry) => (
+                <div key={entry.projectId} className="cart-item">
+                  <img
+                    src={entry.iconUrl || 'https://modrinth.com/favicon.ico'}
+                    alt={entry.title}
+                    className="cart-item-icon"
+                    onError={(e) =>
+                      (e.currentTarget.src = 'https://modrinth.com/favicon.ico')
+                    }
+                  />
+                  <div className="cart-item-info" style={{ minWidth: 0 }}>
+                    <div className="cart-item-name">
+                      <a
+                        href={`https://modrinth.com/mod/${entry.slug ?? entry.projectId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="modrinth-title-link"
+                        title="View on Modrinth"
+                      >
+                        {entry.title}
+                        <ExternalLinkIcon />
+                      </a>
+                    </div>
+                    {entry.deps.length > 0 && (
+                      <div className="cart-item-deps">
+                        +{entry.deps.length} deps
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    style={{ padding: '3px 7px', fontSize: '0.7rem' }}
+                    onClick={() => removeFromCart(entry.projectId)}
+                    title="Remove from cart"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="add-mods-footer">
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          {cart.length > 0 && (
             <button
               type="button"
               className="btn ghost"
-              onClick={onClose}
+              style={{ color: 'var(--danger)' }}
+              onClick={clearCart}
             >
-              Cancel
+              Clear All
             </button>
-            {cart.length > 0 && (
-              <button
-                type="button"
-                className="btn ghost"
-                style={{ color: 'var(--danger)' }}
-                onClick={clearCart}
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-          <button
-            type="button"
-            className="btn"
-            disabled={cart.length === 0 || isBusy.install}
-            onClick={handleInstall}
-          >
-            {isBusy.install ? 'Installing...' : `Install ${cart.length > 0 ? `${String(cart.length)} mod${cart.length !== 1 ? 's' : ''}` : 'queue'}`}
-          </button>
+          )}
+        </div>
+        <button
+          type="button"
+          className="btn"
+          disabled={cart.length === 0 || isBusy.install}
+          onClick={handleInstall}
+        >
+          {isBusy.install
+            ? 'Installing...'
+            : `Install ${cart.length > 0 ? `${String(cart.length)} mod${cart.length !== 1 ? 's' : ''}` : 'queue'}`}
+        </button>
       </div>
     </ModalShell>
   );
 });
 
 const ModManagerPage = memo(function ModManagerPage() {
-  const {
-    modVersionOptions,
-    coreModPolicy,
-    selectedMods,
-    statuses,
-    actions,
-  } = useAdminContext();
+  const { modVersionOptions, coreModPolicy, selectedMods, statuses, actions } =
+    useAdminContext();
 
   const [showAddMods, setShowAddMods] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{
@@ -1328,12 +1866,22 @@ const ModManagerPage = memo(function ModManagerPage() {
   } | null>(null);
 
   const coreMods = useMemo(
-    () => selectedMods.filter((m) => m.projectId && coreModPolicy.lockedProjectIds.includes(m.projectId)),
+    () =>
+      selectedMods.filter(
+        (m) =>
+          m.projectId && coreModPolicy.lockedProjectIds.includes(m.projectId),
+      ),
     [selectedMods, coreModPolicy],
   );
 
   const userMods = useMemo(
-    () => selectedMods.filter((m) => !(m.projectId && coreModPolicy.lockedProjectIds.includes(m.projectId))),
+    () =>
+      selectedMods.filter(
+        (m) =>
+          !(
+            m.projectId && coreModPolicy.lockedProjectIds.includes(m.projectId)
+          ),
+      ),
     [selectedMods, coreModPolicy],
   );
 
@@ -1344,17 +1892,22 @@ const ModManagerPage = memo(function ModManagerPage() {
     setShowAddMods(false);
   };
 
-  const ModGridCard = ({ mod }: { mod: typeof selectedMods[number] }) => {
+  const ModGridCard = ({ mod }: { mod: (typeof selectedMods)[number] }) => {
     const projectId = mod.projectId ?? '';
     const isLocked = coreModPolicy.nonRemovableProjectIds.includes(projectId);
     const isFabric = projectId === coreModPolicy.fabricApiProjectId;
     const versions = projectId ? (modVersionOptions[projectId] ?? []) : [];
-    const selectedVersion = versions.some((v) => v.id === mod.versionId) ? mod.versionId : '';
+    const selectedVersion = versions.some((v) => v.id === mod.versionId)
+      ? mod.versionId
+      : '';
 
     return (
       <div className={`mod-grid-card${isLocked ? ' core-mod' : ''}`}>
         {isLocked && (
-          <span className="lock-badge mod-grid-badge" style={{ fontSize: '0.6rem', padding: '1px 6px' }}>
+          <span
+            className="lock-badge mod-grid-badge"
+            style={{ fontSize: '0.6rem', padding: '1px 6px' }}
+          >
             Core
           </span>
         )}
@@ -1373,7 +1926,9 @@ const ModManagerPage = memo(function ModManagerPage() {
         />
         <div className="mod-grid-name">{mod.name}</div>
         {mod.versionId && (
-          <div className="mod-grid-meta" title={mod.versionId}>{mod.versionId}</div>
+          <div className="mod-grid-meta" title={mod.versionId}>
+            {mod.versionId}
+          </div>
         )}
         {mod.slug && (
           <a
@@ -1401,8 +1956,18 @@ const ModManagerPage = memo(function ModManagerPage() {
               {versions.length > 0 && (
                 <select
                   value={selectedVersion}
-                  style={{ fontSize: '0.72rem', padding: '3px 6px', width: '100%', marginTop: 2 }}
-                  onChange={(e) => void actions.applyModVersion(projectId, e.currentTarget.value)}
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '3px 6px',
+                    width: '100%',
+                    marginTop: 2,
+                  }}
+                  onChange={(e) =>
+                    void actions.applyModVersion(
+                      projectId,
+                      e.currentTarget.value,
+                    )
+                  }
                   disabled={isLocked && !isFabric}
                 >
                   <option value="">Select version</option>
@@ -1420,7 +1985,9 @@ const ModManagerPage = memo(function ModManagerPage() {
             className="btn danger"
             style={{ padding: '4px 8px', fontSize: '0.72rem' }}
             disabled={isLocked}
-            onClick={() => setRemoveTarget({ projectId, sha256: mod.sha256, name: mod.name })}
+            onClick={() =>
+              setRemoveTarget({ projectId, sha256: mod.sha256, name: mod.name })
+            }
           >
             Remove
           </button>
@@ -1443,7 +2010,8 @@ const ModManagerPage = memo(function ModManagerPage() {
           <div>
             <h3 style={{ margin: 0 }}>Installed Mods</h3>
             <p className="hint" style={{ margin: '4px 0 0' }}>
-              {selectedMods.length} mod{selectedMods.length !== 1 ? 's' : ''} installed
+              {selectedMods.length} mod{selectedMods.length !== 1 ? 's' : ''}{' '}
+              installed
             </p>
           </div>
           <button
@@ -1456,18 +2024,27 @@ const ModManagerPage = memo(function ModManagerPage() {
           </button>
         </div>
 
-        <div className={statusClass(statuses.mods.tone)}>{statuses.mods.text}</div>
+        <div className={statusClass(statuses.mods.tone)}>
+          {statuses.mods.text}
+        </div>
 
         {selectedMods.length === 0 ? (
-          <p className="hint" style={{ marginTop: 16 }}>No mods installed. Click "Add Mods" to get started.</p>
+          <p className="hint" style={{ marginTop: 16 }}>
+            No mods installed. Click "Add Mods" to get started.
+          </p>
         ) : (
           <>
             {coreMods.length > 0 && (
               <>
-                <div className="mods-section-label core">🔒 Core Mods — {coreMods.length}</div>
+                <div className="mods-section-label core">
+                  🔒 Core Mods — {coreMods.length}
+                </div>
                 <div className="mods-grid" style={{ marginBottom: 28 }}>
                   {coreMods.map((mod) => (
-                    <ModGridCard key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`} mod={mod} />
+                    <ModGridCard
+                      key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
+                      mod={mod}
+                    />
                   ))}
                 </div>
               </>
@@ -1475,10 +2052,15 @@ const ModManagerPage = memo(function ModManagerPage() {
 
             {userMods.length > 0 && (
               <>
-                <div className="mods-section-label">📦 User Mods — {userMods.length}</div>
+                <div className="mods-section-label">
+                  📦 User Mods — {userMods.length}
+                </div>
                 <div className="mods-grid">
                   {userMods.map((mod) => (
-                    <ModGridCard key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`} mod={mod} />
+                    <ModGridCard
+                      key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
+                      mod={mod}
+                    />
                   ))}
                 </div>
               </>
@@ -1546,15 +2128,8 @@ const ModManagerPage = memo(function ModManagerPage() {
   );
 });
 
-
-
 const FancyMenuPage = memo(function FancyMenuPage() {
-  const {
-    form,
-    setTextFieldFromEvent,
-    actions,
-    statuses,
-  } = useAdminContext();
+  const { form, setTextFieldFromEvent, actions, statuses } = useAdminContext();
   const bundleUploadRef = useRef<HTMLInputElement | null>(null);
 
   // local wizard state
@@ -1587,8 +2162,10 @@ const FancyMenuPage = memo(function FancyMenuPage() {
           <div className="wizard-panel">
             <h3>Fancy Menu activation</h3>
             <div className="wizard-description">
-              FancyMenu is a powerful mod that allows for full customization of the Minecraft main menu.
-              By enabling this, we can override the default buttons, logo, and background with a premium brand experience.
+              FancyMenu is a powerful mod that allows for full customization of
+              the Minecraft main menu. By enabling this, we can override the
+              default buttons, logo, and background with a premium brand
+              experience.
             </div>
 
             <div className="wizard-box">
@@ -1602,12 +2179,16 @@ const FancyMenuPage = memo(function FancyMenuPage() {
                   if (val) setActiveStep(2);
                 }}
                 options={[
-                  { value: 'false', label: 'Disabled (Standard Minecraft Menu)' },
+                  {
+                    value: 'false',
+                    label: 'Disabled (Standard Minecraft Menu)',
+                  },
                   { value: 'true', label: 'Enabled (Custom Brand Experience)' },
                 ]}
               />
               <p className="wizard-meta">
-                Setting this to Enabled will automatically include necessary core mods and configuration files in the profile.
+                Setting this to Enabled will automatically include necessary
+                core mods and configuration files in the profile.
               </p>
             </div>
 
@@ -1627,7 +2208,9 @@ const FancyMenuPage = memo(function FancyMenuPage() {
         {activeStep === 2 && (
           <div className="wizard-panel">
             <h3>Choose your customization path</h3>
-            <p className="hint">Select how you want to build your main menu experience.</p>
+            <p className="hint">
+              Select how you want to build your main menu experience.
+            </p>
 
             <div className="mode-grid">
               <button
@@ -1637,7 +2220,10 @@ const FancyMenuPage = memo(function FancyMenuPage() {
               >
                 <div className="mode-card-icon">⚡</div>
                 <h4>Simple Form</h4>
-                <p>Quickly set a custom logo, background and play button labels via the form below.</p>
+                <p>
+                  Quickly set a custom logo, background and play button labels
+                  via the form below.
+                </p>
               </button>
 
               <button
@@ -1647,7 +2233,10 @@ const FancyMenuPage = memo(function FancyMenuPage() {
               >
                 <div className="mode-card-icon">📦</div>
                 <h4>Custom Bundle</h4>
-                <p>Upload a full FancyMenu .zip export with custom layouts, animations and more.</p>
+                <p>
+                  Upload a full FancyMenu .zip export with custom layouts,
+                  animations and more.
+                </p>
               </button>
             </div>
 
@@ -1701,9 +2290,13 @@ const FancyMenuPage = memo(function FancyMenuPage() {
               </div>
             ) : (
               <div className="wizard-box">
-                <div className="wizard-description" style={{ fontSize: '0.85rem' }}>
-                  <strong>Important:</strong> Your .zip must contain a valid FancyMenu export structure
-                  (usually including a <code>customization</code> folder).
+                <div
+                  className="wizard-description"
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  <strong>Important:</strong> Your .zip must contain a valid
+                  FancyMenu export structure (usually including a{' '}
+                  <code>customization</code> folder).
                 </div>
                 <div className="grid two">
                   <TextInput
@@ -1746,14 +2339,25 @@ const FancyMenuPage = memo(function FancyMenuPage() {
               </div>
             )}
 
-            <div className="row" style={{ justifyContent: 'flex-start', marginTop: 12 }}>
-              <button type="button" className="btn ghost" onClick={() => setActiveStep(1)}>Back</button>
+            <div
+              className="row"
+              style={{ justifyContent: 'flex-start', marginTop: 12 }}
+            >
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setActiveStep(1)}
+              >
+                Back
+              </button>
             </div>
           </div>
         )}
 
-
-        <div className={statusClass(statuses.fancy.tone)} style={{ marginTop: 24 }}>
+        <div
+          className={statusClass(statuses.fancy.tone)}
+          style={{ marginTop: 24 }}
+        >
           {statuses.fancy.text}
         </div>
       </section>
@@ -1769,13 +2373,12 @@ export const AdminApp = memo(function AdminApp() {
       <Sidebar />
       <main className="main">
         <TopBar />
-        <CompatibilityRail />
         <section key={view} className="view-stage" aria-live="polite">
           {view === 'overview' ? <OverviewPage /> : null}
           {view === 'identity' ? <IdentityPage /> : null}
           {view === 'mods' ? <ModManagerPage /> : null}
           {view === 'fancy' ? <FancyMenuPage /> : null}
-          {view === 'exaroton' ? <ExarotonPage /> : null}
+          {view === 'servers' ? <ServersPage /> : null}
         </section>
       </main>
     </div>
