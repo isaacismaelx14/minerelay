@@ -1,4 +1,4 @@
-use crate::{utils::*, launcher_apps::selected_launcher_id};
+use crate::{launcher_control, utils::*, launcher_apps::selected_launcher_id};
 use std::sync::{
   atomic::Ordering,
   Arc,
@@ -22,7 +22,8 @@ use crate::{
   sync,
   types::{
     AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
-    GameSessionPhase, GameSessionStatus, InstanceState, 
+    GameSessionPhase, GameSessionStatus, InstanceState,
+    LauncherServerControlsState,
     LauncherCandidate, LauncherDetectionResult, LauncherUpdateInstallResponse,
     LauncherUpdateStatus, MinecraftRootStatus, OpenLauncherResponse,
     SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
@@ -57,9 +58,9 @@ pub fn settings_set(app: AppHandle, state: State<'_, Arc<AppState>>, settings_pa
   let sanitized = sanitize_settings_payload(settings_payload)?;
   settings::save(&state.config.settings_path(), &sanitized).map_err(|e| format!("{e}"))?;
   *state.settings.lock() = sanitized.clone();
-  
+
   let _ = app.emit("settings://updated", &sanitized);
-  
+
   Ok(sanitized)
 }
 
@@ -450,7 +451,7 @@ pub async fn instance_get_state(state: State<'_, Arc<AppState>>, server_id: Stri
 
   let detected = crate::launcher_apps::detect_installed_launchers();
   let selected = selected_launcher_id(&settings, &detected);
-  
+
   if selected.as_deref() == Some("prism") {
     // Fallback to cached or remote lock to find the correct instance name for Prism
     let lock_for_prism = load_local_lock(&paths).unwrap_or(None)
@@ -488,6 +489,39 @@ pub async fn runtime_ensure_fabric(
   server_id: String,
 ) -> Result<FabricRuntimeStatus, String> {
   crate::runtime::ensure_fabric_and_bootstrap(state.inner(), &server_id).await
+}
+
+#[tauri::command]
+pub async fn launcher_server_controls_get(
+  state: State<'_, Arc<AppState>>,
+) -> Result<LauncherServerControlsState, String> {
+  launcher_control::fetch_controls_status(state.inner()).await
+}
+
+#[tauri::command]
+pub async fn launcher_server_action(
+  state: State<'_, Arc<AppState>>,
+  action: String,
+) -> Result<LauncherServerControlsState, String> {
+  let clean_action = action.trim().to_lowercase();
+  if clean_action != "start" && clean_action != "stop" && clean_action != "restart" {
+    return Err("Action must be one of: start, stop, restart".to_string());
+  }
+
+  launcher_control::perform_action(state.inner(), clean_action.as_str()).await
+}
+
+#[tauri::command]
+pub async fn launcher_server_stream_start(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+  launcher_control::start_stream(app, Arc::clone(state.inner())).await
+}
+
+#[tauri::command]
+pub fn launcher_server_stream_stop(state: State<'_, Arc<AppState>>) {
+  launcher_control::stop_stream(state.inner());
 }
 
 

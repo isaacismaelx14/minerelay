@@ -7,6 +7,8 @@ import type { SyncPlan, UpdateSummary } from "@mvl/shared";
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
 const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MSS+ Client";
 const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+const LAUNCHER_STREAM_RETRY_DELAY_MS = 30_000;
+const LAUNCHER_STREAM_MAX_RETRIES = 3;
 
 import {
   type ScreenState,
@@ -33,6 +35,8 @@ import {
   type LauncherUpdateStatus,
   type LauncherUpdateInstallResponse,
   type CatalogSnapshot,
+  type LauncherServerControlsState,
+  type LauncherServerStatus,
 } from "../types";
 
 import {
@@ -86,6 +90,15 @@ export function useAppCore() {
   const [launcherUpdateNotice, setLauncherUpdateNotice] = useState<
     string | null
   >(null);
+  const [launcherServerControls, setLauncherServerControls] =
+    useState<LauncherServerControlsState | null>(null);
+  const [isServerActionBusy, setIsServerActionBusy] = useState(false);
+  const [launcherStreamStatus, setLauncherStreamStatus] = useState<
+    "connected" | "retrying" | "disconnected"
+  >("connected");
+  const [launcherStreamRetryCount, setLauncherStreamRetryCount] = useState(0);
+  const [launcherStreamRetryCountdownSec, setLauncherStreamRetryCountdownSec] =
+    useState(0);
 
   const [lastCheckAt, setLastCheckAt] = useState<Date | null>(null);
   const [nextCheckAt, setNextCheckAt] = useState<Date | null>(null);
@@ -119,6 +132,28 @@ export function useAppCore() {
   const isPlayingRef = useRef(false);
   const toastCounterRef = useRef(0);
   const closePromptBusyRef = useRef(false);
+  const launcherStreamRetryCountRef = useRef(0);
+  const launcherStreamRetryTimerRef = useRef<number | null>(null);
+  const launcherStreamRetryCountdownRef = useRef<number | null>(null);
+  const launcherPermissionRemovedNotifiedRef = useRef(false);
+  const launcherServerAccessGrantedRef = useRef(false);
+
+  const hasLauncherServerPermission = useCallback(
+    (controls: LauncherServerControlsState | null) => {
+      if (!controls) {
+        return false;
+      }
+      const permissions = controls.permissions;
+      return (
+        permissions.canViewStatus ||
+        permissions.canViewOnlinePlayers ||
+        permissions.canStartServer ||
+        permissions.canStopServer ||
+        permissions.canRestartServer
+      );
+    },
+    [],
+  );
 
   const progressPercent = useMemo(() => {
     if (sync.totalBytes <= 0) {
@@ -137,6 +172,13 @@ export function useAppCore() {
     : sync.completedBytes > 0
       ? `${bytesToHuman(sync.completedBytes)} / --`
       : "0 B / --";
+
+  const isApiSourceMode = useMemo(() => {
+    if (!settings?.apiBaseUrl) {
+      return false;
+    }
+    return !settings.profileLockUrl;
+  }, [settings?.apiBaseUrl, settings?.profileLockUrl]);
 
   const hasFancyMenuMod = catalog?.fancyMenuPresent ?? false;
   const fancyMenuMode = catalog?.fancyMenuMode ?? "simple";
@@ -237,6 +279,215 @@ export function useAppCore() {
     setSessionStatus(status);
     return status;
   }, []);
+
+  const refreshLauncherServerControls = useCallback(async () => {
+    if (!isApiSourceMode) {
+      setLauncherServerControls(null);
+      return null;
+    }
+
+    try {
+      const next = await invoke<LauncherServerControlsState>(
+        "launcher_server_controls_get",
+      );
+      launcherPermissionRemovedNotifiedRef.current = false;
+      launcherServerAccessGrantedRef.current = hasLauncherServerPermission(next);
+      setLauncherServerControls(
+        launcherServerAccessGrantedRef.current ? next : null,
+      );
+      return next;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      const lowered = message.toLowerCase();
+      const permissionRemoved =
+        lowered.includes("forbidden") ||
+        lowered.includes("permission") ||
+        lowered.includes("status access is disabled") ||
+        lowered.includes("access is disabled") ||
+        lowered.includes("403");
+
+      if (permissionRemoved) {
+        setLauncherServerControls(null);
+        setLauncherStreamStatus("connected");
+        setLauncherStreamRetryCount(0);
+        setLauncherStreamRetryCountdownSec(0);
+        launcherStreamRetryCountRef.current = 0;
+        void invoke("launcher_server_stream_stop");
+        if (
+          launcherServerAccessGrantedRef.current &&
+          !launcherPermissionRemovedNotifiedRef.current
+        ) {
+          launcherPermissionRemovedNotifiedRef.current = true;
+          setHint("Permission removed");
+        }
+        launcherServerAccessGrantedRef.current = false;
+        return null;
+      }
+
+      setLauncherServerControls((current) =>
+        current ?? {
+          enabled: false,
+          reason: message,
+          permissions: {
+            canViewStatus: false,
+            canViewOnlinePlayers: false,
+            canStartServer: false,
+            canStopServer: false,
+            canRestartServer: false,
+          },
+          selectedServer: null,
+        },
+      );
+      return null;
+    }
+  }, [hasLauncherServerPermission, isApiSourceMode]);
+
+  const runLauncherServerAction = useCallback(
+    async (action: "start" | "stop" | "restart") => {
+      if (!isApiSourceMode || isServerActionBusy) {
+        return;
+      }
+
+      setIsServerActionBusy(true);
+      try {
+        const next = await invoke<LauncherServerControlsState>(
+          "launcher_server_action",
+          { action },
+        );
+        setLauncherServerControls(next);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setIsServerActionBusy(false);
+      }
+    },
+    [isApiSourceMode, isServerActionBusy],
+  );
+
+  const clearLauncherStreamRetryTimers = useCallback(() => {
+    if (launcherStreamRetryTimerRef.current !== null) {
+      window.clearTimeout(launcherStreamRetryTimerRef.current);
+      launcherStreamRetryTimerRef.current = null;
+    }
+    if (launcherStreamRetryCountdownRef.current !== null) {
+      window.clearInterval(launcherStreamRetryCountdownRef.current);
+      launcherStreamRetryCountdownRef.current = null;
+    }
+  }, []);
+
+  const resetLauncherStreamConnectionState = useCallback(() => {
+    clearLauncherStreamRetryTimers();
+    launcherStreamRetryCountRef.current = 0;
+    setLauncherStreamStatus("connected");
+    setLauncherStreamRetryCount(0);
+    setLauncherStreamRetryCountdownSec(0);
+  }, [clearLauncherStreamRetryTimers]);
+
+  const handleLauncherStreamDisconnected = useCallback(
+    (message: string) => {
+      const lowered = message.toLowerCase();
+      const permissionRemoved =
+        lowered.includes("forbidden") ||
+        lowered.includes("permission") ||
+        lowered.includes("status access is disabled") ||
+        lowered.includes("access is disabled") ||
+        lowered.includes("403");
+
+      if (permissionRemoved) {
+        clearLauncherStreamRetryTimers();
+        setLauncherServerControls(null);
+        setLauncherStreamStatus("connected");
+        setLauncherStreamRetryCount(0);
+        setLauncherStreamRetryCountdownSec(0);
+        launcherStreamRetryCountRef.current = 0;
+        void invoke("launcher_server_stream_stop");
+        if (
+          launcherServerAccessGrantedRef.current &&
+          !launcherPermissionRemovedNotifiedRef.current
+        ) {
+          launcherPermissionRemovedNotifiedRef.current = true;
+          setHint("Permission removed");
+        }
+        launcherServerAccessGrantedRef.current = false;
+        return;
+      }
+
+      void invoke("launcher_server_stream_stop");
+      setLauncherServerControls((current) =>
+        current
+          ? {
+              ...current,
+              enabled: false,
+              reason: "Lost connection to server stream.",
+            }
+          : current,
+      );
+
+      clearLauncherStreamRetryTimers();
+
+      const nextAttempt = launcherStreamRetryCountRef.current + 1;
+      if (nextAttempt > LAUNCHER_STREAM_MAX_RETRIES) {
+        setLauncherStreamStatus("disconnected");
+        setLauncherStreamRetryCountdownSec(0);
+        return;
+      }
+
+      launcherStreamRetryCountRef.current = nextAttempt;
+      setLauncherStreamStatus("retrying");
+      setLauncherStreamRetryCount(nextAttempt);
+      setLauncherStreamRetryCountdownSec(
+        Math.floor(LAUNCHER_STREAM_RETRY_DELAY_MS / 1000),
+      );
+
+      launcherStreamRetryCountdownRef.current = window.setInterval(() => {
+        setLauncherStreamRetryCountdownSec((current) => {
+          if (current <= 1) {
+            if (launcherStreamRetryCountdownRef.current !== null) {
+              window.clearInterval(launcherStreamRetryCountdownRef.current);
+              launcherStreamRetryCountdownRef.current = null;
+            }
+            return 0;
+          }
+          return current - 1;
+        });
+      }, 1000);
+
+      launcherStreamRetryTimerRef.current = window.setTimeout(() => {
+        launcherStreamRetryTimerRef.current = null;
+        void invoke("launcher_server_stream_start").catch((cause) => {
+          handleLauncherStreamDisconnected(
+            cause instanceof Error ? cause.message : String(cause),
+          );
+        });
+      }, LAUNCHER_STREAM_RETRY_DELAY_MS);
+
+    },
+    [clearLauncherStreamRetryTimers],
+  );
+
+  const retryLauncherServerStreamNow = useCallback(() => {
+    if (!isApiSourceMode) {
+      return;
+    }
+
+    clearLauncherStreamRetryTimers();
+    launcherStreamRetryCountRef.current = 0;
+    setLauncherStreamStatus("retrying");
+    setLauncherStreamRetryCount(0);
+    setLauncherStreamRetryCountdownSec(0);
+
+    void invoke("launcher_server_stream_stop").finally(() => {
+      void invoke("launcher_server_stream_start").catch((cause) => {
+        handleLauncherStreamDisconnected(
+          cause instanceof Error ? cause.message : String(cause),
+        );
+      });
+    });
+  }, [
+    clearLauncherStreamRetryTimers,
+    handleLauncherStreamDisconnected,
+    isApiSourceMode,
+  ]);
 
   const refreshVersionReadiness = useCallback(async () => {
     const readiness = await invoke<VersionReadiness>(
@@ -584,13 +835,82 @@ export function useAppCore() {
       stopSettingsListener = off;
     });
 
+    let stopLauncherStatusListener: UnlistenFn | undefined;
+    let stopLauncherErrorListener: UnlistenFn | undefined;
+
+    void listen<LauncherServerStatus>("launcher-server://status", (event) => {
+      launcherPermissionRemovedNotifiedRef.current = false;
+      resetLauncherStreamConnectionState();
+      setLauncherServerControls((current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          enabled: true,
+          reason: null,
+          selectedServer: event.payload,
+        };
+      });
+    }).then((off) => {
+      stopLauncherStatusListener = off;
+    });
+
+    void listen<string>("launcher-server://error", (event) => {
+      handleLauncherStreamDisconnected(event.payload);
+    }).then((off) => {
+      stopLauncherErrorListener = off;
+    });
+
     return () => {
       stopSyncListener?.();
       stopErrorListener?.();
       stopSessionListener?.();
       stopSettingsListener?.();
+      stopLauncherStatusListener?.();
+      stopLauncherErrorListener?.();
+      clearLauncherStreamRetryTimers();
     };
-  }, [refreshDashboardState, refreshVersionReadiness]);
+  }, [
+    clearLauncherStreamRetryTimers,
+    handleLauncherStreamDisconnected,
+    refreshDashboardState,
+    refreshVersionReadiness,
+    resetLauncherStreamConnectionState,
+  ]);
+
+  useEffect(() => {
+    if (!isApiSourceMode) {
+      setLauncherServerControls(null);
+      launcherServerAccessGrantedRef.current = false;
+      resetLauncherStreamConnectionState();
+      void invoke("launcher_server_stream_stop");
+      return;
+    }
+
+    resetLauncherStreamConnectionState();
+    void refreshLauncherServerControls().then((controls) => {
+      const allowSubscribe = hasLauncherServerPermission(controls);
+      launcherServerAccessGrantedRef.current = allowSubscribe;
+      if (allowSubscribe) {
+        void invoke("launcher_server_stream_start");
+      } else {
+        void invoke("launcher_server_stream_stop");
+      }
+    });
+
+    return () => {
+      launcherServerAccessGrantedRef.current = false;
+      clearLauncherStreamRetryTimers();
+      void invoke("launcher_server_stream_stop");
+    };
+  }, [
+    clearLauncherStreamRetryTimers,
+    hasLauncherServerPermission,
+    isApiSourceMode,
+    refreshLauncherServerControls,
+    resetLauncherStreamConnectionState,
+  ]);
 
   const requestSystemCloseModal = useCallback(async () => {
     if (closePromptBusyRef.current) {
@@ -1045,11 +1365,13 @@ export function useAppCore() {
 
     await saveSettings(next);
     await runSyncCycle(false);
+    await refreshLauncherServerControls();
     setHint("Profile source settings saved.");
   }, [
     profileSourceDraft.apiBaseUrl,
     profileSourceDraft.profileLockUrl,
     runSyncCycle,
+    refreshLauncherServerControls,
     saveSettings,
     settings,
   ]);
@@ -1076,6 +1398,11 @@ export function useAppCore() {
     isCheckingLauncherUpdate, setIsCheckingLauncherUpdate,
     isInstallingLauncherUpdate, setIsInstallingLauncherUpdate,
     launcherUpdateNotice, setLauncherUpdateNotice,
+    launcherServerControls, setLauncherServerControls,
+    isServerActionBusy, setIsServerActionBusy,
+    launcherStreamStatus, setLauncherStreamStatus,
+    launcherStreamRetryCount, setLauncherStreamRetryCount,
+    launcherStreamRetryCountdownSec, setLauncherStreamRetryCountdownSec,
     lastCheckAt, setLastCheckAt,
     nextCheckAt, setNextCheckAt,
     wizardActive, setWizardActive,
@@ -1104,6 +1431,8 @@ export function useAppCore() {
     updateCustomPath, pickManualLauncherFromSettings, pickMinecraftRootFromSettings,
     saveProfileSource, beginWizardPathsStep, continueWizardRuntimeStep,
     pickWizardManualLauncherPath, pickWizardMinecraftRootPath, sourceLabel,
+    isApiSourceMode, refreshLauncherServerControls, runLauncherServerAction,
+    retryLauncherServerStreamNow,
     currentWindow, isSetupWindow, isCompactWindow, APP_NAME, SERVER_ID
   };
 };

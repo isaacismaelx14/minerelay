@@ -151,6 +151,33 @@ export interface LauncherUpdateInstallResponse {
   message: string;
 }
 
+export interface LauncherServerPermissions {
+  canViewStatus: boolean;
+  canViewOnlinePlayers: boolean;
+  canStartServer: boolean;
+  canStopServer: boolean;
+  canRestartServer: boolean;
+}
+
+export interface LauncherServerStatus {
+  id: string;
+  name: string;
+  address: string;
+  motd: string;
+  status: number;
+  statusLabel: string;
+  players: { max: number; count: number };
+  software: { id: string; name: string; version: string } | null;
+  shared: boolean;
+}
+
+export interface LauncherServerControlsState {
+  enabled: boolean;
+  reason: string | null;
+  permissions: LauncherServerPermissions;
+  selectedServer: LauncherServerStatus | null;
+}
+
 export interface CatalogSnapshot {
   serverId: string;
   serverName: string;

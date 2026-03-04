@@ -6,12 +6,44 @@ import { useAppCore } from "./hooks/useAppCore";
 
 export default function App() {
   const core = useAppCore();
-  const { isCompactWindow, isSetupWindow, wizardActive, toasts, APP_NAME } = core;
+  const {
+    isCompactWindow,
+    isSetupWindow,
+    wizardActive,
+    toasts,
+    APP_NAME,
+    isApiSourceMode,
+    launcherStreamStatus,
+    launcherStreamRetryCount,
+    launcherStreamRetryCountdownSec,
+    retryLauncherServerStreamNow,
+  } = core;
+
+  const showLauncherStreamBadge =
+    isApiSourceMode && launcherStreamStatus !== "connected";
 
   if (isCompactWindow) {
     return (
       <>
         <CompactWindow core={core} />
+        {showLauncherStreamBadge ? (
+          <div className="launcher-stream-indicator" role="status" aria-live="polite">
+            <span className="launcher-stream-indicator-dot" aria-hidden="true" />
+            <span className="launcher-stream-indicator-text">
+              {launcherStreamStatus === "retrying"
+                ? `Lost connection · retrying in ${launcherStreamRetryCountdownSec}s (${launcherStreamRetryCount}/3)`
+                : "Lost connection · auto retry stopped"}
+            </span>
+            {launcherStreamStatus === "disconnected" ? (
+              <button
+                className="launcher-stream-indicator-btn"
+                onClick={() => retryLauncherServerStreamNow()}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <ToastContainer toasts={toasts} />
       </>
     );
@@ -28,6 +60,24 @@ export default function App() {
 
         <SetupWizard core={core} />
 
+        {showLauncherStreamBadge ? (
+          <div className="launcher-stream-indicator" role="status" aria-live="polite">
+            <span className="launcher-stream-indicator-dot" aria-hidden="true" />
+            <span className="launcher-stream-indicator-text">
+              {launcherStreamStatus === "retrying"
+                ? `Lost connection · retrying in ${launcherStreamRetryCountdownSec}s (${launcherStreamRetryCount}/3)`
+                : "Lost connection · auto retry stopped"}
+            </span>
+            {launcherStreamStatus === "disconnected" ? (
+              <button
+                className="launcher-stream-indicator-btn"
+                onClick={() => retryLauncherServerStreamNow()}
+              >
+                Retry
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <ToastContainer toasts={toasts} />
       </main>
     );
@@ -36,6 +86,24 @@ export default function App() {
   return (
     <>
       <DesktopWorkspace core={core} />
+      {showLauncherStreamBadge ? (
+        <div className="launcher-stream-indicator" role="status" aria-live="polite">
+          <span className="launcher-stream-indicator-dot" aria-hidden="true" />
+          <span className="launcher-stream-indicator-text">
+            {launcherStreamStatus === "retrying"
+              ? `Lost connection · retrying in ${launcherStreamRetryCountdownSec}s (${launcherStreamRetryCount}/3)`
+              : "Lost connection · auto retry stopped"}
+          </span>
+          {launcherStreamStatus === "disconnected" ? (
+            <button
+              className="launcher-stream-indicator-btn"
+              onClick={() => retryLauncherServerStreamNow()}
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <ToastContainer toasts={toasts} />
     </>
   );

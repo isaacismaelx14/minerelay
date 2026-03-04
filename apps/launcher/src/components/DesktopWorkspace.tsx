@@ -12,8 +12,26 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
     launchers, updateCustomPath, pickManualLauncherFromSettings, pickMinecraftRootFromSettings,
     runSyncCycle, launcherUpdateNotice, isCheckingLauncherUpdate, isInstallingLauncherUpdate,
     checkLauncherUpdate, installLauncherUpdate, isPlaying, sync, hasSyncTotal, progressPercent,
-    syncHasUnknownTotal, syncBytesLabel, hint, error
+    syncHasUnknownTotal, syncBytesLabel, hint, error,
+    isApiSourceMode, launcherServerControls, isServerActionBusy, runLauncherServerAction
   } = core;
+
+  const serverStatusToneClass = (() => {
+    if (!launcherServerControls?.enabled) {
+      return "is-disabled";
+    }
+
+    const status = launcherServerControls.selectedServer?.status;
+    if (status === 1) return "is-online";
+    if (status === 0) return "is-offline";
+    if (status === 7) return "is-error";
+    if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "is-busy";
+    return "is-unknown";
+  })();
+  const launcherServerStatus = launcherServerControls?.selectedServer?.status;
+  const disableStartByStatus = [1, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
+  const disableStopByStatus = [0, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
+  const disableRestartByStatus = [0, 2, 3, 4, 6].includes(launcherServerStatus ?? -1);
 
   const renderPrimary = () => {
     if (screen === "booting") {
@@ -88,6 +106,60 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         ) : null}
         {isChecking ? (
           <p className="wizard-meta">Checking server changes...</p>
+        ) : null}
+
+        {isApiSourceMode && launcherServerControls ? (
+          <section className="launcher-server-controls launcher-server-section">
+            <span className="launcher-server-section-label">Live Server Control</span>
+            <div className="launcher-server-head">
+              <h3>Server Status</h3>
+              <span className={`launcher-server-badge ${serverStatusToneClass}`}>
+                {launcherServerControls.selectedServer?.statusLabel ??
+                  (launcherServerControls.enabled ? "Unknown" : "Unavailable")}
+              </span>
+            </div>
+            {launcherServerControls.reason ||
+            (launcherServerControls.permissions.canViewOnlinePlayers &&
+              launcherServerControls.selectedServer) ? (
+              <p className="wizard-meta" style={{ marginTop: 0 }}>
+                {launcherServerControls.reason ??
+                  `${launcherServerControls.selectedServer?.players.count ?? 0}/${launcherServerControls.selectedServer?.players.max ?? 0} players online`}
+              </p>
+            ) : null}
+            {(launcherServerControls.permissions.canStartServer ||
+              launcherServerControls.permissions.canStopServer ||
+              launcherServerControls.permissions.canRestartServer) && (
+              <div className="actions-row" style={{ marginTop: 8 }}>
+                {launcherServerControls.permissions.canStartServer && (
+                  <button
+                    className="btn ghost"
+                    onClick={() => void runLauncherServerAction("start")}
+                    disabled={isServerActionBusy || disableStartByStatus}
+                  >
+                    Start
+                  </button>
+                )}
+                {launcherServerControls.permissions.canStopServer && (
+                  <button
+                    className="btn ghost"
+                    onClick={() => void runLauncherServerAction("stop")}
+                    disabled={isServerActionBusy || disableStopByStatus}
+                  >
+                    Stop
+                  </button>
+                )}
+                {launcherServerControls.permissions.canRestartServer && (
+                  <button
+                    className="btn ghost"
+                    onClick={() => void runLauncherServerAction("restart")}
+                    disabled={isServerActionBusy || disableRestartByStatus}
+                  >
+                    Restart
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
         ) : null}
 
         <ul className="summary-grid">
@@ -321,12 +393,12 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                 <span className="data-label">Live Game Dir</span>
                 <div className="data-value">{versionReadiness?.liveMinecraftRoot ?? "--"}</div>
               </div>
-              
+
               <details className="advanced-options">
                 <summary className="advanced-summary">Advanced: Override Live Directory</summary>
                 <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
                   <p className="pane-subtitle" style={{ fontSize: '0.75rem', marginBottom: '8px', marginTop: 0 }}>
-                    By default, the sync tool targets the standard data folder of your chosen launcher. 
+                    By default, the sync tool targets the standard data folder of your chosen launcher.
                     Specify an absolute path below to force a different live directory.
                   </p>
                   <input

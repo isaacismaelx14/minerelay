@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod events;
 pub mod instance;
+pub mod launcher_control;
 pub mod launcher_apps;
 pub mod notifications;
 pub mod profile;
@@ -86,6 +87,10 @@ pub fn run() {
       commands::instance_get_state,
       commands::instance_check_version_readiness,
       commands::runtime_ensure_fabric,
+      commands::launcher_server_controls_get,
+      commands::launcher_server_action,
+      commands::launcher_server_stream_start,
+      commands::launcher_server_stream_stop,
       commands::launcher_update_check,
       commands::launcher_update_install,
       commands::app_request_close,
