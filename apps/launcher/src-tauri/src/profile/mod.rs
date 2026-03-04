@@ -1,7 +1,7 @@
 use crate::{instance::{InstancePaths, ensure_layout, load_local_lock}, utils::*, types::CatalogSnapshot};
 use base64::{engine::general_purpose, Engine as _};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{Map, Value};
 use url::Url;
 
@@ -39,10 +39,8 @@ async fn fetch_lockfile(state: &AppState, lock_url: &str) -> LauncherResult<Prof
   }
 
   let signature_headers = lock_signature_headers(&response);
-  let lock = response
-    .json::<ProfileLock>()
-    .await
-    .map_err(|error| LauncherError::InvalidData(format!("invalid lockfile format: {error}")))?;
+  let (lock, raw_lock_payload) =
+    parse_json_response::<ProfileLock>(response, "invalid lockfile format").await?;
 
   if lock.loader != "fabric" {
     return Err(LauncherError::InvalidData(format!(
@@ -51,7 +49,7 @@ async fn fetch_lockfile(state: &AppState, lock_url: &str) -> LauncherResult<Prof
     )));
   }
 
-  verify_lock_signature(state, lock_url, &lock, &signature_headers)?;
+  verify_lock_signature(state, lock_url, &raw_lock_payload, &signature_headers)?;
   Ok(lock)
 }
 
@@ -74,17 +72,17 @@ pub async fn fetch_profile_metadata(
   // accidentally pull default profile metadata from /v1/profile.
   let preferred = state.http.get(&legacy_server_url).send().await?;
   if preferred.status().is_success() {
-    let mut profile = preferred.json::<ProfileMetadataResponse>().await.map_err(|error| {
-      LauncherError::InvalidData(format!(
-        "invalid /v1/servers/:serverId/profile payload: {error}"
-      ))
-    })?;
+    let (mut profile, raw_profile_payload) = parse_json_response::<ProfileMetadataResponse>(
+      preferred,
+      "invalid /v1/servers/:serverId/profile payload",
+    )
+    .await?;
 
     if profile.allowed_minecraft_versions.is_empty() {
       profile.allowed_minecraft_versions = vec![profile.minecraft_version.clone()];
     }
 
-    verify_profile_signature(state, &legacy_server_url, &profile)?;
+    verify_profile_signature(state, &legacy_server_url, &profile, &raw_profile_payload)?;
     return Ok(profile);
   }
 
@@ -107,16 +105,17 @@ pub async fn fetch_profile_metadata(
     ));
   }
 
-  let mut profile = fallback
-    .json::<ProfileMetadataResponse>()
-    .await
-    .map_err(|error| LauncherError::InvalidData(format!("invalid /v1/profile payload: {error}")))?;
+  let (mut profile, raw_profile_payload) = parse_json_response::<ProfileMetadataResponse>(
+    fallback,
+    "invalid /v1/profile payload",
+  )
+  .await?;
 
   if profile.allowed_minecraft_versions.is_empty() {
     profile.allowed_minecraft_versions = vec![profile.minecraft_version.clone()];
   }
 
-  verify_profile_signature(state, &direct_profile_url, &profile)?;
+  verify_profile_signature(state, &direct_profile_url, &profile, &raw_profile_payload)?;
   Ok(profile)
 }
 
@@ -158,6 +157,7 @@ fn verify_profile_signature(
   state: &AppState,
   request_url: &str,
   profile: &ProfileMetadataResponse,
+  raw_payload: &Value,
 ) -> LauncherResult<()> {
   if !signature_required(request_url) {
     return Ok(());
@@ -190,19 +190,7 @@ fn verify_profile_signature(
     ));
   }
 
-  let unsigned_payload = serde_json::json!({
-    "profileId": profile.profile_id.clone(),
-    "version": profile.version,
-    "minecraftVersion": profile.minecraft_version.clone(),
-    "loader": profile.loader.clone(),
-    "loaderVersion": profile.loader_version.clone(),
-    "lockUrl": profile.lock_url.clone(),
-    "serverName": profile.server_name.clone(),
-    "serverAddress": profile.server_address.clone(),
-    "allowedMinecraftVersions": profile.allowed_minecraft_versions.clone(),
-    "fancyMenuEnabled": profile.fancy_menu_enabled,
-    "fancyMenu": profile.fancy_menu.clone()
-  });
+  let unsigned_payload = extract_unsigned_profile_payload(raw_payload)?;
 
   verify_signature(
     state,
@@ -218,7 +206,7 @@ fn verify_profile_signature(
 fn verify_lock_signature(
   state: &AppState,
   lock_url: &str,
-  lock: &ProfileLock,
+  raw_payload: &Value,
   headers: &LockSignatureHeaders,
 ) -> LauncherResult<()> {
   if !signature_required(lock_url) {
@@ -258,8 +246,25 @@ fn verify_lock_signature(
     signature_input,
     LOCK_SIGNATURE_INPUT,
     signed_at,
-    lock,
+    raw_payload,
   )
+}
+
+fn extract_unsigned_profile_payload(raw_payload: &Value) -> LauncherResult<Value> {
+  let Some(object) = raw_payload.as_object() else {
+    return Err(LauncherError::InvalidData(
+      "invalid profile payload shape".to_string(),
+    ));
+  };
+
+  let mut unsigned_payload = object.clone();
+  unsigned_payload.remove("signature");
+  unsigned_payload.remove("signatureAlgorithm");
+  unsigned_payload.remove("signatureKeyId");
+  unsigned_payload.remove("signatureInput");
+  unsigned_payload.remove("signedAt");
+
+  Ok(Value::Object(unsigned_payload))
 }
 
 fn verify_signature(
@@ -348,6 +353,21 @@ fn normalize_json(value: Value) -> Value {
     }
     other => other,
   }
+}
+
+async fn parse_json_response<T>(
+  response: reqwest::Response,
+  error_prefix: &str,
+) -> LauncherResult<(T, Value)>
+where
+  T: DeserializeOwned,
+{
+  let body = response.bytes().await?;
+  let raw_payload = serde_json::from_slice::<Value>(body.as_ref())
+    .map_err(|error| LauncherError::InvalidData(format!("{error_prefix}: {error}")))?;
+  let payload = serde_json::from_slice::<T>(body.as_ref())
+    .map_err(|error| LauncherError::InvalidData(format!("{error_prefix}: {error}")))?;
+  Ok((payload, raw_payload))
 }
 
 fn lock_signature_headers(response: &reqwest::Response) -> LockSignatureHeaders {

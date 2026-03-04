@@ -78,10 +78,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LAUNCHER_UPDATE_PUBKEY: ${{ secrets.LAUNCHER_UPDATE_PUBKEY }}
           PROFILE_SIGNATURE_PUBLIC_KEY: ${{ vars.PROFILE_SIGNATURE_PUBLIC_KEY || secrets.PROFILE_SIGNATURE_PUBLIC_KEY }}
+          API_BASE_URL: ${{ vars.LAUNCHER_API_BASE_URL }}
+          PROFILE_LOCK_URL: ${{ vars.LAUNCHER_PROFILE_LOCK_URL }}
         run: |
           TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
+          PROFILE_SIGNATURE_PUBLIC_KEY="$(printf '%s' "$PROFILE_SIGNATURE_PUBLIC_KEY" | tr -d '\r\n')"
+          API_BASE_URL="$(printf '%s' "$API_BASE_URL" | tr -d '\r\n')"
+          PROFILE_LOCK_URL="$(printf '%s' "$PROFILE_LOCK_URL" | tr -d '\r\n')"
           export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          export PROFILE_SIGNATURE_PUBLIC_KEY API_BASE_URL PROFILE_LOCK_URL
 
           if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
             echo "Missing TAURI_SIGNING_PRIVATE_KEY secret. Beta updater releases require signing." >&2
@@ -100,11 +106,13 @@ jobs:
             echo "Missing PROFILE_SIGNATURE_PUBLIC_KEY (set repo variable PROFILE_SIGNATURE_PUBLIC_KEY or secret PROFILE_SIGNATURE_PUBLIC_KEY)." >&2
             exit 1
           fi
-
-          PROFILE_SIGNATURE_PUBLIC_KEY="$(printf '%s' "$PROFILE_SIGNATURE_PUBLIC_KEY" | tr -d '\r\n')"
-          export PROFILE_SIGNATURE_PUBLIC_KEY
+          if [ -z "$API_BASE_URL" ] && [ -z "$PROFILE_LOCK_URL" ]; then
+            echo "Missing launcher profile source defaults. Set LAUNCHER_API_BASE_URL or LAUNCHER_PROFILE_LOCK_URL in repo variables." >&2
+            exit 1
+          fi
 
           node -e 'const raw=(process.env.PROFILE_SIGNATURE_PUBLIC_KEY||"").trim(); if(!raw){console.error("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming"); process.exit(1)} if(raw.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64"); process.exit(1)} const decoded=Buffer.from(raw,"base64"); if(decoded.length!==32){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)"); process.exit(1)}'
+          node -e 'const api=(process.env.API_BASE_URL||"").trim(); const lock=(process.env.PROFILE_LOCK_URL||"").trim(); const valid=(value)=>{try{const parsed=new URL(value); return parsed.protocol==="http:"||parsed.protocol==="https:"}catch{return false}}; if(api && !valid(api)){console.error("LAUNCHER_API_BASE_URL must be a valid http/https URL"); process.exit(1)} if(lock && !valid(lock)){console.error("LAUNCHER_PROFILE_LOCK_URL must be a valid http/https URL"); process.exit(1)}'
 
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
@@ -138,15 +146,22 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | sed 's/\r$//')"
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" | tr -d '\r\n')"
           PROFILE_SIGNATURE_PUBLIC_KEY="$(printf '%s' "$PROFILE_SIGNATURE_PUBLIC_KEY" | tr -d '\r\n')"
+          API_BASE_URL="$(printf '%s' "$API_BASE_URL" | tr -d '\r\n')"
+          PROFILE_LOCK_URL="$(printf '%s' "$PROFILE_LOCK_URL" | tr -d '\r\n')"
           export TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-          export PROFILE_SIGNATURE_PUBLIC_KEY
+          export PROFILE_SIGNATURE_PUBLIC_KEY API_BASE_URL PROFILE_LOCK_URL
 
           if [ -z "$PROFILE_SIGNATURE_PUBLIC_KEY" ]; then
             echo "Missing PROFILE_SIGNATURE_PUBLIC_KEY for launcher build step." >&2
             exit 1
           fi
+          if [ -z "$API_BASE_URL" ] && [ -z "$PROFILE_LOCK_URL" ]; then
+            echo "Missing launcher profile source defaults. Set LAUNCHER_API_BASE_URL or LAUNCHER_PROFILE_LOCK_URL in repo variables." >&2
+            exit 1
+          fi
 
           node -e 'const raw=(process.env.PROFILE_SIGNATURE_PUBLIC_KEY||"").trim(); if(!raw){console.error("PROFILE_SIGNATURE_PUBLIC_KEY is empty after trimming"); process.exit(1)} if(raw.length%4!==0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must be valid base64"); process.exit(1)} const decoded=Buffer.from(raw,"base64"); if(decoded.length!==32){console.error("PROFILE_SIGNATURE_PUBLIC_KEY must decode to 32 bytes (Ed25519 public key)"); process.exit(1)}'
+          node -e 'const api=(process.env.API_BASE_URL||"").trim(); const lock=(process.env.PROFILE_LOCK_URL||"").trim(); const valid=(value)=>{try{const parsed=new URL(value); return parsed.protocol==="http:"||parsed.protocol==="https:"}catch{return false}}; if(api && !valid(api)){console.error("LAUNCHER_API_BASE_URL must be a valid http/https URL"); process.exit(1)} if(lock && !valid(lock)){console.error("LAUNCHER_PROFILE_LOCK_URL must be a valid http/https URL"); process.exit(1)}'
 
           if [ "${{ runner.os }}" = "Windows" ]; then
             pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles nsis,msi
