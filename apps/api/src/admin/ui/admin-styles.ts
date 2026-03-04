@@ -1279,7 +1279,7 @@ export const ADMIN_STYLES = `
     border-color: rgba(245, 158, 11, 0.2);
   }
 
-  .mod-grid-card.core-mod:hover { 
+  .mod-grid-card.core-mod:hover {
     background: rgba(245, 158, 11, 0.03);
     border-color: rgba(245, 158, 11, 0.4);
   }
@@ -1295,7 +1295,7 @@ export const ADMIN_STYLES = `
     transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
     padding: 2px;
   }
-  
+
   .mod-grid-card:hover .mod-grid-icon {
     transform: scale(1.05);
     border-color: rgba(255, 255, 255, 0.2);
@@ -1365,7 +1365,7 @@ export const ADMIN_STYLES = `
     opacity: 0;
     transition: opacity 0.2s ease;
   }
-  
+
   .mod-grid-card:hover .mod-card-check, .mod-grid-card .mod-card-check:has(input:checked) {
     opacity: 1;
   }
@@ -2159,6 +2159,14 @@ export const ADMIN_STYLES = `
     font-weight: 600;
   }
 
+  .widget-player-count {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    margin-left: 2px;
+    white-space: nowrap;
+  }
+
   .widget-controls {
     display: flex;
     gap: 4px;
@@ -2210,6 +2218,56 @@ export const ADMIN_STYLES = `
   }
 
   .rail-chip b { color: var(--text-secondary); }
+
+  .rail-chip-loading {
+    color: var(--text-muted);
+    opacity: 0.85;
+    animation: adminSkeletonPulse 1.4s ease-in-out infinite;
+  }
+
+  .main-loading {
+    display: grid;
+    gap: 20px;
+  }
+
+  .main-loading-head,
+  .main-loading-card {
+    border: 1px solid var(--line);
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    animation: adminSkeletonPulse 1.4s ease-in-out infinite;
+  }
+
+  .main-loading-head {
+    height: 92px;
+    border-radius: var(--radius-md);
+  }
+
+  .main-loading-grid {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-loading-card {
+    min-height: 220px;
+  }
+
+  @media (max-width: 900px) {
+    .main-loading-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @keyframes adminSkeletonPulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 0.95;
+    }
+  }
 
   /* API Key Input Improvements */
   .api-key-container {

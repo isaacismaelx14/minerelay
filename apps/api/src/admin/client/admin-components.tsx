@@ -259,7 +259,7 @@ const SelectInput = memo(function SelectInput({
 });
 
 const Sidebar = memo(function Sidebar() {
-  const { view, setView, rail, selectedMods, hasPendingPublish } =
+  const { view, setView, rail, selectedMods, hasPendingPublish, isBusy } =
     useAdminContext();
 
   return (
@@ -372,28 +372,54 @@ const Sidebar = memo(function Sidebar() {
       </nav>
 
       <div className="nav-status">
-        <div className="rail-chip">
-          <b>MC</b> {rail.minecraft}
-        </div>
-        <div className="rail-chip">
-          <b>Loader</b> {rail.fabric}
-        </div>
-        <div className="rail-chip">{selectedMods.length} mods</div>
-        {hasPendingPublish && (
-          <div
-            className="rail-chip"
-            style={{
-              color: 'var(--warning)',
-              borderColor: 'var(--warning)',
-              background: 'rgba(245,158,11,0.05)',
-              fontWeight: 600,
-            }}
-          >
-            Requires Publish
-          </div>
+        {isBusy.bootstrap ? (
+          <>
+            <div className="rail-chip rail-chip-loading">
+              Loading runtime...
+            </div>
+            <div className="rail-chip rail-chip-loading">Loading loader...</div>
+            <div className="rail-chip rail-chip-loading">Loading mods...</div>
+          </>
+        ) : (
+          <>
+            <div className="rail-chip">
+              <b>MC</b> {rail.minecraft}
+            </div>
+            <div className="rail-chip">
+              <b>Loader</b> {rail.fabric}
+            </div>
+            <div className="rail-chip">{selectedMods.length} mods</div>
+            {hasPendingPublish && (
+              <div
+                className="rail-chip"
+                style={{
+                  color: 'var(--warning)',
+                  borderColor: 'var(--warning)',
+                  background: 'rgba(245,158,11,0.05)',
+                  fontWeight: 600,
+                }}
+              >
+                Requires Publish
+              </div>
+            )}
+          </>
         )}
       </div>
     </aside>
+  );
+});
+
+const MainLoadingState = memo(function MainLoadingState() {
+  return (
+    <div className="main-loading" role="status" aria-live="polite">
+      <div className="main-loading-head" />
+      <div className="main-loading-grid">
+        <div className="main-loading-card" />
+        <div className="main-loading-card" />
+        <div className="main-loading-card" />
+        <div className="main-loading-card" />
+      </div>
+    </div>
   );
 });
 
@@ -829,127 +855,160 @@ const ServersPage = memo(function ServersPage() {
               )}
 
               <article className="panel">
-                <h3>Settings</h3>
-                <div className="grid" style={{ gap: 12 }}>
-                  <label className="check" style={{ opacity: 0.7 }}>
-                    <input type="checkbox" checked disabled />
-                    <span>Server status (required, cannot be disabled)</span>
-                  </label>
+                <div
+                  className="row"
+                  style={{ justifyContent: 'space-between' }}
+                >
+                  <h3>Settings</h3>
+                  {exaroton.busy ? (
+                    <span className="hint">Saving...</span>
+                  ) : null}
+                </div>
+                <fieldset
+                  disabled={exaroton.busy}
+                  style={{ border: 0, padding: 0, margin: 0, minInlineSize: 0 }}
+                >
+                  <div className="grid" style={{ gap: 12 }}>
+                    <label className="check" style={{ opacity: 0.7 }}>
+                      <input type="checkbox" checked disabled />
+                      <span>Server status (required, cannot be disabled)</span>
+                    </label>
 
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={exaroton.settings.modsSyncEnabled}
-                      onChange={(event) =>
-                        void actions.updateExarotonSettings({
-                          modsSyncEnabled: event.currentTarget.checked,
-                        })
-                      }
-                    />
-                    <span>Mods sync</span>
-                  </label>
+                    <label className="check">
+                      <input
+                        type="checkbox"
+                        checked={exaroton.settings.modsSyncEnabled}
+                        onChange={(event) =>
+                          void actions.updateExarotonSettings({
+                            modsSyncEnabled: event.currentTarget.checked,
+                          })
+                        }
+                      />
+                      <span>Mods sync</span>
+                    </label>
 
-                  <div className="alert-box" style={{ marginTop: 4 }}>
-                    <strong>Player access</strong>
-                    <div className="grid" style={{ marginTop: 8, gap: 8 }}>
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={exaroton.settings.playerCanViewStatus}
-                          disabled={
-                            exaroton.settings.playerCanStartServer ||
-                            exaroton.settings.playerCanStopServer ||
-                            exaroton.settings.playerCanRestartServer
-                          }
-                          onChange={(event) =>
-                            void actions.updateExarotonSettings({
-                              playerCanViewStatus: event.currentTarget.checked,
-                            })
-                          }
-                        />
-                        <span>Status visibility for players</span>
-                      </label>
+                    <div className="alert-box" style={{ marginTop: 4 }}>
+                      <strong>Player access</strong>
+                      <div className="grid" style={{ marginTop: 8, gap: 8 }}>
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={exaroton.settings.playerCanViewStatus}
+                            disabled={
+                              exaroton.settings.playerCanStartServer ||
+                              exaroton.settings.playerCanStopServer ||
+                              exaroton.settings.playerCanRestartServer
+                            }
+                            onChange={(event) =>
+                              void actions.updateExarotonSettings({
+                                playerCanViewStatus:
+                                  event.currentTarget.checked,
+                              })
+                            }
+                          />
+                          <span>Status visibility for players</span>
+                        </label>
 
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={exaroton.settings.playerCanStartServer}
-                          onChange={(event) =>
-                            void actions.updateExarotonSettings({
-                              playerCanStartServer: event.currentTarget.checked,
-                            })
-                          }
-                        />
-                        <span>Start server for players</span>
-                      </label>
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={
+                              exaroton.settings.playerCanViewOnlinePlayers
+                            }
+                            disabled={!exaroton.settings.playerCanViewStatus}
+                            onChange={(event) =>
+                              void actions.updateExarotonSettings({
+                                playerCanViewOnlinePlayers:
+                                  event.currentTarget.checked,
+                              })
+                            }
+                          />
+                          <span>Online players count for players</span>
+                        </label>
 
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={exaroton.settings.playerCanStopServer}
-                          onChange={(event) =>
-                            void actions.updateExarotonSettings({
-                              playerCanStopServer: event.currentTarget.checked,
-                            })
-                          }
-                        />
-                        <span>
-                          Stop server for players{' '}
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: 16,
-                              height: 16,
-                              borderRadius: '50%',
-                              border: '1px solid var(--line)',
-                              fontSize: '0.72rem',
-                              cursor: 'help',
-                            }}
-                            title="We do not recommend granting stop controls to players; misuse can degrade overall player experience."
-                            aria-label="Stop permission warning"
-                          >
-                            i
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={exaroton.settings.playerCanStartServer}
+                            onChange={(event) =>
+                              void actions.updateExarotonSettings({
+                                playerCanStartServer:
+                                  event.currentTarget.checked,
+                              })
+                            }
+                          />
+                          <span>Start server for players</span>
+                        </label>
+
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={exaroton.settings.playerCanStopServer}
+                            onChange={(event) =>
+                              void actions.updateExarotonSettings({
+                                playerCanStopServer:
+                                  event.currentTarget.checked,
+                              })
+                            }
+                          />
+                          <span>
+                            Stop server for players{' '}
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 16,
+                                height: 16,
+                                borderRadius: '50%',
+                                border: '1px solid var(--line)',
+                                fontSize: '0.72rem',
+                                cursor: 'help',
+                              }}
+                              title="We do not recommend granting stop controls to players; misuse can degrade overall player experience."
+                              aria-label="Stop permission warning"
+                            >
+                              i
+                            </span>
                           </span>
-                        </span>
-                      </label>
+                        </label>
 
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={exaroton.settings.playerCanRestartServer}
-                          onChange={(event) =>
-                            void actions.updateExarotonSettings({
-                              playerCanRestartServer:
-                                event.currentTarget.checked,
-                            })
-                          }
-                        />
-                        <span>
-                          Restart server for players{' '}
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: 16,
-                              height: 16,
-                              borderRadius: '50%',
-                              border: '1px solid var(--line)',
-                              fontSize: '0.72rem',
-                              cursor: 'help',
-                            }}
-                            title="We do not recommend granting restart controls to players; misuse can degrade overall player experience."
-                            aria-label="Restart permission warning"
-                          >
-                            i
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={exaroton.settings.playerCanRestartServer}
+                            onChange={(event) =>
+                              void actions.updateExarotonSettings({
+                                playerCanRestartServer:
+                                  event.currentTarget.checked,
+                              })
+                            }
+                          />
+                          <span>
+                            Restart server for players{' '}
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 16,
+                                height: 16,
+                                borderRadius: '50%',
+                                border: '1px solid var(--line)',
+                                fontSize: '0.72rem',
+                                cursor: 'help',
+                              }}
+                              title="We do not recommend granting restart controls to players; misuse can degrade overall player experience."
+                              aria-label="Restart permission warning"
+                            >
+                              i
+                            </span>
                           </span>
-                        </span>
-                      </label>
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </fieldset>
               </article>
             </div>
           )}
@@ -977,6 +1036,9 @@ const ExarotonWidget = memo(function ExarotonWidget() {
 
   const server = exaroton.selectedServer;
   const statusTone = getExarotonStatusTone(server.status);
+  const disableStartByStatus = [1, 2, 3, 4, 6].includes(server.status);
+  const disableStopByStatus = [0, 2, 3, 4, 6].includes(server.status);
+  const disableRestartByStatus = [0, 2, 3, 4, 6].includes(server.status);
 
   return (
     <div className="exaroton-widget">
@@ -999,13 +1061,16 @@ const ExarotonWidget = memo(function ExarotonWidget() {
         <span className={exarotonStatusClass(server.status)}>
           {server.statusLabel}
         </span>
+        <span className="widget-player-count">
+          {server.players.count}/{server.players.max} online
+        </span>
       </div>
       <div className="widget-controls">
         <button
           className="control-btn"
           type="button"
           title="Start Server"
-          disabled={exaroton.busy || server.status !== 0}
+          disabled={exaroton.busy || disableStartByStatus}
           onClick={() => void actions.exarotonAction('start')}
         >
           <svg
@@ -1023,7 +1088,7 @@ const ExarotonWidget = memo(function ExarotonWidget() {
           className="control-btn"
           type="button"
           title="Restart Server"
-          disabled={exaroton.busy || server.status === 0}
+          disabled={exaroton.busy || disableRestartByStatus}
           onClick={() => void actions.exarotonAction('restart')}
         >
           <svg
@@ -1042,7 +1107,7 @@ const ExarotonWidget = memo(function ExarotonWidget() {
           className="control-btn"
           type="button"
           title="Stop Server"
-          disabled={exaroton.busy || server.status === 0}
+          disabled={exaroton.busy || disableStopByStatus}
           onClick={() => void actions.exarotonAction('stop')}
         >
           <svg
@@ -1064,8 +1129,6 @@ const ExarotonWidget = memo(function ExarotonWidget() {
 const TopBar = memo(function TopBar() {
   const {
     exaroton,
-    sessionState,
-    selectedMods,
     hasPendingPublish,
     publishBlockReason,
     hasSavedDraft,
@@ -1109,10 +1172,6 @@ const TopBar = memo(function TopBar() {
     <section className="topbar">
       <div className="topbar-meta">
         <ExarotonWidget />
-        <div className="session-info">
-          <b>{sessionState}</b>
-          <span className="meta">Mods: {selectedMods.length}</span>
-        </div>
       </div>
       <div className="topbar-actions">
         <button
@@ -1134,7 +1193,10 @@ const TopBar = memo(function TopBar() {
               type="button"
               disabled={isBusy.publish || Boolean(publishBlockReason)}
               onClick={handlePublish}
-              title={publishBlockReason || (isBusy.publish ? statuses.publish.text : undefined)}
+              title={
+                publishBlockReason ||
+                (isBusy.publish ? statuses.publish.text : undefined)
+              }
             >
               {publishButtonLabel}
             </button>
@@ -2780,7 +2842,7 @@ const FancyMenuPage = memo(function FancyMenuPage() {
 });
 
 export const AdminApp = memo(function AdminApp() {
-  const { view } = useAdminContext();
+  const { view, isBusy } = useAdminContext();
 
   return (
     <div className="shell">
@@ -2788,11 +2850,17 @@ export const AdminApp = memo(function AdminApp() {
       <main className="main">
         <TopBar />
         <section key={view} className="view-stage" aria-live="polite">
-          {view === 'overview' ? <OverviewPage /> : null}
-          {view === 'identity' ? <IdentityPage /> : null}
-          {view === 'mods' ? <ModManagerPage /> : null}
-          {view === 'fancy' ? <FancyMenuPage /> : null}
-          {view === 'servers' ? <ServersPage /> : null}
+          {isBusy.bootstrap ? (
+            <MainLoadingState />
+          ) : (
+            <>
+              {view === 'overview' ? <OverviewPage /> : null}
+              {view === 'identity' ? <IdentityPage /> : null}
+              {view === 'mods' ? <ModManagerPage /> : null}
+              {view === 'fancy' ? <FancyMenuPage /> : null}
+              {view === 'servers' ? <ServersPage /> : null}
+            </>
+          )}
         </section>
       </main>
     </div>

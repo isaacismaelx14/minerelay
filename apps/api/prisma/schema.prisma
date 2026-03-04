@@ -97,6 +97,7 @@ model ExarotonIntegration {
   selectedServerAddress String?
   modsSyncEnabled       Boolean  @default(true)
   playerCanViewStatus   Boolean  @default(true)
+  playerCanViewOnlinePlayers Boolean  @default(true)
   playerCanModifyStatus Boolean  @default(false)
   playerCanStartServer  Boolean  @default(false)
   playerCanStopServer   Boolean  @default(false)

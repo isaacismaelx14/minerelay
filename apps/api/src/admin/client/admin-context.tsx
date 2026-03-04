@@ -201,6 +201,7 @@ type AdminContextValue = {
     updateExarotonSettings: (payload: {
       modsSyncEnabled?: boolean;
       playerCanViewStatus?: boolean;
+      playerCanViewOnlinePlayers?: boolean;
       playerCanStartServer?: boolean;
       playerCanStopServer?: boolean;
       playerCanRestartServer?: boolean;
@@ -242,6 +243,7 @@ const DEFAULT_EXAROTON: ExarotonState = {
     serverStatusEnabled: true,
     modsSyncEnabled: true,
     playerCanViewStatus: true,
+    playerCanViewOnlinePlayers: true,
     playerCanStartServer: false,
     playerCanStopServer: false,
     playerCanRestartServer: false,
@@ -2068,6 +2070,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     async (payload: {
       modsSyncEnabled?: boolean;
       playerCanViewStatus?: boolean;
+      playerCanViewOnlinePlayers?: boolean;
       playerCanStartServer?: boolean;
       playerCanStopServer?: boolean;
       playerCanRestartServer?: boolean;

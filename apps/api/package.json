@@ -5,7 +5,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "pnpm run admin:build-client && nest build",
-    "dev": "pnpm run admin:build-client && nest start --watch",
+    "dev": "pnpm run prisma:generate && pnpm run admin:build-client && nest start --watch",
     "start": "pnpm run admin:build-client && nest start",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",

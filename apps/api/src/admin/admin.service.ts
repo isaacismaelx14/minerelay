@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -554,6 +555,7 @@ export class AdminService implements OnModuleInit {
         selectedServerAddress: selected?.address ?? null,
         modsSyncEnabled: existingSettings.modsSyncEnabled,
         playerCanViewStatus: existingSettings.playerCanViewStatus,
+        playerCanViewOnlinePlayers: existingSettings.playerCanViewOnlinePlayers,
         playerCanModifyStatus: existingSettings.playerCanModifyStatus,
         playerCanStartServer: existingSettings.playerCanStartServer,
         playerCanStopServer: existingSettings.playerCanStopServer,
@@ -571,6 +573,7 @@ export class AdminService implements OnModuleInit {
         selectedServerAddress: selected?.address ?? null,
         modsSyncEnabled: existingSettings.modsSyncEnabled,
         playerCanViewStatus: existingSettings.playerCanViewStatus,
+        playerCanViewOnlinePlayers: existingSettings.playerCanViewOnlinePlayers,
         playerCanModifyStatus: existingSettings.playerCanModifyStatus,
         playerCanStartServer: existingSettings.playerCanStartServer,
         playerCanStopServer: existingSettings.playerCanStopServer,
@@ -700,11 +703,17 @@ export class AdminService implements OnModuleInit {
       ? true
       : (input.playerCanViewStatus ?? integrationSettings.playerCanViewStatus);
 
+    const nextPlayerCanViewOnlinePlayers = nextPlayerCanViewStatus
+      ? (input.playerCanViewOnlinePlayers ??
+        integrationSettings.playerCanViewOnlinePlayers)
+      : false;
+
     const updated = await this.prisma.exarotonIntegration.update({
       where: { id: EXAROTON_INTEGRATION_ID },
       data: ({
         modsSyncEnabled: input.modsSyncEnabled ?? integrationSettings.modsSyncEnabled,
         playerCanViewStatus: nextPlayerCanViewStatus,
+        playerCanViewOnlinePlayers: nextPlayerCanViewOnlinePlayers,
         playerCanModifyStatus: nextPlayerCanModifyStatus,
         playerCanStartServer: nextPlayerCanStartServer,
         playerCanStopServer: nextPlayerCanStopServer,
@@ -771,6 +780,134 @@ export class AdminService implements OnModuleInit {
     );
 
     return close;
+  }
+
+  async getLauncherPlayerServerStatus(): Promise<{
+    selectedServer: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    };
+    permissions: {
+      canViewStatus: boolean;
+      canViewOnlinePlayers: boolean;
+      canStartServer: boolean;
+      canStopServer: boolean;
+      canRestartServer: boolean;
+    };
+  }> {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    if (!integration.playerCanViewStatus) {
+      throw new ForbiddenException('Player status access is disabled');
+    }
+
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
+
+    return {
+      selectedServer: this.mapLauncherServerWithPlayerVisibility(
+        this.mapExarotonServer(selectedServer),
+        integration.playerCanViewOnlinePlayers,
+      ),
+      permissions: {
+        canViewStatus: integration.playerCanViewStatus,
+        canViewOnlinePlayers: integration.playerCanViewOnlinePlayers,
+        canStartServer: integration.playerCanStartServer,
+        canStopServer: integration.playerCanStopServer,
+        canRestartServer: integration.playerCanRestartServer,
+      },
+    };
+  }
+
+  async runLauncherPlayerServerAction(
+    action: 'start' | 'stop' | 'restart',
+  ): Promise<{
+    selectedServer: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    };
+    permissions: {
+      canViewStatus: boolean;
+      canViewOnlinePlayers: boolean;
+      canStartServer: boolean;
+      canStopServer: boolean;
+      canRestartServer: boolean;
+    };
+  }> {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    if (!integration.playerCanViewStatus) {
+      throw new ForbiddenException('Player status access is disabled');
+    }
+
+    if (action === 'start' && !integration.playerCanStartServer) {
+      throw new ForbiddenException('Player start server permission is disabled');
+    }
+    if (action === 'stop' && !integration.playerCanStopServer) {
+      throw new ForbiddenException('Player stop server permission is disabled');
+    }
+    if (action === 'restart' && !integration.playerCanRestartServer) {
+      throw new ForbiddenException('Player restart server permission is disabled');
+    }
+
+    await this.exarotonServerAction(action);
+    return this.getLauncherPlayerServerStatus();
+  }
+
+  async openLauncherPlayerStatusStream(handlers: {
+    onStatus: (server: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    }) => void;
+    onError: (message: string) => void;
+  }): Promise<() => void> {
+    const { integration } = await this.requireExarotonConnection();
+    if (!integration.playerCanViewStatus) {
+      throw new ForbiddenException('Player status access is disabled');
+    }
+
+    return this.openExarotonStatusStream({
+      onStatus: (server) => {
+        handlers.onStatus(
+          this.mapLauncherServerWithPlayerVisibility(
+            server,
+            integration.playerCanViewOnlinePlayers,
+          ),
+        );
+      },
+      onError: handlers.onError,
+    });
   }
 
   async getFabricVersions(minecraftVersion: string) {
@@ -1508,6 +1645,7 @@ export class AdminService implements OnModuleInit {
   private mapExarotonSettings(input: {
     modsSyncEnabled?: boolean | null;
     playerCanViewStatus?: boolean | null;
+    playerCanViewOnlinePlayers?: boolean | null;
     playerCanModifyStatus?: boolean | null;
     playerCanStartServer?: boolean | null;
     playerCanStopServer?: boolean | null;
@@ -1524,8 +1662,10 @@ export class AdminService implements OnModuleInit {
     return {
       serverStatusEnabled: true as const,
       modsSyncEnabled: input.modsSyncEnabled ?? true,
-      playerCanViewStatus:
-        playerCanModifyStatus || input.playerCanViewStatus !== false,
+      playerCanViewStatus: playerCanModifyStatus || input.playerCanViewStatus !== false,
+      playerCanViewOnlinePlayers:
+        input.playerCanViewOnlinePlayers !== false &&
+        (playerCanModifyStatus || input.playerCanViewStatus !== false),
       playerCanStartServer,
       playerCanStopServer,
       playerCanRestartServer,
@@ -1535,6 +1675,7 @@ export class AdminService implements OnModuleInit {
   private readExarotonSettings(input: unknown): {
     modsSyncEnabled: boolean;
     playerCanViewStatus: boolean;
+    playerCanViewOnlinePlayers: boolean;
     playerCanModifyStatus: boolean;
     playerCanStartServer: boolean;
     playerCanStopServer: boolean;
@@ -1543,6 +1684,7 @@ export class AdminService implements OnModuleInit {
     const source = (input ?? {}) as {
       modsSyncEnabled?: unknown;
       playerCanViewStatus?: unknown;
+      playerCanViewOnlinePlayers?: unknown;
       playerCanModifyStatus?: unknown;
       playerCanStartServer?: unknown;
       playerCanStopServer?: unknown;
@@ -1557,10 +1699,13 @@ export class AdminService implements OnModuleInit {
       playerCanStartServer ||
       playerCanStopServer ||
       playerCanRestartServer;
+    const playerCanViewStatus =
+      playerCanModifyStatus || source.playerCanViewStatus !== false;
     return {
       modsSyncEnabled: source.modsSyncEnabled !== false,
-      playerCanViewStatus:
-        playerCanModifyStatus || source.playerCanViewStatus !== false,
+      playerCanViewStatus,
+      playerCanViewOnlinePlayers:
+        source.playerCanViewOnlinePlayers !== false && playerCanViewStatus,
       playerCanModifyStatus,
       playerCanStartServer,
       playerCanStopServer,
@@ -1597,6 +1742,7 @@ export class AdminService implements OnModuleInit {
       selectedServerAddress: string | null;
       modsSyncEnabled: boolean;
       playerCanViewStatus: boolean;
+      playerCanViewOnlinePlayers: boolean;
       playerCanModifyStatus: boolean;
       playerCanStartServer: boolean;
       playerCanStopServer: boolean;
@@ -1640,10 +1786,38 @@ export class AdminService implements OnModuleInit {
         selectedServerAddress: integration.selectedServerAddress,
         modsSyncEnabled: integrationSettings.modsSyncEnabled,
         playerCanViewStatus: integrationSettings.playerCanViewStatus,
+        playerCanViewOnlinePlayers: integrationSettings.playerCanViewOnlinePlayers,
         playerCanModifyStatus: integrationSettings.playerCanModifyStatus,
         playerCanStartServer: integrationSettings.playerCanStartServer,
         playerCanStopServer: integrationSettings.playerCanStopServer,
         playerCanRestartServer: integrationSettings.playerCanRestartServer,
+      },
+    };
+  }
+
+  private mapLauncherServerWithPlayerVisibility(
+    server: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    },
+    canViewOnlinePlayers: boolean,
+  ) {
+    if (canViewOnlinePlayers) {
+      return server;
+    }
+
+    return {
+      ...server,
+      players: {
+        max: 0,
+        count: 0,
       },
     };
   }

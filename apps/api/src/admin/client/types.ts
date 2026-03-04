@@ -76,6 +76,7 @@ export type ExarotonSettingsPayload = {
   serverStatusEnabled: true;
   modsSyncEnabled: boolean;
   playerCanViewStatus: boolean;
+  playerCanViewOnlinePlayers: boolean;
   playerCanStartServer: boolean;
   playerCanStopServer: boolean;
   playerCanRestartServer: boolean;

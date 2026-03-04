@@ -9,6 +9,7 @@ import { ProfileModule } from './profile/profile.module';
 import { UpdatesModule } from './updates/updates.module';
 
 import { SecurityModule } from './security/security.module';
+import { LauncherModule } from './launcher/launcher.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { SecurityModule } from './security/security.module';
     ]),
     PrismaModule,
     SecurityModule,
+    LauncherModule,
     ProfileModule,
     UpdatesModule,
     LockfileModule,

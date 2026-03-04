@@ -278,6 +278,11 @@ export class UpdateExarotonSettingsDto {
   @Type(() => Boolean)
   @IsBoolean()
   @IsOptional()
+  playerCanViewOnlinePlayers?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
   playerCanModifyStatus?: boolean;
 
   @Type(() => Boolean)
