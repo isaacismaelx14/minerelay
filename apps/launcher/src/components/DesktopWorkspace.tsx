@@ -16,6 +16,11 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
     syncHasUnknownTotal, syncBytesLabel, hint, error,
     isApiSourceMode, launcherServerControls, isServerActionBusy, runLauncherServerAction
   } = core;
+  const serverControlReady = Boolean(
+    launcherServerControls?.enabled &&
+      !launcherServerControls.reason &&
+      launcherServerControls.permissions.canViewStatus,
+  );
 
   const renderPrimary = () => {
     if (screen === "booting") {
@@ -255,7 +260,7 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                         profileLockUrl: event.target.value,
                       }))
                     }
-                  />
+                    />
                 </div>
               </details>
 
@@ -264,6 +269,50 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               </button>
             </div>
           </section>
+
+          {isApiSourceMode ? (
+            <section className="panel-card">
+              <h3>Server Control Pairing</h3>
+              {serverControlReady ? (
+                <div className="data-list">
+                  <div className="data-item">
+                    <span className="data-label">Pairing Status</span>
+                    <div className="data-value">Ready</div>
+                  </div>
+                  <p className="pane-subtitle">
+                    This installation is already paired for server control.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="pane-subtitle">
+                    Pairing is pending. Ask the admin for a one-time pairing
+                    code and save it here.
+                  </p>
+                  <div className="data-list">
+                    <div className="data-item">
+                      <span className="data-label">Pairing Code</span>
+                      <input
+                        className="input"
+                        type="text"
+                        value={profileSourceDraft.pairingCode}
+                        placeholder="ABCD2345"
+                        onChange={(event) =>
+                          setProfileSourceDraft((current) => ({
+                            ...current,
+                            pairingCode: event.target.value.toUpperCase(),
+                          }))
+                        }
+                      />
+                    </div>
+                    <button className="btn ghost" onClick={() => void saveProfileSource()}>
+                      Save Pairing Code
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
 
           <section className="panel-card">
             <h3>Launcher</h3>

@@ -20,6 +20,7 @@ export interface AppSettings {
   customLauncherPath: string | null;
   apiBaseUrl: string | null;
   profileLockUrl: string | null;
+  pairingCode: string | null;
   installMode: InstallMode;
   wizardCompleted: boolean;
   minecraftRootOverride: string | null;

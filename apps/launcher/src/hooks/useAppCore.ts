@@ -121,6 +121,7 @@ export function useAppCore() {
   const [profileSourceDraft, setProfileSourceDraft] = useState({
     apiBaseUrl: "",
     profileLockUrl: "",
+    pairingCode: "",
   });
   const [probePlaying, setProbePlaying] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -376,6 +377,7 @@ export function useAppCore() {
     setProfileSourceDraft({
       apiBaseUrl: persisted.apiBaseUrl ?? "",
       profileLockUrl: persisted.profileLockUrl ?? "",
+      pairingCode: persisted.pairingCode ?? "",
     });
   }, []);
 
@@ -401,6 +403,7 @@ export function useAppCore() {
       setProfileSourceDraft({
         apiBaseUrl: merged.apiBaseUrl ?? "",
         profileLockUrl: merged.profileLockUrl ?? "",
+        pairingCode: merged.pairingCode ?? "",
       });
     }
 
@@ -981,6 +984,7 @@ export function useAppCore() {
       setProfileSourceDraft({
         apiBaseUrl: event.payload.apiBaseUrl ?? "",
         profileLockUrl: event.payload.profileLockUrl ?? "",
+        pairingCode: event.payload.pairingCode ?? "",
       });
       // Important cross-window sync: refresh state when settings change
       void refreshDashboardState();
@@ -1221,6 +1225,7 @@ export function useAppCore() {
       ...settings,
       apiBaseUrl,
       profileLockUrl: profileLockUrl || null,
+      pairingCode: profileSourceDraft.pairingCode.trim() || null,
     };
 
     await saveSettings(next);
@@ -1229,6 +1234,7 @@ export function useAppCore() {
   }, [
     profileSourceDraft.apiBaseUrl,
     profileSourceDraft.profileLockUrl,
+    profileSourceDraft.pairingCode,
     saveSettings,
     settings,
     startWizardDetection,
@@ -1528,6 +1534,7 @@ export function useAppCore() {
       ...settings,
       apiBaseUrl,
       profileLockUrl: profileLockUrl || null,
+      pairingCode: profileSourceDraft.pairingCode.trim() || null,
     };
 
     await saveSettings(next);
@@ -1537,6 +1544,7 @@ export function useAppCore() {
   }, [
     profileSourceDraft.apiBaseUrl,
     profileSourceDraft.profileLockUrl,
+    profileSourceDraft.pairingCode,
     runSyncCycle,
     refreshLauncherServerControls,
     saveSettings,

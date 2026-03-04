@@ -2,6 +2,7 @@
   "apiBaseUrl": "https://api.example.com",
   "profileLockUrl": "https://api.example.com/v1/locks/mvl-main/2",
   "profileSignaturePublicKey": "base64-public-key",
+  "serverControlTrustedHosts": "api.example.com",
   "devtoolsSecretCommand": "optional-dev-only-secret",
   "launcherInstallCode": "optional-install-enrollment-code",
   "serverId": "mvl",

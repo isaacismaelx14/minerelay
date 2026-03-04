@@ -72,6 +72,26 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
                 />
               </div>
             </details>
+            <details className="advanced-options" open={!!profileSourceDraft.pairingCode || undefined}>
+              <summary className="advanced-summary">Advanced: Pairing Code</summary>
+              <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                <p className="wizard-meta" style={{ margin: 0 }}>
+                  Optional one-time code used to enroll this installation for secure server control.
+                </p>
+                <input
+                  className="wizard-input"
+                  type="text"
+                  value={profileSourceDraft.pairingCode}
+                  placeholder="ABCD2345"
+                  onChange={(event) =>
+                    setProfileSourceDraft((current) => ({
+                      ...current,
+                      pairingCode: event.target.value.toUpperCase(),
+                    }))
+                  }
+                />
+              </div>
+            </details>
             <div className="actions-row">
               <button
                 className="btn primary"

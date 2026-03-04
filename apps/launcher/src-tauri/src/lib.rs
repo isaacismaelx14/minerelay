@@ -33,6 +33,7 @@ use tauri::{
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
   Manager,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
 
 use crate::types::{AppSettings, GameSessionPhase};
 
@@ -47,9 +48,25 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .manage(state)
+    .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .setup(|app| {
+      #[cfg(any(target_os = "windows", target_os = "linux"))]
+      app.deep_link()
+        .register("mssclient")
+        .map_err(|error| anyhow::anyhow!("failed to register deep link: {error}"))?;
+
+      let app_state = app.state::<Arc<state::AppState>>().inner().clone();
+      app.deep_link().on_open_url(move |event| {
+        for url in event.urls() {
+          let _ = crate::launcher_control::ingest_pairing_link(
+            app_state.as_ref(),
+            url.as_str(),
+          );
+        }
+      });
+
       build_tray(app)?;
 
       #[cfg(target_os = "macos")]
@@ -91,6 +108,7 @@ pub fn run() {
       commands::launcher_server_action,
       commands::launcher_server_stream_start,
       commands::launcher_server_stream_stop,
+      commands::launcher_pairing_apply_link,
       commands::launcher_update_check,
       commands::launcher_update_install,
       commands::app_request_close,

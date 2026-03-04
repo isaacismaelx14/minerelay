@@ -5,6 +5,7 @@
   "windows": ["main", "setup"],
   "permissions": [
     "core:default",
+    "deep-link:default",
     "notification:default",
     "updater:default"
   ]

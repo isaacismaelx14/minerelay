@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Param,
   Patch,
   Post,
   Query,
@@ -18,6 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   AdminLoginDto,
+  CreateLauncherPairingClaimDto,
   ConnectExarotonDto,
   ExarotonServerActionDto,
   UpdateExarotonSettingsDto,
@@ -159,6 +161,26 @@ export class AdminController {
   @Patch('/v1/admin/exaroton/settings')
   updateExarotonSettings(@Body() payload: UpdateExarotonSettingsDto) {
     return this.adminService.updateExarotonSettings(payload);
+  }
+
+  @Post('/v1/admin/launcher/pairing/claims')
+  createLauncherPairingClaim(@Body() payload: CreateLauncherPairingClaimDto) {
+    return this.adminService.createLauncherPairingClaim(payload.apiBaseUrl);
+  }
+
+  @Get('/v1/admin/launcher/pairing/claims')
+  listLauncherPairingClaims() {
+    return this.adminService.listLauncherPairingClaims();
+  }
+
+  @Delete('/v1/admin/launcher/pairing/claims/:claimId')
+  revokeLauncherPairingClaim(@Param('claimId') claimId = '') {
+    return this.adminService.revokeLauncherPairingClaim(claimId.trim());
+  }
+
+  @Post('/v1/admin/launcher/trust/reset')
+  resetLauncherTrust() {
+    return this.adminService.resetLauncherTrust();
   }
 
   @Post('/v1/admin/exaroton/mods/sync')

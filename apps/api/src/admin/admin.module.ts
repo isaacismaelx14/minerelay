@@ -10,9 +10,10 @@ import { CoreModPolicyService } from './core-mod-policy.service';
 import { FancyPreviewAssemblerService } from './fancy-preview-assembler.service';
 import { ArtifactsModule } from '../artifacts/artifacts.module';
 import { ExarotonApiClient } from './exaroton/exaroton-api.client';
+import { LauncherSecurityModule } from '../launcher-security/launcher-security.module';
 
 @Module({
-  imports: [ArtifactsModule],
+  imports: [ArtifactsModule, LauncherSecurityModule],
   controllers: [AdminController],
   providers: [
     AdminService,

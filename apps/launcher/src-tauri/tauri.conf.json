@@ -56,6 +56,13 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "mssclient"
+        ]
+      }
+    },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE4NzEwRTNCOUJGMERCMzYKUldRMjIvQ2JPdzV4R0FPaW12NnZPOU1oNFRNVStKYlVFTS9XbU0yd0tDTTkrQUNrazBHT2pEeW0K"
     }

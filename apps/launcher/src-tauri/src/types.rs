@@ -250,6 +250,8 @@ pub struct AppSettings {
   #[serde(default)]
   pub profile_lock_url: Option<String>,
   #[serde(default)]
+  pub pairing_code: Option<String>,
+  #[serde(default)]
   pub install_mode: InstallMode,
   #[serde(default)]
   pub wizard_completed: bool,
@@ -266,6 +268,7 @@ impl Default for AppSettings {
       custom_launcher_path: None,
       api_base_url: None,
       profile_lock_url: None,
+      pairing_code: None,
       install_mode: InstallMode::Global,
       wizard_completed: false,
       minecraft_root_override: None,

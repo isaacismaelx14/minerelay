@@ -575,6 +575,14 @@ pub fn launcher_server_stream_stop(state: State<'_, Arc<AppState>>) {
   launcher_control::stop_stream(state.inner());
 }
 
+#[tauri::command]
+pub fn launcher_pairing_apply_link(
+  state: State<'_, Arc<AppState>>,
+  url: String,
+) -> Result<bool, String> {
+  launcher_control::ingest_pairing_link(state.inner(), &url)
+}
+
 
 
 
@@ -635,6 +643,7 @@ async fn fetch_latest_beta_updater_endpoint(state: &AppState) -> Option<String> 
 fn sanitize_settings_payload(mut payload: AppSettings) -> Result<AppSettings, String> {
   payload.api_base_url = normalize_optional_service_url(payload.api_base_url, true)?;
   payload.profile_lock_url = normalize_optional_service_url(payload.profile_lock_url, false)?;
+  payload.pairing_code = normalize_optional_string(payload.pairing_code).map(|value| value.to_uppercase());
   payload.custom_launcher_path = normalize_optional_string(payload.custom_launcher_path);
   payload.minecraft_root_override = normalize_optional_string(payload.minecraft_root_override);
 
@@ -687,5 +696,3 @@ fn switch_to_window(app: &AppHandle, target: &str, hide: &str) -> Result<(), Str
 
   Ok(())
 }
-
-

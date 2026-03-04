@@ -50,6 +50,20 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @mvl/api prisma:generate
 
+      - name: Validate launcher security env defaults
+        shell: bash
+        env:
+          LAUNCHER_PAIRING_CLAIM_TTL_SECONDS: ${{ vars.LAUNCHER_PAIRING_CLAIM_TTL_SECONDS }}
+          LAUNCHER_CHALLENGE_TTL_SECONDS: ${{ vars.LAUNCHER_CHALLENGE_TTL_SECONDS }}
+          LAUNCHER_SESSION_TTL_SECONDS: ${{ vars.LAUNCHER_SESSION_TTL_SECONDS }}
+          LAUNCHER_NONCE_TTL_SECONDS: ${{ vars.LAUNCHER_NONCE_TTL_SECONDS }}
+          LAUNCHER_PAIRING_V2_ENABLED: ${{ vars.LAUNCHER_PAIRING_V2_ENABLED }}
+        run: |
+          node -e 'const fields=["LAUNCHER_PAIRING_CLAIM_TTL_SECONDS","LAUNCHER_CHALLENGE_TTL_SECONDS","LAUNCHER_SESSION_TTL_SECONDS","LAUNCHER_NONCE_TTL_SECONDS"]; for(const key of fields){const raw=(process.env[key]||"").trim(); if(!raw) continue; const n=Number(raw); if(!Number.isFinite(n)||n<=0){console.error(`${key} must be a positive number`); process.exit(1)}} const enabled=(process.env.LAUNCHER_PAIRING_V2_ENABLED||"").trim().toLowerCase(); if(enabled && enabled!=="true" && enabled!=="false"){console.error("LAUNCHER_PAIRING_V2_ENABLED must be true/false when provided"); process.exit(1)}'
+
+      - name: Run API unit tests
+        run: pnpm --filter @mvl/api exec jest --passWithNoTests --runInBand
+
       - name: Build API
         run: pnpm --filter @mvl/api build
 
@@ -72,8 +86,26 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+
+      - name: Apply Prisma migrations on production DB
+        run: |
+          set -euo pipefail
+          PROJECT_ID="${RAILWAY_PROJECT_ID:-2e1199e7-8617-445e-a258-0e17212cadfc}"
+          railway run \
+            --service api \
+            --environment production \
+            --project "$PROJECT_ID" \
+            -- pnpm --filter @mvl/api prisma:deploy
 
       - name: Deploy API to Railway
         run: |

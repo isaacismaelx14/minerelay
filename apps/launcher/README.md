@@ -37,6 +37,7 @@ Do not ship secrets in `.env` with the desktop bundle.
 For CI packaging (`launcher-build.yml` / `launcher-release.yml`), set these repository variables/secrets so build-time defaults are embedded consistently:
 
 - Variables: `LAUNCHER_API_BASE_URL`, `LAUNCHER_PROFILE_LOCK_URL`, `LAUNCHER_SERVER_ID`, `LAUNCHER_UPDATE_ENDPOINT`
+- Variables: `LAUNCHER_SERVER_CONTROL_TRUSTED_HOSTS` (optional, comma-separated hosts)
 - Secrets: `LAUNCHER_UPDATE_PUBKEY`, `PROFILE_SIGNATURE_PUBLIC_KEY` (or variable), `LAUNCHER_INSTALL_CODE`
 
 Security defaults:

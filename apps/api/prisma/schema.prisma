@@ -112,6 +112,9 @@ model LauncherTrustedDevice {
   installationId String  @unique
   publicKeyHash String
   publicKeyBase64 String
+  deviceFingerprintHash String
+  appVersion    String?
+  platform      String?
   lastSeenAt    DateTime?
   trustedAt     DateTime @default(now())
   rotatedAt     DateTime?
@@ -121,4 +124,64 @@ model LauncherTrustedDevice {
 
   @@index([revokedAt])
   @@index([publicKeyHash])
+  @@index([deviceFingerprintHash])
+}
+
+model LauncherPairingClaim {
+  id                        String   @id
+  tokenHash                 String   @unique
+  codeHash                  String   @unique
+  expiresAt                 DateTime
+  consumedAt                DateTime?
+  revokedAt                 DateTime?
+  issuedAt                  DateTime @default(now())
+  issuedBy                  String?
+  consumedByInstallationId  String?
+  consumedByDeviceHash      String?
+
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@index([consumedAt])
+}
+
+model LauncherChallenge {
+  id         String   @id
+  nonce      String
+  issuedAt   DateTime @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  @@index([expiresAt])
+  @@index([consumedAt])
+}
+
+model LauncherSession {
+  id              String   @id
+  tokenHash       String   @unique
+  tokenId         String   @unique
+  installationId  String
+  publicKeyBase64 String
+  userAgentHash   String
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  nonces LauncherSessionNonce[]
+
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@index([installationId])
+}
+
+model LauncherSessionNonce {
+  id        String   @id
+  sessionId String
+  nonce     String
+  expiresAt DateTime
+
+  session LauncherSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, nonce])
+  @@index([expiresAt])
 }

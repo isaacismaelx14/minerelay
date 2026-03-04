@@ -7,6 +7,7 @@ pub struct LauncherConfig {
   pub api_base_url: Option<String>,
   pub profile_lock_url: Option<String>,
   pub profile_signature_public_key: Option<String>,
+  pub server_control_trusted_hosts: Option<String>,
   pub devtools_secret_command: Option<String>,
   pub launcher_install_code: Option<String>,
   pub server_id: String,
@@ -54,6 +55,8 @@ struct RuntimeConfigFile {
   profile_lock_url: Option<String>,
   #[serde(default, alias = "PROFILE_SIGNATURE_PUBLIC_KEY")]
   profile_signature_public_key: Option<String>,
+  #[serde(default, alias = "LAUNCHER_SERVER_CONTROL_TRUSTED_HOSTS")]
+  server_control_trusted_hosts: Option<String>,
   #[serde(default, alias = "DEVTOOLS_SECRET_COMMAND")]
   devtools_secret_command: Option<String>,
   #[serde(default, alias = "LAUNCHER_INSTALL_CODE")]
@@ -111,6 +114,18 @@ impl LauncherConfig {
       source: profile_signature_public_key_source,
       configured: profile_signature_public_key.is_some(),
       sensitive: true,
+    });
+
+    let (server_control_trusted_hosts, server_control_trusted_hosts_source) = read_optional_with_source(
+      "LAUNCHER_SERVER_CONTROL_TRUSTED_HOSTS",
+      runtime.server_control_trusted_hosts,
+      option_env!("LAUNCHER_SERVER_CONTROL_TRUSTED_HOSTS"),
+    );
+    resolution_report.push(ConfigResolution {
+      key: "LAUNCHER_SERVER_CONTROL_TRUSTED_HOSTS",
+      source: server_control_trusted_hosts_source,
+      configured: server_control_trusted_hosts.is_some(),
+      sensitive: false,
     });
 
     let (raw_devtools_secret_command, devtools_secret_command_source) = read_optional_with_source(
@@ -202,6 +217,7 @@ impl LauncherConfig {
       api_base_url,
       profile_lock_url,
       profile_signature_public_key,
+      server_control_trusted_hosts,
       devtools_secret_command,
       launcher_install_code,
       server_id,
