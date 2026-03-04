@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -55,6 +56,7 @@ type LauncherStatusResponse = {
 
 @Injectable()
 export class LauncherService implements OnModuleInit {
+  private readonly logger = new Logger(LauncherService.name);
   private readonly challenges = new Map<string, LauncherChallenge>();
   private readonly sessions = new Map<string, LauncherSession>();
 
@@ -75,6 +77,12 @@ export class LauncherService implements OnModuleInit {
   }
 
   onModuleInit() {
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    if (isProd && !this.installCodeHash) {
+      this.logger.warn(
+        'LAUNCHER_INSTALL_CODE is missing in production. Launcher enrollment security is reduced. Configure LAUNCHER_INSTALL_CODE for secure public deployments.',
+      );
+    }
     setInterval(() => this.cleanup(), 30_000).unref();
   }
 
