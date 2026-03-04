@@ -42,6 +42,7 @@ struct SessionRequest {
   challenge_id: String,
   client_public_key: String,
   signature: String,
+  installation_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -50,6 +51,7 @@ struct EnrollRequest {
   challenge_id: String,
   client_public_key: String,
   signature: String,
+  installation_id: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   install_code: Option<String>,
 }
@@ -365,6 +367,7 @@ async fn ensure_auth(state: &AppState, api_base: &str) -> Result<LauncherAuthSta
   }
 
   let signing_key = load_or_create_device_signing_key(state)?;
+  let installation_id = load_or_create_installation_id(state)?;
   let verifying_key = VerifyingKey::from(&signing_key);
   let public_key_b64 = STANDARD.encode(verifying_key.to_bytes());
 
@@ -381,6 +384,7 @@ async fn ensure_auth(state: &AppState, api_base: &str) -> Result<LauncherAuthSta
     challenge_id: enroll_challenge.challenge_id,
     client_public_key: public_key_b64.clone(),
     signature: enroll_signature_b64,
+    installation_id: installation_id.clone(),
     install_code,
   };
 
@@ -417,6 +421,7 @@ async fn ensure_auth(state: &AppState, api_base: &str) -> Result<LauncherAuthSta
     challenge_id: challenge.challenge_id,
     client_public_key: public_key_b64,
     signature: signature_b64,
+    installation_id,
   };
 
   let session = state
@@ -544,4 +549,27 @@ fn load_or_create_device_signing_key(state: &AppState) -> Result<SigningKey, Str
 
 fn launcher_device_key_path(state: &AppState) -> PathBuf {
   state.config.data_root.join("launcher-device.key")
+}
+
+fn load_or_create_installation_id(state: &AppState) -> Result<String, String> {
+  let path = launcher_installation_id_path(state);
+  if let Ok(existing) = fs::read_to_string(&path) {
+    let value = existing.trim();
+    if !value.is_empty() {
+      return Ok(value.to_string());
+    }
+  }
+
+  let installation_id = Uuid::new_v4().to_string();
+  if let Some(parent) = path.parent() {
+    fs::create_dir_all(parent)
+      .map_err(|error| format!("Failed to prepare installation id directory: {error}"))?;
+  }
+  fs::write(&path, installation_id.as_bytes())
+    .map_err(|error| format!("Failed to persist installation id: {error}"))?;
+  Ok(installation_id)
+}
+
+fn launcher_installation_id_path(state: &AppState) -> PathBuf {
+  state.config.data_root.join("launcher-installation.id")
 }
