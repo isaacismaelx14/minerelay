@@ -7,7 +7,7 @@ export type ManagedMod = {
   kind: 'mod';
   name: string;
   provider: 'modrinth' | 'direct';
-  side: 'client';
+  side: 'client' | 'server' | 'both';
   projectId?: string;
   versionId?: string;
   url: string;
@@ -60,17 +60,24 @@ export class CoreModPolicyService {
     return [...byProject.values(), ...unnamed];
   }
 
-  buildMetadata(fancyMenuEnabled: boolean): CoreModPolicyMetadata {
-    const lockedProjectIds = [FABRIC_API_PROJECT_ID];
-    if (fancyMenuEnabled) {
-      lockedProjectIds.push(FANCY_MENU_PROJECT_ID);
+  private enforceManagedSide(mod: ManagedMod): ManagedMod {
+    if (this.isFabricApiMod(mod)) {
+      return { ...mod, side: 'both' };
     }
 
+    if (this.isFancyMenuMod(mod)) {
+      return { ...mod, side: 'client' };
+    }
+
+    return mod;
+  }
+
+  buildMetadata(fancyMenuEnabled: boolean): CoreModPolicyMetadata {
     return {
       fabricApiProjectId: FABRIC_API_PROJECT_ID,
       fancyMenuProjectId: FANCY_MENU_PROJECT_ID,
-      lockedProjectIds,
-      nonRemovableProjectIds: [...lockedProjectIds],
+      lockedProjectIds: [],
+      nonRemovableProjectIds: [],
       rules: {
         fabricApiRequired: true,
         fabricApiVersionEditable: true,
@@ -109,20 +116,26 @@ export class CoreModPolicyService {
     if (fabricApiExisting?.versionId) {
       try {
         filtered.push(
-          await input.resolveMod(
-            FABRIC_API_PROJECT_ID,
-            minecraftVersion,
-            fabricApiExisting.versionId,
+          this.enforceManagedSide(
+            await input.resolveMod(
+              FABRIC_API_PROJECT_ID,
+              minecraftVersion,
+              fabricApiExisting.versionId,
+            ),
           ),
         );
       } catch {
         filtered.push(
-          await input.resolveMod(FABRIC_API_PROJECT_ID, minecraftVersion),
+          this.enforceManagedSide(
+            await input.resolveMod(FABRIC_API_PROJECT_ID, minecraftVersion),
+          ),
         );
       }
     } else {
       filtered.push(
-        await input.resolveMod(FABRIC_API_PROJECT_ID, minecraftVersion),
+        this.enforceManagedSide(
+          await input.resolveMod(FABRIC_API_PROJECT_ID, minecraftVersion),
+        ),
       );
     }
 
@@ -131,24 +144,30 @@ export class CoreModPolicyService {
       if (fancyExisting?.versionId) {
         try {
           filtered.push(
-            await input.resolveMod(
-              FANCY_MENU_PROJECT_ID,
-              minecraftVersion,
-              fancyExisting.versionId,
+            this.enforceManagedSide(
+              await input.resolveMod(
+                FANCY_MENU_PROJECT_ID,
+                minecraftVersion,
+                fancyExisting.versionId,
+              ),
             ),
           );
         } catch {
           filtered.push(
-            await input.resolveMod(FANCY_MENU_PROJECT_ID, minecraftVersion),
+            this.enforceManagedSide(
+              await input.resolveMod(FANCY_MENU_PROJECT_ID, minecraftVersion),
+            ),
           );
         }
       } else {
         filtered.push(
-          await input.resolveMod(FANCY_MENU_PROJECT_ID, minecraftVersion),
+          this.enforceManagedSide(
+            await input.resolveMod(FANCY_MENU_PROJECT_ID, minecraftVersion),
+          ),
         );
       }
     }
 
-    return this.dedupeMods(filtered);
+    return this.dedupeMods(filtered).map((mod) => this.enforceManagedSide(mod));
   }
 }

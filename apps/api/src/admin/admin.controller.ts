@@ -20,6 +20,7 @@ import {
   AdminLoginDto,
   ConnectExarotonDto,
   ExarotonServerActionDto,
+  UpdateExarotonSettingsDto,
   SelectExarotonServerDto,
   GenerateLockfileDto,
   InstallModDto,
@@ -153,6 +154,16 @@ export class AdminController {
   @Post('/v1/admin/exaroton/server/action')
   exarotonServerAction(@Body() payload: ExarotonServerActionDto) {
     return this.adminService.exarotonServerAction(payload.action);
+  }
+
+  @Patch('/v1/admin/exaroton/settings')
+  updateExarotonSettings(@Body() payload: UpdateExarotonSettingsDto) {
+    return this.adminService.updateExarotonSettings(payload);
+  }
+
+  @Post('/v1/admin/exaroton/mods/sync')
+  syncExarotonMods() {
+    return this.adminService.syncExarotonModsNow();
   }
 
   @Get('/v1/admin/exaroton/server/stream')

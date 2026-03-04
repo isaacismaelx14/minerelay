@@ -113,6 +113,8 @@ const DataItem = memo(function DataItem({
   );
 });
 
+const EXAROTON_MODS_WARNING_KEY = 'admin-exaroton-mods-delete-warning-v1';
+
 const ModalShell = memo(function ModalShell({
   onClose,
   children,
@@ -550,9 +552,10 @@ const ServersPage = memo(function ServersPage() {
           <div className="security-banner">
             <div className="security-banner-icon">🛡️</div>
             <p>
-              <b>Your privacy is our priority.</b> Your API key is encrypted
-              and stored securely on our servers. We never share your
-              credentials with third parties.
+              <b>Your key stays protected.</b> All requests run through our
+              secure backend umbrella. After saving, we no longer expose your
+              raw key in UI; it is encrypted at rest and only decrypted when an
+              authorized action needs to call Exaroton.
             </p>
           </div>
 
@@ -825,6 +828,132 @@ const ServersPage = memo(function ServersPage() {
                   </div>
                 </article>
               )}
+
+              <article className="panel">
+                <h3>Settings</h3>
+                <div className="grid" style={{ gap: 12 }}>
+                  <label className="check" style={{ opacity: 0.7 }}>
+                    <input type="checkbox" checked disabled />
+                    <span>Server status (required, cannot be disabled)</span>
+                  </label>
+
+                  <label className="check">
+                    <input
+                      type="checkbox"
+                      checked={exaroton.settings.modsSyncEnabled}
+                      onChange={(event) =>
+                        void actions.updateExarotonSettings({
+                          modsSyncEnabled: event.currentTarget.checked,
+                        })
+                      }
+                    />
+                    <span>Mods sync</span>
+                  </label>
+
+                  <div className="alert-box" style={{ marginTop: 4 }}>
+                    <strong>Player access</strong>
+                    <div className="grid" style={{ marginTop: 8, gap: 8 }}>
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={exaroton.settings.playerCanViewStatus}
+                          disabled={
+                            exaroton.settings.playerCanStartServer ||
+                            exaroton.settings.playerCanStopServer ||
+                            exaroton.settings.playerCanRestartServer
+                          }
+                          onChange={(event) =>
+                            void actions.updateExarotonSettings({
+                              playerCanViewStatus: event.currentTarget.checked,
+                            })
+                          }
+                        />
+                        <span>Status visibility for players</span>
+                      </label>
+
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={exaroton.settings.playerCanStartServer}
+                          onChange={(event) =>
+                            void actions.updateExarotonSettings({
+                              playerCanStartServer:
+                                event.currentTarget.checked,
+                            })
+                          }
+                        />
+                        <span>Start server for players</span>
+                      </label>
+
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={exaroton.settings.playerCanStopServer}
+                          onChange={(event) =>
+                            void actions.updateExarotonSettings({
+                              playerCanStopServer:
+                                event.currentTarget.checked,
+                            })
+                          }
+                        />
+                        <span>
+                          Stop server for players{' '}
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 16,
+                              height: 16,
+                              borderRadius: '50%',
+                              border: '1px solid var(--line)',
+                              fontSize: '0.72rem',
+                              cursor: 'help',
+                            }}
+                            title="We do not recommend granting stop controls to players; misuse can degrade overall player experience."
+                            aria-label="Stop permission warning"
+                          >
+                            i
+                          </span>
+                        </span>
+                      </label>
+
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={exaroton.settings.playerCanRestartServer}
+                          onChange={(event) =>
+                            void actions.updateExarotonSettings({
+                              playerCanRestartServer:
+                                event.currentTarget.checked,
+                            })
+                          }
+                        />
+                        <span>
+                          Restart server for players{' '}
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 16,
+                              height: 16,
+                              borderRadius: '50%',
+                              border: '1px solid var(--line)',
+                              fontSize: '0.72rem',
+                              cursor: 'help',
+                            }}
+                            title="We do not recommend granting restart controls to players; misuse can degrade overall player experience."
+                            aria-label="Restart permission warning"
+                          >
+                            i
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </article>
             </div>
           )}
         </div>
@@ -937,6 +1066,7 @@ const ExarotonWidget = memo(function ExarotonWidget() {
 
 const TopBar = memo(function TopBar() {
   const {
+    exaroton,
     sessionState,
     selectedMods,
     hasPendingPublish,
@@ -945,6 +1075,28 @@ const TopBar = memo(function TopBar() {
     actions,
     statuses,
   } = useAdminContext();
+  const [showExarotonPublishWarning, setShowExarotonPublishWarning] =
+    useState(false);
+
+  const handlePublish = () => {
+    const shouldWarn =
+      exaroton.connected &&
+      exaroton.settings.modsSyncEnabled &&
+      !localStorage.getItem(EXAROTON_MODS_WARNING_KEY);
+
+    if (shouldWarn) {
+      setShowExarotonPublishWarning(true);
+      return;
+    }
+
+    void actions.publishProfile();
+  };
+
+  const acknowledgeWarningAndPublish = () => {
+    localStorage.setItem(EXAROTON_MODS_WARNING_KEY, '1');
+    setShowExarotonPublishWarning(false);
+    void actions.publishProfile();
+  };
 
   return (
     <section className="topbar">
@@ -974,7 +1126,7 @@ const TopBar = memo(function TopBar() {
               className="btn"
               type="button"
               disabled={isBusy.publish}
-              onClick={() => void actions.publishProfile()}
+              onClick={handlePublish}
             >
               {isBusy.publish ? 'Publishing...' : 'Publish'}
             </button>
@@ -994,6 +1146,40 @@ const TopBar = memo(function TopBar() {
       <div className={statusClass(statuses.draft.tone)}>
         {statuses.draft.text}
       </div>
+
+      {showExarotonPublishWarning ? (
+        <ModalShell onClose={() => setShowExarotonPublishWarning(false)}>
+          <div className="step-header">
+            <h2>Before first Exaroton mod sync</h2>
+            <p>
+              We recommend deleting existing mods from your Exaroton server
+              first to avoid conflicts, duplicates, or incompatible jars.
+            </p>
+          </div>
+          <div className="alert-box">
+            <p>
+              Once you click publish, server-target mods will be synchronized to
+              the Exaroton <b>mods</b> folder.
+            </p>
+          </div>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={() => setShowExarotonPublishWarning(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={acknowledgeWarningAndPublish}
+            >
+              I Understand
+            </button>
+          </div>
+        </ModalShell>
+      ) : null}
     </section>
   );
 });
@@ -1189,7 +1375,7 @@ const OverviewPage = memo(function OverviewPage() {
           </div>
           <DataList>
             <DataItem label="Total Mods" value={selectedMods.length} />
-            <DataItem label="Core Mods" value="2 (Locked)" />
+            <DataItem label="Core Mods" value="2 (Managed)" />
             <DataItem
               label="Update Status"
               value={
@@ -1863,8 +2049,14 @@ const AddModsModal = memo(function AddModsModal({
 });
 
 const ModManagerPage = memo(function ModManagerPage() {
-  const { modVersionOptions, coreModPolicy, selectedMods, statuses, actions } =
-    useAdminContext();
+  const {
+    exaroton,
+    modVersionOptions,
+    coreModPolicy,
+    selectedMods,
+    statuses,
+    actions,
+  } = useAdminContext();
 
   const [showAddMods, setShowAddMods] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<{
@@ -1951,6 +2143,31 @@ const ModManagerPage = memo(function ModManagerPage() {
           </a>
         )}
         <div className="mod-grid-actions">
+          {exaroton.connected ? (
+            <select
+              value={mod.side || 'client'}
+              style={{
+                fontSize: '0.72rem',
+                padding: '3px 6px',
+                width: '100%',
+                marginBottom: 4,
+              }}
+              disabled={isLocked}
+              onChange={(event) =>
+                actions.setModInstallTarget(
+                  projectId,
+                  event.currentTarget.value as 'client' | 'server' | 'both',
+                  mod.sha256,
+                )
+              }
+              title="Install target"
+            >
+              <option value="client">User</option>
+              <option value="server">Server</option>
+              <option value="both">User + Server</option>
+            </select>
+          ) : null}
+
           {projectId && (
             <>
               <button
@@ -2022,14 +2239,26 @@ const ModManagerPage = memo(function ModManagerPage() {
               installed
             </p>
           </div>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setShowAddMods(true)}
-            style={{ flexShrink: 0 }}
-          >
-            + Add Mods
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            {exaroton.connected ? (
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => void actions.syncExarotonMods()}
+                style={{ flexShrink: 0 }}
+              >
+                Sync Server Mods
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setShowAddMods(true)}
+              style={{ flexShrink: 0 }}
+            >
+              + Add Mods
+            </button>
+          </div>
         </div>
 
         <div className={statusClass(statuses.mods.tone)}>

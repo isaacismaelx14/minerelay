@@ -2,7 +2,7 @@ export type AdminMod = {
   kind: 'mod';
   name: string;
   provider: 'modrinth' | 'direct';
-  side: 'client';
+  side: 'client' | 'server' | 'both';
   projectId?: string;
   versionId?: string;
   url: string;
@@ -68,7 +68,17 @@ export type ExarotonStatusPayload = {
     email: string | null;
   } | null;
   selectedServer: ExarotonServerPayload | null;
+  settings: ExarotonSettingsPayload;
   error: string | null;
+};
+
+export type ExarotonSettingsPayload = {
+  serverStatusEnabled: true;
+  modsSyncEnabled: boolean;
+  playerCanViewStatus: boolean;
+  playerCanStartServer: boolean;
+  playerCanStopServer: boolean;
+  playerCanRestartServer: boolean;
 };
 
 export type BootstrapPayload = {
@@ -178,6 +188,7 @@ export type PublishPayload = {
     update: number;
     keep: number;
   };
+  exarotonSync?: ExarotonSyncModsPayload;
 };
 
 export type UploadImagePayload = {
@@ -201,6 +212,7 @@ export type ConnectExarotonPayload = {
   };
   servers: ExarotonServerPayload[];
   selectedServer: ExarotonServerPayload | null;
+  settings: ExarotonSettingsPayload;
 };
 
 export type ExarotonServersPayload = {
@@ -215,6 +227,21 @@ export type ExarotonActionPayload = {
   success: boolean;
   action: 'start' | 'stop' | 'restart';
   selectedServer: ExarotonServerPayload;
+};
+
+export type ExarotonSyncModsPayload = {
+  attempted: boolean;
+  success: boolean;
+  message: string;
+  summary: {
+    add: number;
+    remove: number;
+    keep: number;
+  };
+};
+
+export type ExarotonSettingsUpdatePayload = {
+  settings: ExarotonSettingsPayload;
 };
 
 export type ExarotonStreamStatusPayload = {

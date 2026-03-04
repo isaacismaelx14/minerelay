@@ -1004,6 +1004,10 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
   let mut map = HashMap::new();
 
   for item in &lock.items {
+    if !should_sync_mod_to_client(item) {
+      continue;
+    }
+
     validate_download_url(&item.provider, &item.url)?;
 
     let filename = extract_filename(&item.url)?;
@@ -1027,6 +1031,13 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
   extend_configs(&mut map, &lock.configs)?;
 
   Ok(map)
+}
+
+fn should_sync_mod_to_client(item: &LockItem) -> bool {
+  match item.side.as_deref() {
+    Some("server") => false,
+    _ => true,
+  }
 }
 
 fn extend_resources(

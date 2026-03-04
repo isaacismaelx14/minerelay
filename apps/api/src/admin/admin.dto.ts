@@ -23,7 +23,8 @@ export class ResolvedModDto {
   provider!: 'modrinth' | 'direct';
 
   @IsString()
-  side!: 'client';
+  @IsIn(['client', 'server', 'both'])
+  side!: 'client' | 'server' | 'both';
 
   @IsString()
   @IsOptional()
@@ -261,4 +262,36 @@ export class ExarotonServerActionDto {
   @IsString()
   @IsIn(['start', 'stop', 'restart'])
   action!: 'start' | 'stop' | 'restart';
+}
+
+export class UpdateExarotonSettingsDto {
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  modsSyncEnabled?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  playerCanViewStatus?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  playerCanModifyStatus?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  playerCanStartServer?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  playerCanStopServer?: boolean;
+
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  playerCanRestartServer?: boolean;
 }

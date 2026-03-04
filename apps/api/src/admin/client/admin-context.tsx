@@ -19,9 +19,12 @@ import type {
   CoreModPolicy,
   DependencyAnalysis,
   ExarotonActionPayload,
+  ExarotonSettingsPayload,
+  ExarotonSettingsUpdatePayload,
   ExarotonSelectPayload,
   ExarotonServerPayload,
   ExarotonServersPayload,
+  ExarotonSyncModsPayload,
   ExarotonStreamStatusPayload,
   ExarotonStatusPayload,
   FabricVersionsPayload,
@@ -62,6 +65,7 @@ type ExarotonState = {
   showApiKey: boolean;
   servers: ExarotonServerPayload[];
   selectedServer: ExarotonServerPayload | null;
+  settings: ExarotonSettingsPayload;
   busy: boolean;
   error: string;
   connectionStep: 'idle' | 'key' | 'servers' | 'success';
@@ -159,6 +163,11 @@ type AdminContextValue = {
     confirmInstall: () => Promise<void>;
     cancelInstall: () => void;
     removeMod: (projectId: string, sha256?: string) => void;
+    setModInstallTarget: (
+      projectId: string,
+      target: 'client' | 'server' | 'both',
+      sha256?: string,
+    ) => void;
     loadModVersions: (projectId: string) => Promise<void>;
     applyModVersion: (projectId: string, versionId: string) => Promise<void>;
     saveSettings: () => Promise<void>;
@@ -180,6 +189,14 @@ type AdminContextValue = {
     listExarotonServers: () => Promise<void>;
     selectExarotonServer: (serverId: string) => Promise<void>;
     exarotonAction: (action: 'start' | 'stop' | 'restart') => Promise<void>;
+    updateExarotonSettings: (payload: {
+      modsSyncEnabled?: boolean;
+      playerCanViewStatus?: boolean;
+      playerCanStartServer?: boolean;
+      playerCanStopServer?: boolean;
+      playerCanRestartServer?: boolean;
+    }) => Promise<void>;
+    syncExarotonMods: () => Promise<void>;
   };
   baselineRuntime: {
     minecraftVersion: string;
@@ -212,6 +229,14 @@ const DEFAULT_EXAROTON: ExarotonState = {
   showApiKey: false,
   servers: [],
   selectedServer: null,
+  settings: {
+    serverStatusEnabled: true,
+    modsSyncEnabled: true,
+    playerCanViewStatus: true,
+    playerCanStartServer: false,
+    playerCanStopServer: false,
+    playerCanRestartServer: false,
+  },
   busy: false,
   error: '',
   connectionStep: 'idle',
@@ -243,8 +268,8 @@ const DEFAULT_FORM: FormState = {
 const DEFAULT_POLICY: CoreModPolicy = {
   fabricApiProjectId: 'P7dR8mSH',
   fancyMenuProjectId: 'Wq5SjeWM',
-  lockedProjectIds: ['P7dR8mSH'],
-  nonRemovableProjectIds: ['P7dR8mSH'],
+  lockedProjectIds: [],
+  nonRemovableProjectIds: [],
   rules: {
     fabricApiRequired: true,
     fabricApiVersionEditable: true,
@@ -458,6 +483,7 @@ function mapStatusToExarotonState(
     showApiKey: previous?.showApiKey ?? false,
     servers: previous?.servers ?? [],
     selectedServer: payload.selectedServer,
+    settings: payload.settings ?? previous?.settings ?? DEFAULT_EXAROTON.settings,
     busy: false,
     error: payload.error ?? '',
     connectionStep: nextStep,
@@ -668,6 +694,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         showApiKey: false,
         servers: payload.servers ?? [],
         selectedServer: payload.selectedServer ?? null,
+        settings: payload.settings ?? current.settings,
         busy: false,
         error: '',
         connectionStep: 'servers',
@@ -1341,6 +1368,28 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     [coreModPolicy, form.fancyMenuEnabled, setStatus],
   );
 
+  const setModInstallTarget = useCallback(
+    (
+      projectId: string,
+      target: 'client' | 'server' | 'both',
+      sha256?: string,
+    ) => {
+      setSelectedMods((current) =>
+        current.map((entry) => {
+          if (projectId && entry.projectId === projectId) {
+            return { ...entry, side: target };
+          }
+          if (sha256 && entry.sha256 === sha256) {
+            return { ...entry, side: target };
+          }
+          return entry;
+        }),
+      );
+      setStatus('mods', 'Mod install target updated.', 'ok');
+    },
+    [setStatus],
+  );
+
   const loadModVersions = useCallback(
     async (projectId: string) => {
       const minecraftVersion = form.minecraftVersion.trim();
@@ -1607,6 +1656,14 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       setSnapshotTick((current) => current + 1);
 
       setHasSavedDraft(false);
+      if (published.exarotonSync?.attempted && !published.exarotonSync.success) {
+        setStatus(
+          'publish',
+          `${published.releaseVersion || `v${published.version}`} published. Exaroton sync warning: ${published.exarotonSync.message}`,
+          'error',
+        );
+        return;
+      }
       setStatus(
         'publish',
         `Published ${published.releaseVersion || `v${published.version}`} (${published.bumpType || 'patch'}, +${published.summary.add} / ~${published.summary.update} / -${published.summary.remove}).`,
@@ -1707,6 +1764,74 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       window.location.href = '/admin/login';
     }
   }, []);
+
+  const updateExarotonSettings = useCallback(
+    async (payload: {
+      modsSyncEnabled?: boolean;
+      playerCanViewStatus?: boolean;
+      playerCanStartServer?: boolean;
+      playerCanStopServer?: boolean;
+      playerCanRestartServer?: boolean;
+    }) => {
+      setExaroton((current) => ({ ...current, busy: true }));
+      setStatus('exaroton', 'Saving Exaroton settings...');
+      try {
+        const response = await requestJson<ExarotonSettingsUpdatePayload>(
+          '/v1/admin/exaroton/settings',
+          'PATCH',
+          payload,
+        );
+        setExaroton((current) => ({
+          ...current,
+          busy: false,
+          settings: response.settings,
+        }));
+        setStatus('exaroton', 'Exaroton settings saved.', 'ok');
+      } catch (error) {
+        setExaroton((current) => ({
+          ...current,
+          busy: false,
+          error: (error as Error).message || 'Failed to save Exaroton settings.',
+        }));
+        setStatus(
+          'exaroton',
+          (error as Error).message || 'Failed to save Exaroton settings.',
+          'error',
+        );
+      }
+    },
+    [setStatus],
+  );
+
+  const syncExarotonMods = useCallback(async () => {
+    setExaroton((current) => ({ ...current, busy: true }));
+    setStatus('exaroton', 'Running Exaroton mods sync...');
+    try {
+      const response = await requestJson<ExarotonSyncModsPayload>(
+        '/v1/admin/exaroton/mods/sync',
+        'POST',
+      );
+      setExaroton((current) => ({ ...current, busy: false }));
+      setStatus(
+        'exaroton',
+        response.success
+          ? `Exaroton mods synced (+${response.summary.add} / -${response.summary.remove} / =${response.summary.keep}).`
+          : response.message,
+        response.success ? 'ok' : 'error',
+      );
+    } catch (error) {
+      setExaroton((current) => ({
+        ...current,
+        busy: false,
+        error: (error as Error).message || 'Exaroton mods sync failed.',
+      }));
+      setStatus(
+        'exaroton',
+        (error as Error).message || 'Exaroton mods sync failed.',
+        'error',
+      );
+    }
+  }, [setStatus]);
 
   const rail = useMemo<RailState>(() => {
     const baselineMods = latestProfileModsRef.current;
@@ -1857,6 +1982,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         confirmInstall,
         cancelInstall,
         removeMod,
+        setModInstallTarget,
         loadModVersions,
         applyModVersion,
         saveSettings,
@@ -1886,6 +2012,8 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         listExarotonServers,
         selectExarotonServer,
         exarotonAction,
+        updateExarotonSettings,
+        syncExarotonMods,
       },
     }),
     [
@@ -1914,6 +2042,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       publishProfile,
       rail,
       removeMod,
+      setModInstallTarget,
       requestInstall,
       saveDraft,
       saveSettings,
@@ -1923,9 +2052,11 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       sessionState,
       setTextFieldFromEvent,
       statuses,
+      syncExarotonMods,
       refreshExarotonStatus,
       uploadBrandingImage,
       uploadFancyBundle,
+      updateExarotonSettings,
       view,
       summaryStats,
     ],

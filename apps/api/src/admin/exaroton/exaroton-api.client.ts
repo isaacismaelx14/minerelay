@@ -83,6 +83,76 @@ export class ExarotonApiClient {
     );
   }
 
+  async getFileData(
+    token: string,
+    serverId: string,
+    filePath: string,
+  ): Promise<Buffer | null> {
+    const authToken = token.trim();
+    if (!authToken) {
+      throw new UnauthorizedException('Exaroton API key is missing');
+    }
+
+    const response = await fetch(
+      `${EXAROTON_API_BASE}${this.buildFileDataPath(serverId, filePath)}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'User-Agent': EXAROTON_USER_AGENT,
+        },
+      },
+    ).catch(() => null);
+
+    if (!response) {
+      throw new BadGatewayException('Could not reach Exaroton API');
+    }
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new UnauthorizedException('Invalid Exaroton API key');
+      }
+      throw new BadGatewayException(
+        `Exaroton API request failed (${response.status})`,
+      );
+    }
+
+    const payload = Buffer.from(await response.arrayBuffer());
+    return payload;
+  }
+
+  async putFileData(
+    token: string,
+    serverId: string,
+    filePath: string,
+    body: Buffer | string,
+    contentType = 'application/octet-stream',
+  ): Promise<void> {
+    const payload =
+      body instanceof Buffer ? new Uint8Array(body) : body;
+    await this.requestJsonAction(token, this.buildFileDataPath(serverId, filePath), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+      },
+      body: payload,
+    });
+  }
+
+  async deleteFileData(
+    token: string,
+    serverId: string,
+    filePath: string,
+  ): Promise<void> {
+    await this.requestJsonAction(token, this.buildFileDataPath(serverId, filePath), {
+      method: 'DELETE',
+    });
+  }
+
   openServerStatusStream(
     token: string,
     serverId: string,
@@ -192,6 +262,74 @@ export class ExarotonApiClient {
         apiError || `Exaroton API request failed (${response.status})`,
       );
     }
+  }
+
+  private async requestJsonAction(
+    token: string,
+    path: string,
+    input: {
+      method: 'PUT' | 'DELETE';
+      headers?: Record<string, string>;
+      body?: Uint8Array | string;
+    },
+  ): Promise<void> {
+    const authToken = token.trim();
+    if (!authToken) {
+      throw new UnauthorizedException('Exaroton API key is missing');
+    }
+
+    const response = await fetch(`${EXAROTON_API_BASE}${path}`, {
+      method: input.method,
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'User-Agent': EXAROTON_USER_AGENT,
+        ...(input.headers ?? {}),
+      },
+      body: (input.body ?? null) as unknown as BodyInit,
+    }).catch(() => null);
+
+    if (!response) {
+      throw new BadGatewayException('Could not reach Exaroton API');
+    }
+
+    let body: ExarotonEnvelope<unknown> | null = null;
+    try {
+      body = (await response.json()) as ExarotonEnvelope<unknown>;
+    } catch {
+      body = null;
+    }
+
+    if (!response.ok || !body || body.success !== true) {
+      const apiError = body?.error?.trim() || '';
+      if (response.status === 401 || response.status === 403) {
+        throw new UnauthorizedException(apiError || 'Invalid Exaroton API key');
+      }
+      throw new BadGatewayException(
+        apiError || `Exaroton API request failed (${response.status})`,
+      );
+    }
+  }
+
+  private buildFileDataPath(serverId: string, filePath: string): string {
+    const cleanServerId = serverId.trim();
+    const cleanPath = filePath.trim().replace(/^\/+/, '');
+    if (!cleanServerId) {
+      throw new UnauthorizedException('Exaroton server ID is missing');
+    }
+    if (!cleanPath) {
+      throw new BadGatewayException('Exaroton file path is missing');
+    }
+
+    const encodedPath = cleanPath
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+    if (!encodedPath) {
+      throw new BadGatewayException('Exaroton file path is missing');
+    }
+
+    return `/servers/${encodeURIComponent(cleanServerId)}/files/data/${encodedPath}/`;
   }
 
   private async request<T>(token: string, path: string): Promise<T> {

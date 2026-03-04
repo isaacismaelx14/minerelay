@@ -29,6 +29,7 @@ import {
   InstallModDto,
   PublishProfileDto,
   SaveDraftDto,
+  UpdateExarotonSettingsDto,
   UpdateSettingsDto,
 } from './admin.dto';
 import { BundleSandboxClient } from './bundle-sandbox.client';
@@ -49,9 +50,35 @@ import {
 const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
 const EXAROTON_INTEGRATION_ID = 'global';
+const EXAROTON_MODS_SYNC_STATE_PATH = 'mods/.mss-sync.json';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
 const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+type ExarotonModsSyncSummary = {
+  add: number;
+  remove: number;
+  keep: number;
+};
+
+type ExarotonModsSyncResult = {
+  attempted: boolean;
+  success: boolean;
+  message: string;
+  summary: ExarotonModsSyncSummary;
+};
+
+type ExarotonSyncStateFile = {
+  version: 1;
+  syncedAt: string;
+  files: Array<{
+    filename: string;
+    sha256: string;
+    url?: string;
+    projectId?: string;
+    versionId?: string;
+  }>;
+};
 
 interface ModrinthSearchResponse {
   hits: Array<{
@@ -464,13 +491,14 @@ export class AdminService implements OnModuleInit {
     }
 
     const encrypted = encryptExarotonApiKey(cleanApiKey, encryptionKey);
+    const existingSettings = this.readExarotonSettings(existing);
     const selected = existing?.selectedServerId
       ? servers.find((entry: ExarotonServer) => entry.id === existing.selectedServerId) || null
       : null;
 
     await this.prisma.exarotonIntegration.upsert({
       where: { id: EXAROTON_INTEGRATION_ID },
-      create: {
+      create: ({
         id: EXAROTON_INTEGRATION_ID,
         apiKeyCiphertext: encrypted.ciphertext,
         apiKeyIv: encrypted.iv,
@@ -480,9 +508,15 @@ export class AdminService implements OnModuleInit {
         selectedServerId: selected?.id ?? null,
         selectedServerName: selected?.name ?? null,
         selectedServerAddress: selected?.address ?? null,
+        modsSyncEnabled: existingSettings.modsSyncEnabled,
+        playerCanViewStatus: existingSettings.playerCanViewStatus,
+        playerCanModifyStatus: existingSettings.playerCanModifyStatus,
+        playerCanStartServer: existingSettings.playerCanStartServer,
+        playerCanStopServer: existingSettings.playerCanStopServer,
+        playerCanRestartServer: existingSettings.playerCanRestartServer,
         connectedAt: new Date(),
-      },
-      update: {
+      } as unknown) as Prisma.ExarotonIntegrationCreateInput,
+      update: ({
         apiKeyCiphertext: encrypted.ciphertext,
         apiKeyIv: encrypted.iv,
         apiKeyAuthTag: encrypted.authTag,
@@ -491,8 +525,14 @@ export class AdminService implements OnModuleInit {
         selectedServerId: selected?.id ?? null,
         selectedServerName: selected?.name ?? null,
         selectedServerAddress: selected?.address ?? null,
+        modsSyncEnabled: existingSettings.modsSyncEnabled,
+        playerCanViewStatus: existingSettings.playerCanViewStatus,
+        playerCanModifyStatus: existingSettings.playerCanModifyStatus,
+        playerCanStartServer: existingSettings.playerCanStartServer,
+        playerCanStopServer: existingSettings.playerCanStopServer,
+        playerCanRestartServer: existingSettings.playerCanRestartServer,
         connectedAt: new Date(),
-      },
+      } as unknown) as Prisma.ExarotonIntegrationUpdateInput,
     });
 
     return {
@@ -501,6 +541,7 @@ export class AdminService implements OnModuleInit {
       account,
       servers: servers.map((entry: ExarotonServer) => this.mapExarotonServer(entry)),
       selectedServer: selected ? this.mapExarotonServer(selected) : null,
+      settings: this.mapExarotonSettings(existingSettings),
     };
   }
 
@@ -583,6 +624,68 @@ export class AdminService implements OnModuleInit {
       action,
       selectedServer: this.mapExarotonServer(selectedServer),
     };
+  }
+
+  async updateExarotonSettings(input: UpdateExarotonSettingsDto) {
+    const integration = await this.prisma.exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+    if (!integration) {
+      throw new NotFoundException('Exaroton account is not connected');
+    }
+
+    const integrationSettings = this.readExarotonSettings(integration);
+    const baseStart = integrationSettings.playerCanStartServer;
+    const baseStop = integrationSettings.playerCanStopServer;
+    const baseRestart = integrationSettings.playerCanRestartServer;
+    const legacyModifyToggle = input.playerCanModifyStatus;
+
+    const nextPlayerCanStartServer =
+      input.playerCanStartServer ?? legacyModifyToggle ?? baseStart;
+    const nextPlayerCanStopServer =
+      input.playerCanStopServer ?? legacyModifyToggle ?? baseStop;
+    const nextPlayerCanRestartServer =
+      input.playerCanRestartServer ?? legacyModifyToggle ?? baseRestart;
+
+    const nextPlayerCanModifyStatus =
+      nextPlayerCanStartServer ||
+      nextPlayerCanStopServer ||
+      nextPlayerCanRestartServer;
+
+    const nextPlayerCanViewStatus = nextPlayerCanModifyStatus
+      ? true
+      : (input.playerCanViewStatus ?? integrationSettings.playerCanViewStatus);
+
+    const updated = await this.prisma.exarotonIntegration.update({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      data: ({
+        modsSyncEnabled: input.modsSyncEnabled ?? integrationSettings.modsSyncEnabled,
+        playerCanViewStatus: nextPlayerCanViewStatus,
+        playerCanModifyStatus: nextPlayerCanModifyStatus,
+        playerCanStartServer: nextPlayerCanStartServer,
+        playerCanStopServer: nextPlayerCanStopServer,
+        playerCanRestartServer: nextPlayerCanRestartServer,
+      } as unknown) as Prisma.ExarotonIntegrationUpdateInput,
+    });
+
+    return {
+      settings: this.mapExarotonSettings(this.readExarotonSettings(updated)),
+    };
+  }
+
+  async syncExarotonModsNow(): Promise<ExarotonModsSyncResult> {
+    const serverId = this.getServerId();
+    const latest = await this.prisma.profileVersion.findFirst({
+      where: { serverId },
+      orderBy: { version: 'desc' },
+    });
+
+    if (!latest) {
+      throw new NotFoundException(`No profile version found for server '${serverId}'`);
+    }
+
+    const lock = ProfileLockSchema.parse(latest.lockJson);
+    return this.trySyncExarotonMods(lock);
   }
 
   async openExarotonStatusStream(handlers: {
@@ -887,7 +990,7 @@ export class AdminService implements OnModuleInit {
     const serverId = this.getServerId();
     const publicBase = this.resolvePublicBaseUrl(requestOrigin);
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const published = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const [server, latest] = await Promise.all([
         tx.server.findUnique({ where: { id: serverId } }),
         tx.profileVersion.findFirst({
@@ -1009,8 +1112,17 @@ export class AdminService implements OnModuleInit {
         bumpType,
         lockUrl,
         summary,
+        generatedLock: generated,
       };
     });
+
+    const { generatedLock, ...publishPayload } = published;
+    const exarotonSync = await this.trySyncExarotonMods(generatedLock);
+
+    return {
+      ...publishPayload,
+      exarotonSync,
+    };
   }
 
   async uploadMedia(
@@ -1235,6 +1347,69 @@ export class AdminService implements OnModuleInit {
     };
   }
 
+  private mapExarotonSettings(input: {
+    modsSyncEnabled?: boolean | null;
+    playerCanViewStatus?: boolean | null;
+    playerCanModifyStatus?: boolean | null;
+    playerCanStartServer?: boolean | null;
+    playerCanStopServer?: boolean | null;
+    playerCanRestartServer?: boolean | null;
+  }) {
+    const playerCanStartServer = input.playerCanStartServer === true;
+    const playerCanStopServer = input.playerCanStopServer === true;
+    const playerCanRestartServer = input.playerCanRestartServer === true;
+    const playerCanModifyStatus =
+      input.playerCanModifyStatus === true ||
+      playerCanStartServer ||
+      playerCanStopServer ||
+      playerCanRestartServer;
+    return {
+      serverStatusEnabled: true as const,
+      modsSyncEnabled: input.modsSyncEnabled ?? true,
+      playerCanViewStatus:
+        playerCanModifyStatus || input.playerCanViewStatus !== false,
+      playerCanStartServer,
+      playerCanStopServer,
+      playerCanRestartServer,
+    };
+  }
+
+  private readExarotonSettings(input: unknown): {
+    modsSyncEnabled: boolean;
+    playerCanViewStatus: boolean;
+    playerCanModifyStatus: boolean;
+    playerCanStartServer: boolean;
+    playerCanStopServer: boolean;
+    playerCanRestartServer: boolean;
+  } {
+    const source = (input ?? {}) as {
+      modsSyncEnabled?: unknown;
+      playerCanViewStatus?: unknown;
+      playerCanModifyStatus?: unknown;
+      playerCanStartServer?: unknown;
+      playerCanStopServer?: unknown;
+      playerCanRestartServer?: unknown;
+    };
+
+    const playerCanStartServer = source.playerCanStartServer === true;
+    const playerCanStopServer = source.playerCanStopServer === true;
+    const playerCanRestartServer = source.playerCanRestartServer === true;
+    const playerCanModifyStatus =
+      source.playerCanModifyStatus === true ||
+      playerCanStartServer ||
+      playerCanStopServer ||
+      playerCanRestartServer;
+    return {
+      modsSyncEnabled: source.modsSyncEnabled !== false,
+      playerCanViewStatus:
+        playerCanModifyStatus || source.playerCanViewStatus !== false,
+      playerCanModifyStatus,
+      playerCanStartServer,
+      playerCanStopServer,
+      playerCanRestartServer,
+    };
+  }
+
   private getExarotonEncryptionKey(): string | null {
     const value = this.config.get<string>('EXAROTON_ENCRYPTION_KEY')?.trim();
     return value && value.length > 0 ? value : null;
@@ -1262,6 +1437,12 @@ export class AdminService implements OnModuleInit {
       selectedServerId: string | null;
       selectedServerName: string | null;
       selectedServerAddress: string | null;
+      modsSyncEnabled: boolean;
+      playerCanViewStatus: boolean;
+      playerCanModifyStatus: boolean;
+      playerCanStartServer: boolean;
+      playerCanStopServer: boolean;
+      playerCanRestartServer: boolean;
     };
   }> {
     const integration = await this.prisma.exarotonIntegration.findUnique({
@@ -1285,6 +1466,8 @@ export class AdminService implements OnModuleInit {
       throw new BadGatewayException('Exaroton API key could not be decrypted');
     }
 
+    const integrationSettings = this.readExarotonSettings(integration);
+
     return {
       apiKey,
       integration: {
@@ -1297,6 +1480,12 @@ export class AdminService implements OnModuleInit {
         selectedServerId: integration.selectedServerId,
         selectedServerName: integration.selectedServerName,
         selectedServerAddress: integration.selectedServerAddress,
+        modsSyncEnabled: integrationSettings.modsSyncEnabled,
+        playerCanViewStatus: integrationSettings.playerCanViewStatus,
+        playerCanModifyStatus: integrationSettings.playerCanModifyStatus,
+        playerCanStartServer: integrationSettings.playerCanStartServer,
+        playerCanStopServer: integrationSettings.playerCanStopServer,
+        playerCanRestartServer: integrationSettings.playerCanRestartServer,
       },
     };
   }
@@ -1309,6 +1498,7 @@ export class AdminService implements OnModuleInit {
         connected: false,
         account: null,
         selectedServer: null,
+        settings: this.mapExarotonSettings({}),
         error:
           'EXAROTON_ENCRYPTION_KEY is not configured. Set it to enable this feature.',
       };
@@ -1324,9 +1514,12 @@ export class AdminService implements OnModuleInit {
         connected: false,
         account: null,
         selectedServer: null,
+        settings: this.mapExarotonSettings({}),
         error: null,
       };
     }
+
+    const integrationSettings = this.readExarotonSettings(integration);
 
     let apiKey = '';
     try {
@@ -1344,6 +1537,7 @@ export class AdminService implements OnModuleInit {
         connected: false,
         account: null,
         selectedServer: null,
+        settings: this.mapExarotonSettings(integrationSettings),
         error: 'Stored Exaroton credentials could not be decrypted',
       };
     }
@@ -1378,8 +1572,222 @@ export class AdminService implements OnModuleInit {
         email: integration.accountEmail || null,
       },
       selectedServer,
+      settings: this.mapExarotonSettings(integrationSettings),
       error: null,
     };
+  }
+
+  private async trySyncExarotonMods(
+    lock: ProfileLock,
+  ): Promise<ExarotonModsSyncResult> {
+    const zero: ExarotonModsSyncSummary = { add: 0, remove: 0, keep: 0 };
+    try {
+      const integration = await this.prisma.exarotonIntegration.findUnique({
+        where: { id: EXAROTON_INTEGRATION_ID },
+      });
+      if (!integration) {
+        return {
+          attempted: false,
+          success: false,
+          message: 'Exaroton account is not connected.',
+          summary: zero,
+        };
+      }
+
+      const integrationSettings = this.readExarotonSettings(integration);
+      if (!integrationSettings.modsSyncEnabled) {
+        return {
+          attempted: false,
+          success: false,
+          message: 'Exaroton mods sync is disabled in settings.',
+          summary: zero,
+        };
+      }
+
+      const selectedServerId = integration.selectedServerId?.trim();
+      if (!selectedServerId) {
+        return {
+          attempted: false,
+          success: false,
+          message: 'Select an Exaroton server first.',
+          summary: zero,
+        };
+      }
+
+      const encryptionKey = this.requireExarotonEncryptionKey();
+      const apiKey = decryptExarotonApiKey(
+        {
+          ciphertext: integration.apiKeyCiphertext,
+          iv: integration.apiKeyIv,
+          authTag: integration.apiKeyAuthTag,
+        },
+        encryptionKey,
+      );
+
+      const serverMods = lock.items.filter(
+        (item) => item.kind === 'mod' && (item.side === 'server' || item.side === 'both'),
+      );
+
+      const desired = new Map<
+        string,
+        {
+          sha256: string;
+          url: string;
+          projectId?: string;
+          versionId?: string;
+        }
+      >();
+
+      for (const mod of serverMods) {
+        const filename = this.extractRemoteFilename(mod.url);
+        desired.set(filename, {
+          sha256: mod.sha256,
+          url: mod.url,
+          projectId: mod.projectId,
+          versionId: mod.versionId,
+        });
+      }
+
+      const modsFolderProbe = await this.exarotonClient.getFileData(
+        apiKey,
+        selectedServerId,
+        'mods',
+      );
+      if (!modsFolderProbe) {
+        await this.exarotonClient.putFileData(
+          apiKey,
+          selectedServerId,
+          'mods',
+          '',
+          'inode/directory',
+        );
+      }
+
+      const state = await this.readExarotonModsSyncState(apiKey, selectedServerId);
+      const previous = new Map(
+        (state?.files ?? []).map((file) => [file.filename, file]),
+      );
+
+      const summary: ExarotonModsSyncSummary = { add: 0, remove: 0, keep: 0 };
+
+      for (const [filename, desiredFile] of desired.entries()) {
+        const existing = previous.get(filename);
+        if (existing?.sha256?.toLowerCase() === desiredFile.sha256.toLowerCase()) {
+          summary.keep += 1;
+          continue;
+        }
+
+        const body = await this.downloadRemoteAsset(desiredFile.url);
+        await this.exarotonClient.putFileData(
+          apiKey,
+          selectedServerId,
+          `mods/${filename}`,
+          body,
+        );
+        summary.add += 1;
+      }
+
+      for (const [filename] of previous.entries()) {
+        if (desired.has(filename)) {
+          continue;
+        }
+        await this.exarotonClient.deleteFileData(
+          apiKey,
+          selectedServerId,
+          `mods/${filename}`,
+        );
+        summary.remove += 1;
+      }
+
+      const nextState: ExarotonSyncStateFile = {
+        version: 1,
+        syncedAt: new Date().toISOString(),
+        files: Array.from(desired.entries()).map(([filename, value]) => ({
+          filename,
+          sha256: value.sha256,
+          url: value.url,
+          projectId: value.projectId,
+          versionId: value.versionId,
+        })),
+      };
+
+      await this.exarotonClient.putFileData(
+        apiKey,
+        selectedServerId,
+        EXAROTON_MODS_SYNC_STATE_PATH,
+        JSON.stringify(nextState, null, 2),
+        'application/json',
+      );
+
+      return {
+        attempted: true,
+        success: true,
+        message: 'Exaroton server mods synchronized.',
+        summary,
+      };
+    } catch (error) {
+      return {
+        attempted: true,
+        success: false,
+        message:
+          (error as Error).message ||
+          'Exaroton server mod sync failed.',
+        summary: zero,
+      };
+    }
+  }
+
+  private async readExarotonModsSyncState(
+    apiKey: string,
+    serverId: string,
+  ): Promise<ExarotonSyncStateFile | null> {
+    const payload = await this.exarotonClient.getFileData(
+      apiKey,
+      serverId,
+      EXAROTON_MODS_SYNC_STATE_PATH,
+    );
+
+    if (!payload || payload.length === 0) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(payload.toString('utf8')) as ExarotonSyncStateFile;
+      if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.files)) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private async downloadRemoteAsset(url: string): Promise<Buffer> {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'mvl-admin-mvp/0.2.0',
+      },
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
+      throw new BadGatewayException('Could not download server mod artifact');
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  private extractRemoteFilename(url: string): string {
+    try {
+      const parsed = new URL(url);
+      const pieces = parsed.pathname.split('/').filter(Boolean);
+      const last = pieces[pieces.length - 1]?.trim();
+      if (!last) {
+        throw new Error();
+      }
+      return last;
+    } catch {
+      throw new BadGatewayException(`Invalid mod URL for server sync: ${url}`);
+    }
   }
 
   private async collectMod(
@@ -1688,7 +2096,7 @@ export class AdminService implements OnModuleInit {
       kind: 'mod';
       name: string;
       provider: 'modrinth' | 'direct';
-      side: 'client';
+      side: 'client' | 'server' | 'both';
       projectId?: string;
       versionId?: string;
       url: string;

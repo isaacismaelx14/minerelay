@@ -35,9 +35,9 @@ describe('CoreModPolicyService', () => {
       fancyMenuEnabled: false,
       resolveMod: resolver,
     });
-    expect(mods.some((mod) => mod.projectId === FABRIC_API_PROJECT_ID)).toBe(
-      true,
-    );
+    const fabric = mods.find((mod) => mod.projectId === FABRIC_API_PROJECT_ID);
+    expect(fabric).toBeDefined();
+    expect(fabric?.side).toBe('both');
   });
 
   it('removes FancyMenu when feature is disabled', async () => {
@@ -70,9 +70,9 @@ describe('CoreModPolicyService', () => {
       fancyMenuEnabled: true,
       resolveMod: resolver,
     });
-    expect(mods.some((mod) => mod.projectId === FANCY_MENU_PROJECT_ID)).toBe(
-      true,
-    );
+    const fancy = mods.find((mod) => mod.projectId === FANCY_MENU_PROJECT_ID);
+    expect(fancy).toBeDefined();
+    expect(fancy?.side).toBe('client');
   });
 
   it('keeps Fabric API version override when compatible', async () => {
@@ -96,5 +96,16 @@ describe('CoreModPolicyService', () => {
 
     const fabric = mods.find((mod) => mod.projectId === FABRIC_API_PROJECT_ID);
     expect(fabric?.versionId).toBe('custom-fabric-version');
+    expect(fabric?.side).toBe('both');
+  });
+
+  it('does not lock Fabric API in metadata', () => {
+    const metadata = service.buildMetadata(true);
+    expect(metadata.lockedProjectIds.includes(FABRIC_API_PROJECT_ID)).toBe(
+      false,
+    );
+    expect(
+      metadata.nonRemovableProjectIds.includes(FABRIC_API_PROJECT_ID),
+    ).toBe(false);
   });
 });

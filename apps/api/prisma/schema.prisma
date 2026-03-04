@@ -95,6 +95,12 @@ model ExarotonIntegration {
   selectedServerId      String?
   selectedServerName    String?
   selectedServerAddress String?
+  modsSyncEnabled       Boolean  @default(true)
+  playerCanViewStatus   Boolean  @default(true)
+  playerCanModifyStatus Boolean  @default(false)
+  playerCanStartServer  Boolean  @default(false)
+  playerCanStopServer   Boolean  @default(false)
+  playerCanRestartServer Boolean @default(false)
   connectedAt           DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
