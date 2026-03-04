@@ -4,6 +4,18 @@ Desktop sync/bootstrap app for **Minecraft Java Edition only**.
 
 This project does **not** implement Microsoft OAuth and does **not** replace a Minecraft launcher. It synchronizes a managed instance directory, ensures server-lock behavior, and opens an installed Java launcher.
 
+## License and Legal
+
+This repository is `source-available` and **not** OSI open source.
+
+- License: see `LICENSE.md`
+- Contribution terms: see `CLA.md` and `CONTRIBUTING.md`
+- Community standards: see `CODE_OF_CONDUCT.md`
+- Security reporting: see `SECURITY.md`
+- Trademark usage: see `TRADEMARKS.md`
+- Public forks are allowed only for non-commercial collaboration and pull
+  request workflows; compiled redistribution is not allowed.
+
 ## Repository Layout
 
 - `apps/launcher`: Tauri v2 + React + TypeScript desktop app

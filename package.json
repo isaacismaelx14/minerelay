@@ -2,6 +2,7 @@
   "name": "mc-client-center",
   "private": true,
   "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE.md",
   "packageManager": "pnpm@9.12.3",
   "scripts": {
     "dev": "turbo run dev --parallel",
