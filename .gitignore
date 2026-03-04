@@ -49,3 +49,5 @@ apps/launcher/.updater/
 output/playwright
 
 launcher-trust-store.json
+launcher.runtime.json
+

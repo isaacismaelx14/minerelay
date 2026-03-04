@@ -216,6 +216,57 @@ pub fn app_return_to_main_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn app_log_client_exception(
+  source: String,
+  message: String,
+  details: Option<String>,
+) {
+  crate::telemetry::record_exception_event(
+    source.trim(),
+    message.trim(),
+    details.as_deref().map(|entry| entry.trim()),
+  );
+}
+
+#[tauri::command]
+pub fn app_open_devtools_secret(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+  secret_command: String,
+) -> Result<(), String> {
+  let Some(expected) = state.config.devtools_secret_command.as_deref() else {
+    return Err("Devtools secret command is not configured".to_string());
+  };
+
+  let attempted = secret_command.trim();
+  if attempted.is_empty() || attempted != expected {
+    crate::telemetry::record_exception_event(
+      "devtools",
+      "Rejected secret command",
+      Some("invalid secret command"),
+    );
+    return Err("Invalid secret command".to_string());
+  }
+
+  let mut opened = 0usize;
+  for (_, window) in app.webview_windows() {
+    window.open_devtools();
+    opened += 1;
+  }
+
+  if opened == 0 {
+    return Err("No webview windows available to open devtools".to_string());
+  }
+
+  crate::telemetry::record_exception_event(
+    "devtools",
+    "Opened devtools",
+    Some("secret command accepted"),
+  );
+  Ok(())
+}
+
+#[tauri::command]
 pub fn game_running_probe(state: State<'_, Arc<AppState>>) -> Result<GameRunningProbe, String> {
   let status = session::get_status(state.inner());
   if status.phase != GameSessionPhase::Idle {

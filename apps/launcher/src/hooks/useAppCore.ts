@@ -137,6 +137,9 @@ export function useAppCore() {
   const launcherStreamRetryCountdownRef = useRef<number | null>(null);
   const launcherPermissionRemovedNotifiedRef = useRef(false);
   const launcherServerAccessGrantedRef = useRef(false);
+  const devtoolsUnlockActiveRef = useRef(false);
+  const devtoolsUnlockBufferRef = useRef("");
+  const devtoolsUnlockTimeoutRef = useRef<number | null>(null);
 
   const hasLauncherServerPermission = useCallback(
     (controls: LauncherServerControlsState | null) => {
@@ -233,6 +236,137 @@ export function useAppCore() {
     pushToast("hint", hint);
     setHint(null);
   }, [hint, pushToast]);
+
+  useEffect(() => {
+    const onWindowError = (event: ErrorEvent) => {
+      const message = event.message || "Unknown window error";
+      const details = [
+        event.filename ? `file=${event.filename}` : null,
+        event.lineno ? `line=${event.lineno}` : null,
+        event.colno ? `col=${event.colno}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      void invoke("app_log_client_exception", {
+        source: "window.error",
+        message,
+        details: details || undefined,
+      }).catch(() => undefined);
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : JSON.stringify(reason ?? "Unhandled rejection");
+
+      void invoke("app_log_client_exception", {
+        source: "window.unhandledrejection",
+        message,
+      }).catch(() => undefined);
+    };
+
+    window.addEventListener("error", onWindowError);
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", onWindowError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    };
+  }, []);
+
+  useEffect(() => {
+    const clearUnlockTimeout = () => {
+      if (devtoolsUnlockTimeoutRef.current !== null) {
+        window.clearTimeout(devtoolsUnlockTimeoutRef.current);
+        devtoolsUnlockTimeoutRef.current = null;
+      }
+    };
+
+    const cancelUnlock = (message?: string) => {
+      clearUnlockTimeout();
+      devtoolsUnlockActiveRef.current = false;
+      devtoolsUnlockBufferRef.current = "";
+      if (message) {
+        setHint(message);
+      }
+    };
+
+    const startUnlock = () => {
+      clearUnlockTimeout();
+      devtoolsUnlockActiveRef.current = true;
+      devtoolsUnlockBufferRef.current = "";
+      setHint("Devtools unlock active: type secret command, then press Enter. Press Esc to cancel.");
+      devtoolsUnlockTimeoutRef.current = window.setTimeout(() => {
+        cancelUnlock("Devtools unlock timed out.");
+      }, 12_000);
+    };
+
+    const onSecretDevtoolsShortcut = (event: KeyboardEvent) => {
+      const isUnlockCombo =
+        (event.ctrlKey || event.metaKey) &&
+        event.altKey &&
+        event.shiftKey &&
+        event.code === "KeyD";
+
+      if (devtoolsUnlockActiveRef.current) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cancelUnlock("Devtools unlock canceled.");
+          return;
+        }
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const secretCommand = devtoolsUnlockBufferRef.current.trim();
+          if (!secretCommand) {
+            cancelUnlock("Devtools unlock canceled.");
+            return;
+          }
+
+          cancelUnlock();
+          void invoke("app_open_devtools_secret", { secretCommand })
+            .then(() => {
+              setHint("Devtools opened.");
+            })
+            .catch((cause) => {
+              setError(cause instanceof Error ? cause.message : String(cause));
+            });
+          return;
+        }
+
+        if (event.key === "Backspace") {
+          event.preventDefault();
+          devtoolsUnlockBufferRef.current =
+            devtoolsUnlockBufferRef.current.slice(0, -1);
+          return;
+        }
+
+        if (event.key.length === 1 && !event.metaKey && !event.ctrlKey) {
+          event.preventDefault();
+          devtoolsUnlockBufferRef.current += event.key;
+        }
+        return;
+      }
+
+      if (!isUnlockCombo) {
+        return;
+      }
+
+      event.preventDefault();
+      startUnlock();
+    };
+
+    window.addEventListener("keydown", onSecretDevtoolsShortcut);
+    return () => {
+      cancelUnlock();
+      window.removeEventListener("keydown", onSecretDevtoolsShortcut);
+    };
+  }, []);
 
   const saveSettings = useCallback(async (next: AppSettings) => {
     const persisted = await invoke<AppSettings>("settings_set", {
@@ -497,6 +631,26 @@ export function useAppCore() {
     setVersionReadiness(readiness);
     return readiness;
   }, []);
+
+  const fallbackVersionReadiness = useCallback(
+    (guidance: string): VersionReadiness => ({
+      minecraftVersion: "--",
+      loader: "--",
+      loaderVersion: "--",
+      managedMinecraftDir: "--",
+      liveMinecraftRoot: "--",
+      minecraftRoot: "--",
+      foundInMinecraftRootDir: false,
+      usingOverrideRoot: false,
+      allowlisted: false,
+      allowedMinecraftVersions: [],
+      expectedFabricVersionId: "--",
+      expectedManagedVersionId: "--",
+      managedVersionPresent: false,
+      guidance,
+    }),
+    [],
+  );
 
   const refreshDashboardState = useCallback(async () => {
     const [instanceState, readiness, snapshot] = await Promise.all([
@@ -830,7 +984,11 @@ export function useAppCore() {
       });
       // Important cross-window sync: refresh state when settings change
       void refreshDashboardState();
-      void refreshVersionReadiness();
+      void refreshVersionReadiness().catch((cause) => {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        setVersionReadiness(fallbackVersionReadiness(message));
+        setError(message);
+      });
     }).then((off) => {
       stopSettingsListener = off;
     });
@@ -1136,8 +1294,15 @@ export function useAppCore() {
 
     await saveSettings(next);
     setWizardStep("runtime");
-    await refreshVersionReadiness();
+    try {
+      await refreshVersionReadiness();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setVersionReadiness(fallbackVersionReadiness(message));
+      setError(message);
+    }
   }, [
+    fallbackVersionReadiness,
     refreshVersionReadiness,
     saveSettings,
     settings,
@@ -1157,9 +1322,11 @@ export function useAppCore() {
       setWizardRuntimeStatus(installed);
       await refreshVersionReadiness();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setVersionReadiness(fallbackVersionReadiness(message));
+      setError(message);
     }
-  }, [refreshVersionReadiness]);
+  }, [fallbackVersionReadiness, refreshVersionReadiness]);
 
   const continueWizardSyncStep = useCallback(async () => {
     if (!versionReadiness) {

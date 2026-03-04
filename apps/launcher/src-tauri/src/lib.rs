@@ -40,9 +40,9 @@ const REQUIRED_ONBOARDING_VERSION: i32 = 2;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  telemetry::init();
-
   let config = config::LauncherConfig::from_env();
+  telemetry::init(&config.data_root);
+  config.log_resolution_report();
   let state = Arc::new(state::AppState::new(config));
 
   let app = tauri::Builder::default()
@@ -97,6 +97,8 @@ pub fn run() {
       commands::app_keep_running_in_background,
       commands::app_open_setup_window,
       commands::app_return_to_main_window,
+      commands::app_log_client_exception,
+      commands::app_open_devtools_secret,
       commands::game_running_probe,
     ])
     .build(tauri::generate_context!())
