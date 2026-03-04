@@ -101,7 +101,7 @@ jobs:
             exit 1
           fi
           if [ -z "$LAUNCHER_UPDATE_PUBKEY" ]; then
-            echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates" >&2
+            echo "Missing LAUNCHER_UPDATE_PUBKEY secret. The app needs the updater public key to verify updates." >&2
             exit 1
           fi
           if [ -z "$PROFILE_SIGNATURE_PUBLIC_KEY" ]; then
