@@ -97,16 +97,6 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Apply Prisma migrations on production DB
-        run: |
-          set -euo pipefail
-          PROJECT_ID="${RAILWAY_PROJECT_ID:-2e1199e7-8617-445e-a258-0e17212cadfc}"
-          railway run \
-            --service api \
-            --environment production \
-            --project "$PROJECT_ID" \
-            -- pnpm --filter @mvl/api prisma:deploy
-
       - name: Deploy API to Railway
         run: |
           set -euo pipefail
