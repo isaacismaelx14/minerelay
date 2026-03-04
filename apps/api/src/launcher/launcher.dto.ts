@@ -12,6 +12,10 @@ export class LauncherAuthSessionDto {
   @IsString()
   @Length(80, 200)
   signature!: string;
+
+  @IsString()
+  @Length(8, 120)
+  installationId!: string;
 }
 
 export class LauncherAuthEnrollDto {
@@ -31,6 +35,10 @@ export class LauncherAuthEnrollDto {
   @IsString()
   @Length(6, 128)
   installCode?: string;
+
+  @IsString()
+  @Length(8, 120)
+  installationId!: string;
 }
 
 export class LauncherServerActionDto {

@@ -5,14 +5,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
 import nacl from 'tweetnacl';
 import { AdminService } from '../admin/admin.service';
+import { PrismaService } from '../db/prisma.service';
 
 const AUTH_INPUT = 'launcher-auth-v1';
 const REQUEST_INPUT = 'launcher-request-v1';
-const TRUST_STORE_FILENAME = 'launcher-trust-store.json';
 
 type LauncherChallenge = {
   id: string;
@@ -25,6 +23,7 @@ type LauncherChallenge = {
 type LauncherSession = {
   tokenId: string;
   tokenHash: string;
+  installationId: string;
   publicKey: Uint8Array;
   userAgentHash: string;
   expiresAt: number;
@@ -63,27 +62,19 @@ export class LauncherService implements OnModuleInit {
   private readonly sessionTtlMs = 15 * 60 * 1000;
   private readonly requestSkewMs = 60 * 1000;
   private readonly nonceTtlMs = 3 * 60 * 1000;
-  private readonly trustedPublicKeyHashes = new Set<string>();
-  private readonly trustStorePath: string;
   private readonly installCodeHash: string | null;
 
   constructor(
     private readonly adminService: AdminService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
-    const configuredPath =
-      this.config.get<string>('LAUNCHER_TRUST_STORE_PATH')?.trim() ?? '';
-    this.trustStorePath = configuredPath
-      ? resolve(configuredPath)
-      : resolve(process.cwd(), TRUST_STORE_FILENAME);
-
     const installCode =
       this.config.get<string>('LAUNCHER_INSTALL_CODE')?.trim() ?? '';
     this.installCodeHash = installCode ? this.sha256(installCode) : null;
   }
 
   onModuleInit() {
-    this.loadTrustedKeys();
     setInterval(() => this.cleanup(), 30_000).unref();
   }
 
@@ -110,11 +101,12 @@ export class LauncherService implements OnModuleInit {
     };
   }
 
-  createSession(
+  async createSession(
     input: {
       challengeId: string;
       clientPublicKey: string;
       signature: string;
+      installationId: string;
     },
     userAgent: string,
   ) {
@@ -122,13 +114,31 @@ export class LauncherService implements OnModuleInit {
       this.verifyChallengeSignature(input);
 
     const publicKeyHash = this.sha256(publicKeyBase64);
-    if (!this.trustedPublicKeyHashes.has(publicKeyHash)) {
+    const installationId = input.installationId.trim();
+    const trustedDevice = await this.prisma.launcherTrustedDevice.findUnique({
+      where: { installationId },
+    });
+
+    if (!trustedDevice || trustedDevice.revokedAt) {
       throw new UnauthorizedException(
         'Launcher installation is not trusted. Enroll this installation first.',
       );
     }
 
+    if (trustedDevice.publicKeyHash !== publicKeyHash) {
+      throw new UnauthorizedException(
+        'Launcher key mismatch for this installation. Re-enroll this installation.',
+      );
+    }
+
     challenge.consumed = true;
+
+    await this.prisma.launcherTrustedDevice.update({
+      where: { installationId },
+      data: {
+        lastSeenAt: new Date(),
+      },
+    });
 
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.sha256(token);
@@ -142,6 +152,7 @@ export class LauncherService implements OnModuleInit {
     this.sessions.set(tokenHash, {
       tokenId,
       tokenHash,
+      installationId,
       publicKey: publicKeyBytes,
       userAgentHash: this.sha256(normalizedUserAgent),
       expiresAt,
@@ -157,29 +168,100 @@ export class LauncherService implements OnModuleInit {
     };
   }
 
-  enrollInstallation(input: {
+  async enrollInstallation(input: {
     challengeId: string;
     clientPublicKey: string;
     signature: string;
     installCode?: string;
+    installationId: string;
   }) {
     const { challenge, publicKeyBase64 } = this.verifyChallengeSignature(input);
+    const installationId = input.installationId.trim();
     const publicKeyHash = this.sha256(publicKeyBase64);
+    const now = new Date();
 
-    if (this.trustedPublicKeyHashes.has(publicKeyHash)) {
+    const existing = await this.prisma.launcherTrustedDevice.findUnique({
+      where: { installationId },
+    });
+
+    if (existing && existing.revokedAt) {
+      throw new UnauthorizedException('Launcher installation is revoked');
+    }
+
+    if (existing && existing.publicKeyHash === publicKeyHash) {
+      await this.prisma.launcherTrustedDevice.update({
+        where: { installationId },
+        data: {
+          lastSeenAt: now,
+        },
+      });
       challenge.consumed = true;
       return { trusted: true, alreadyTrusted: true };
     }
 
+    if (existing) {
+      await this.prisma.launcherTrustedDevice.update({
+        where: { installationId },
+        data: {
+          publicKeyHash,
+          publicKeyBase64,
+          rotatedAt: now,
+          lastSeenAt: now,
+        },
+      });
+      challenge.consumed = true;
+      return { trusted: true, rotated: true };
+    }
+
+    const activeTrustedDevices = await this.prisma.launcherTrustedDevice.count({
+      where: {
+        revokedAt: null,
+      },
+    });
+
     if (!this.installCodeHash) {
-      if (this.trustedPublicKeyHashes.size === 0) {
-        this.trustedPublicKeyHashes.add(publicKeyHash);
-        this.persistTrustedKeys();
+      if (activeTrustedDevices === 0) {
+        await this.prisma.launcherTrustedDevice.create({
+          data: {
+            id: randomBytes(12).toString('hex'),
+            installationId,
+            publicKeyHash,
+            publicKeyBase64,
+            trustedAt: now,
+            lastSeenAt: now,
+          },
+        });
         challenge.consumed = true;
         return {
           trusted: true,
           bootstrapTrusted: true,
         };
+      }
+
+      if (activeTrustedDevices === 1) {
+        const current = await this.prisma.launcherTrustedDevice.findFirst({
+          where: { revokedAt: null },
+          orderBy: { updatedAt: 'desc' },
+        });
+
+        if (current) {
+          await this.prisma.launcherTrustedDevice.update({
+            where: { id: current.id },
+            data: {
+              installationId,
+              publicKeyHash,
+              publicKeyBase64,
+              rotatedAt: now,
+              lastSeenAt: now,
+            },
+          });
+          challenge.consumed = true;
+          return {
+            trusted: true,
+            rotated: true,
+            reinstallRecovered: true,
+          };
+        }
       }
 
       throw new UnauthorizedException(
@@ -192,8 +274,16 @@ export class LauncherService implements OnModuleInit {
       throw new UnauthorizedException('Invalid launcher install code');
     }
 
-    this.trustedPublicKeyHashes.add(publicKeyHash);
-    this.persistTrustedKeys();
+    await this.prisma.launcherTrustedDevice.create({
+      data: {
+        id: randomBytes(12).toString('hex'),
+        installationId,
+        publicKeyHash,
+        publicKeyBase64,
+        trustedAt: now,
+        lastSeenAt: now,
+      },
+    });
     challenge.consumed = true;
 
     return { trusted: true, newlyTrusted: true };
@@ -403,90 +493,6 @@ export class LauncherService implements OnModuleInit {
 
   private stableStringify(value: unknown): string {
     return JSON.stringify(this.normalize(value));
-  }
-
-  private loadTrustedKeys() {
-    const configured =
-      this.config.get<string>('LAUNCHER_TRUSTED_PUBLIC_KEYS')?.trim() ?? '';
-
-    if (configured) {
-      for (const raw of configured.split(',')) {
-        const key = raw.trim();
-        if (!key) {
-          continue;
-        }
-        try {
-          const bytes = this.base64ToBytes(key, 'public key');
-          if (bytes.length !== 32) {
-            continue;
-          }
-          this.trustedPublicKeyHashes.add(
-            this.sha256(this.bytesToBase64(bytes)),
-          );
-        } catch {
-          continue;
-        }
-      }
-    }
-
-    try {
-      const raw = readFileSync(this.trustStorePath, 'utf8');
-      const parsed = JSON.parse(raw) as {
-        trustedPublicKeyHashes?: unknown;
-        trustedPublicKeys?: unknown;
-      };
-      const hashEntries = Array.isArray(parsed.trustedPublicKeyHashes)
-        ? parsed.trustedPublicKeyHashes
-        : [];
-      for (const entry of hashEntries) {
-        if (typeof entry === 'string' && entry.trim()) {
-          this.trustedPublicKeyHashes.add(entry.trim());
-        }
-      }
-
-      const entries = Array.isArray(parsed.trustedPublicKeys)
-        ? parsed.trustedPublicKeys
-        : [];
-
-      for (const value of entries) {
-        if (typeof value !== 'string') {
-          continue;
-        }
-        try {
-          const bytes = this.base64ToBytes(value, 'public key');
-          if (bytes.length !== 32) {
-            continue;
-          }
-          this.trustedPublicKeyHashes.add(
-            this.sha256(this.bytesToBase64(bytes)),
-          );
-        } catch {
-          continue;
-        }
-      }
-    } catch {
-      return;
-    }
-  }
-
-  private persistTrustedKeys() {
-    try {
-      const dir = dirname(this.trustStorePath);
-      mkdirSync(dir, { recursive: true });
-
-      const payload = {
-        trustedPublicKeyHashes: Array.from(
-          this.trustedPublicKeyHashes.values(),
-        ),
-        updatedAt: new Date().toISOString(),
-      };
-
-      writeFileSync(this.trustStorePath, JSON.stringify(payload, null, 2), {
-        encoding: 'utf8',
-      });
-    } catch {
-      throw new UnauthorizedException('Failed to persist launcher trust store');
-    }
   }
 
   private normalize(value: unknown): unknown {

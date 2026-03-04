@@ -106,3 +106,19 @@ model ExarotonIntegration {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
+
+model LauncherTrustedDevice {
+  id            String   @id
+  installationId String  @unique
+  publicKeyHash String
+  publicKeyBase64 String
+  lastSeenAt    DateTime?
+  trustedAt     DateTime @default(now())
+  rotatedAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([revokedAt])
+  @@index([publicKeyHash])
+}
