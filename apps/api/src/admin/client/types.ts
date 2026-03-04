@@ -98,9 +98,13 @@ export type BootstrapPayload = {
     serverName?: string | null;
     serverAddress?: string | null;
     profileId?: string | null;
+    minecraftVersion?: string | null;
+    loaderVersion?: string | null;
+    mods?: AdminMod[] | null;
     fancyMenu?: Partial<FancyMenuPayload> | null;
     branding?: BrandingPayload | null;
   } | null;
+  hasSavedDraft: boolean;
   exaroton: ExarotonStatusPayload;
 };
 
@@ -210,6 +214,10 @@ export type ExarotonSelectPayload = {
 export type ExarotonActionPayload = {
   success: boolean;
   action: 'start' | 'stop' | 'restart';
+  selectedServer: ExarotonServerPayload;
+};
+
+export type ExarotonStreamStatusPayload = {
   selectedServer: ExarotonServerPayload;
 };
 

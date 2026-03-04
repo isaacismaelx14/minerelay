@@ -1,6 +1,8 @@
 import { BadGatewayException, UnauthorizedException } from '@nestjs/common';
+import { WebSocket } from 'ws';
 
 const EXAROTON_API_BASE = 'https://api.exaroton.com/v1';
+const EXAROTON_WS_BASE = 'wss://api.exaroton.com/v1';
 const EXAROTON_USER_AGENT = 'mvl-admin-mvp/0.2.0';
 
 type ExarotonEnvelope<T> = {
@@ -35,6 +37,12 @@ export type ExarotonServer = {
     version: string;
   } | null;
   shared: boolean;
+};
+
+type ExarotonWebSocketMessage = {
+  type?: string;
+  stream?: string;
+  data?: unknown;
 };
 
 export class ExarotonApiClient {
@@ -73,6 +81,80 @@ export class ExarotonApiClient {
       token,
       `/servers/${encodeURIComponent(serverId.trim())}/restart`,
     );
+  }
+
+  openServerStatusStream(
+    token: string,
+    serverId: string,
+    handlers: {
+      onStatus: (server: ExarotonServer) => void;
+      onError: (message: string) => void;
+      onClose?: () => void;
+    },
+  ): () => void {
+    const authToken = token.trim();
+    const cleanServerId = serverId.trim();
+    if (!authToken) {
+      throw new UnauthorizedException('Exaroton API key is missing');
+    }
+    if (!cleanServerId) {
+      throw new UnauthorizedException('Exaroton server ID is missing');
+    }
+
+    const socket = new WebSocket(
+      `${EXAROTON_WS_BASE}/servers/${encodeURIComponent(cleanServerId)}/websocket`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'User-Agent': EXAROTON_USER_AGENT,
+        },
+      },
+    );
+
+    const close = () => {
+      try {
+        socket.close();
+      } catch {
+        // no-op
+      }
+    };
+
+    socket.on('message', (raw) => {
+      let message: ExarotonWebSocketMessage | null = null;
+      try {
+        message = JSON.parse(raw.toString()) as ExarotonWebSocketMessage;
+      } catch {
+        return;
+      }
+
+      if (
+        message?.stream === 'status' &&
+        message.type === 'status' &&
+        message.data &&
+        typeof message.data === 'object'
+      ) {
+        handlers.onStatus(message.data as ExarotonServer);
+        return;
+      }
+
+      if (message?.type === 'disconnected') {
+        const reason =
+          typeof message.data === 'string' && message.data.trim().length > 0
+            ? message.data.trim()
+            : 'unknown reason';
+        handlers.onError(`Exaroton stream disconnected: ${reason}`);
+      }
+    });
+
+    socket.on('error', () => {
+      handlers.onError('Exaroton stream connection failed');
+    });
+
+    socket.on('close', () => {
+      handlers.onClose?.();
+    });
+
+    return close;
   }
 
   /** For action endpoints (start/stop/restart) that return data: null on success */

@@ -294,6 +294,7 @@ export class AdminService implements OnModuleInit {
       },
       appSettings: settings,
       draft,
+      hasSavedDraft: settings.publishDraft !== null,
       exaroton,
     };
   }
@@ -582,6 +583,47 @@ export class AdminService implements OnModuleInit {
       action,
       selectedServer: this.mapExarotonServer(selectedServer),
     };
+  }
+
+  async openExarotonStatusStream(handlers: {
+    onStatus: (server: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    }) => void;
+    onError: (message: string) => void;
+  }): Promise<() => void> {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    const initial = await this.exarotonClient.getServer(apiKey, selectedServerId);
+    handlers.onStatus(this.mapExarotonServer(initial));
+
+    const close = this.exarotonClient.openServerStatusStream(
+      apiKey,
+      selectedServerId,
+      {
+        onStatus: (server) => {
+          if (server.id !== selectedServerId) {
+            return;
+          }
+          handlers.onStatus(this.mapExarotonServer(server));
+        },
+        onError: handlers.onError,
+      },
+    );
+
+    return close;
   }
 
   async getFabricVersions(minecraftVersion: string) {
@@ -957,6 +999,7 @@ export class AdminService implements OnModuleInit {
           releaseMinor: nextSemver.minor,
           releasePatch: nextSemver.patch,
           supportedMinecraftVersions: allowedVersions,
+          publishDraft: Prisma.DbNull,
         },
       });
 

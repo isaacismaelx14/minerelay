@@ -22,6 +22,7 @@ import type {
   ExarotonSelectPayload,
   ExarotonServerPayload,
   ExarotonServersPayload,
+  ExarotonStreamStatusPayload,
   ExarotonStatusPayload,
   FabricVersionsPayload,
   FancyMenuPayload,
@@ -139,6 +140,7 @@ type AdminContextValue = {
   exaroton: ExarotonState;
   sessionState: 'pending' | 'active';
   hasPendingPublish: boolean;
+  hasSavedDraft: boolean;
   rail: RailState;
   isBusy: {
     bootstrap: boolean;
@@ -439,7 +441,9 @@ function mapStatusToExarotonState(
 ): ExarotonState {
   const nextStep = payload.connected
     ? payload.selectedServer
-      ? 'success'
+      ? previous?.connectionStep === 'success'
+        ? 'success'
+        : 'idle'
       : 'servers'
     : previous?.connectionStep === 'key'
       ? 'key'
@@ -547,10 +551,12 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
   );
   const [statuses, setStatuses] = useState<StatusState>(DEFAULT_STATUS);
   const [exaroton, setExaroton] = useState<ExarotonState>(DEFAULT_EXAROTON);
+  const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const [busyBootstrap, setBusyBootstrap] = useState(false);
   const [busySearch, setBusySearch] = useState(false);
   const [busyPublish, setBusyPublish] = useState(false);
   const [busyInstall, setBusyInstall] = useState(false);
+  const [snapshotTick, setSnapshotTick] = useState(0);
   const hasBootstrappedRef = useRef(false);
   const latestProfileModsRef = useRef<AdminMod[]>([]);
   const latestProfileRuntimeRef = useRef({
@@ -735,7 +741,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
           ...current,
           busy: false,
           selectedServer: payload.selectedServer,
-          connectionStep: 'success',
+          connectionStep: current.selectedServer ? 'idle' : 'success',
         }));
         setStatus('exaroton', 'Server selected.', 'ok');
       } catch (error) {
@@ -785,6 +791,64 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     },
     [setStatus],
   );
+
+  useEffect(() => {
+    if (!exaroton.connected || !exaroton.selectedServer?.id) {
+      return;
+    }
+
+    const stream = new EventSource('/v1/admin/exaroton/server/stream');
+
+    const onStatus = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      try {
+        const payload = JSON.parse(
+          message.data,
+        ) as ExarotonStreamStatusPayload;
+        const next = payload.selectedServer;
+        if (!next?.id) {
+          return;
+        }
+        setExaroton((current) => ({
+          ...current,
+          selectedServer: next,
+          servers: current.servers.map((server) =>
+            server.id === next.id ? next : server,
+          ),
+          error: '',
+        }));
+      } catch {
+        // ignore malformed stream payloads
+      }
+    };
+
+    const onStreamError = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      let text = 'Exaroton stream error.';
+      try {
+        const payload = JSON.parse(message.data) as { message?: string };
+        if (payload?.message?.trim()) {
+          text = payload.message.trim();
+        }
+      } catch {
+        // fallback message
+      }
+      setExaroton((current) => ({ ...current, error: text }));
+      setStatus('exaroton', text, 'error');
+    };
+
+    stream.addEventListener('status', onStatus as EventListener);
+    stream.addEventListener('stream-error', onStreamError as EventListener);
+
+    return () => {
+      stream.removeEventListener('status', onStatus as EventListener);
+      stream.removeEventListener(
+        'stream-error',
+        onStreamError as EventListener,
+      );
+      stream.close();
+    };
+  }, [exaroton.connected, exaroton.selectedServer?.id, setStatus]);
 
   const setTextFieldFromEvent = useCallback(
     (
@@ -961,6 +1025,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       };
       lastFancyEnabledRef.current = nextForm.fancyMenuEnabled;
       setSessionState('active');
+      setHasSavedDraft(payload.hasSavedDraft ?? payload.draft !== null);
       setStatus('bootstrap', 'Bootstrap loaded.', 'ok');
       await loadFabricVersions(nextForm.minecraftVersion);
       const syncedMods = await ensureCoreMods(
@@ -987,6 +1052,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         collectFancyMenuPayload,
         collectBrandingPayload,
       );
+      setSnapshotTick((current) => current + 1);
     } catch (error) {
       setStatus(
         'bootstrap',
@@ -1263,13 +1329,13 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         setStatus('mods', 'This core mod cannot be removed.', 'error');
         return;
       }
-      setSelectedMods((current) =>
-        current.filter((entry) => {
-          if (projectId && entry.projectId === projectId) return false;
-          if (sha256 && entry.sha256 === sha256) return false;
-          return true;
-        }),
-      );
+      const nextMods = selectedModsRef.current.filter((entry) => {
+        if (projectId && entry.projectId === projectId) return false;
+        if (sha256 && entry.sha256 === sha256) return false;
+        return true;
+      });
+      selectedModsRef.current = nextMods;
+      setSelectedMods(nextMods);
       setStatus('mods', 'Mod removed.', 'ok');
     },
     [coreModPolicy, form.fancyMenuEnabled, setStatus],
@@ -1454,6 +1520,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
         currentReleaseVersion:
           payload.releaseVersion ?? current.currentReleaseVersion,
       }));
+      setHasSavedDraft(true);
       setStatus('draft', 'Draft saved.', 'ok');
     } catch (error) {
       setStatus(
@@ -1525,13 +1592,21 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       }));
       latestProfileModsRef.current = [...synced];
       latestProfileRuntimeRef.current = { minecraftVersion, loaderVersion };
+      const updatedForm: FormState = {
+        ...form,
+        currentVersion: published.version,
+        currentReleaseVersion:
+          published.releaseVersion || form.currentReleaseVersion,
+      };
       lastPublishedSnapshotRef.current = buildPublishSnapshot(
-        form,
+        updatedForm,
         synced,
         collectFancyMenuPayload,
         collectBrandingPayload,
       );
+      setSnapshotTick((current) => current + 1);
 
+      setHasSavedDraft(false);
       setStatus(
         'publish',
         `Published ${published.releaseVersion || `v${published.version}`} (${published.bumpType || 'patch'}, +${published.summary.add} / ~${published.summary.update} / -${published.summary.remove}).`,
@@ -1697,6 +1772,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
     collectBrandingPayload,
     collectFancyMenuPayload,
     form,
+    snapshotTick,
     selectedMods,
     sessionState,
   ]);
@@ -1760,6 +1836,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       exaroton,
       sessionState,
       hasPendingPublish,
+      hasSavedDraft,
       rail,
       summaryStats,
       isBusy: {
@@ -1826,6 +1903,7 @@ export function AdminProvider({ children }: PropsWithChildren): ReactElement {
       exarotonAction,
       form,
       hasPendingPublish,
+      hasSavedDraft,
       listExarotonServers,
       loadFabricVersions,
       loadModVersions,

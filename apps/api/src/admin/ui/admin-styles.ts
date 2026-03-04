@@ -399,6 +399,39 @@ export const ADMIN_STYLES = `
     align-items: center;
   }
 
+  .publish-reminder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .requires-publish {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #f97316;
+    background: rgba(249, 115, 22, 0.12);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    border-radius: 6px;
+    padding: 3px 10px;
+    white-space: nowrap;
+  }
+
+  .draft-pending {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #eab308;
+    background: rgba(234, 179, 8, 0.12);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 6px;
+    padding: 3px 10px;
+    white-space: nowrap;
+  }
+
+  .publish-clean {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
   /* Panels & Cards */
   .panel {
     background: var(--bg-card);

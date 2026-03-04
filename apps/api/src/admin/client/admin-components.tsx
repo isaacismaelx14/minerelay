@@ -789,7 +789,10 @@ const ServersPage = memo(function ServersPage() {
                     <h3>Selected Server</h3>
                     <button
                       className="btn ghost"
-                      onClick={() => void actions.listExarotonServers()}
+                      onClick={() => {
+                        actions.setExarotonStep('servers');
+                        void actions.listExarotonServers();
+                      }}
                     >
                       Change Server
                     </button>
@@ -937,6 +940,7 @@ const TopBar = memo(function TopBar() {
     sessionState,
     selectedMods,
     hasPendingPublish,
+    hasSavedDraft,
     isBusy,
     actions,
     statuses,
@@ -947,7 +951,7 @@ const TopBar = memo(function TopBar() {
       <div className="topbar-meta">
         <ExarotonWidget />
         <div className="session-info">
-          Authenticated Session <b>{sessionState}</b>
+          <b>{sessionState}</b>
           <span className="meta">Mods: {selectedMods.length}</span>
         </div>
       </div>
@@ -959,9 +963,13 @@ const TopBar = memo(function TopBar() {
         >
           Save Draft
         </button>
-        {hasPendingPublish ? (
+        {hasPendingPublish || hasSavedDraft ? (
           <div className="publish-reminder">
-            <span className="requires-publish">Requires Publish</span>
+            {hasPendingPublish ? (
+              <span className="requires-publish">Requires Publish</span>
+            ) : (
+              <span className="draft-pending">Draft pending</span>
+            )}
             <button
               className="btn"
               type="button"
@@ -2117,6 +2125,7 @@ const ModManagerPage = memo(function ModManagerPage() {
               onClick={() => {
                 actions.removeMod(removeTarget.projectId, removeTarget.sha256);
                 setRemoveTarget(null);
+                void actions.saveDraft();
               }}
             >
               Confirm Remove

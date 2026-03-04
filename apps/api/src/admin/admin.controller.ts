@@ -155,6 +155,52 @@ export class AdminController {
     return this.adminService.exarotonServerAction(payload.action);
   }
 
+  @Get('/v1/admin/exaroton/server/stream')
+  async exarotonServerStream(@Req() req: Request, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closeUpstream: (() => void) | null = null;
+    const heartbeat = setInterval(() => {
+      send('ping', { ts: Date.now() });
+    }, 15000);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      if (closeUpstream) {
+        closeUpstream();
+        closeUpstream = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    req.on('close', cleanup);
+
+    try {
+      closeUpstream = await this.adminService.openExarotonStatusStream({
+        onStatus: (server) => send('status', { selectedServer: server }),
+        onError: (message) => send('stream-error', { message }),
+      });
+      send('ready', { ok: true });
+    } catch (error) {
+      send('stream-error', {
+        message:
+          (error as Error).message || 'Failed to open Exaroton status stream',
+      });
+      cleanup();
+    }
+  }
+
   @Get('/v1/admin/fabric/versions')
   getFabricVersions(@Query('minecraftVersion') minecraftVersion = ''): Promise<{
     minecraftVersion: string;
