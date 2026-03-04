@@ -9,7 +9,10 @@ import * as yauzl from "yauzl";
 
 const PORT = Number.parseInt(process.env.PORT || "3210", 10) || 3210;
 const API_KEY = process.env.FANCYMENU_SANDBOX_API_KEY || "sandbox-dev-key";
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_UPLOAD_BYTES =
+  Number.parseInt(process.env.FANCYMENU_SANDBOX_MAX_UPLOAD_MB || "10", 10) *
+  1024 *
+  1024;
 const MAX_ENTRIES = 2000;
 const MAX_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
 const MAX_TEXT_FILE_BYTES = 1024 * 1024;

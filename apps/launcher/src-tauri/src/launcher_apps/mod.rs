@@ -1,3 +1,5 @@
+use crate::{instance::{InstancePaths, ensure_layout, load_local_lock, resolve_launcher_minecraft_root}, utils::*};
+use std::sync::Arc;
 use std::{
   fs,
   path::{Path, PathBuf},
@@ -168,12 +170,6 @@ pub fn pick_manual_launcher_path() -> Option<String> {
 
   #[cfg(target_os = "macos")]
   {
-    if let Some(app_path) = rfd::FileDialog::new().set_directory("/Applications").pick_folder() {
-      if app_path.extension().and_then(|ext| ext.to_str()) == Some("app") {
-        return Some(app_path.to_string_lossy().to_string());
-      }
-    }
-
     return rfd::FileDialog::new()
       .set_directory("/Applications")
       .pick_file()
@@ -210,15 +206,15 @@ pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]
   })
 }
 
-pub fn bootstrap_prism_instance(lock: &ProfileLock, minecraft_dir: &Path) -> LauncherResult<LauncherBootstrapResult> {
+pub async fn bootstrap_prism_instance(state: &crate::state::AppState, lock: &ProfileLock) -> LauncherResult<LauncherBootstrapResult> {
   let prism_root = prism_root_dir()?;
   let instances_root = prism_root.join("instances");
   fs::create_dir_all(&instances_root)?;
 
-  let instance_name = server_release_name(lock);
-  let instance_key = server_release_key(lock);
+  let instance_name = lock.branding.server_name.clone();
+  let instance_key = slugify(&lock.branding.server_name);
 
-  let instance_dir = instances_root.join(instance_key);
+  let instance_dir = instances_root.join(&instance_key);
   fs::create_dir_all(&instance_dir)?;
 
   let loader_component = build_loader_component(lock)?;
@@ -241,17 +237,36 @@ pub fn bootstrap_prism_instance(lock: &ProfileLock, minecraft_dir: &Path) -> Lau
       .map_err(|error| LauncherError::InvalidData(format!("failed to serialize mmc-pack.json: {error}")))?,
   )?;
 
-  let game_dir = minecraft_dir.to_string_lossy().to_string();
   let cfg = format!(
-    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\nOverrideGameDir=true\nGameDir={game_dir}\n"
+    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n"
   );
   fs::write(instance_dir.join("instance.cfg"), cfg)?;
+
+  #[cfg(target_os = "macos")]
+  let minecraft_folder = "minecraft";
+  #[cfg(not(target_os = "macos"))]
+  let minecraft_folder = ".minecraft";
+  
+  let minecraft_dir = instance_dir.join(minecraft_folder);
+  let icon_path = minecraft_dir.join("icon.png");
+
+  if let Some(logo_url) = lock.branding.logo_url.as_deref() {
+    let client = state.http.clone();
+    if let Ok(response) = client.get(logo_url).send().await {
+      if response.status().is_success() {
+        if let Ok(bytes) = response.bytes().await {
+          let _ = fs::create_dir_all(&minecraft_dir);
+          let _ = fs::write(&icon_path, bytes);
+        }
+      }
+    }
+  }
 
   Ok(LauncherBootstrapResult {
     launcher_id: "prism".to_string(),
     instance_name,
     instance_path: Some(instance_dir.to_string_lossy().to_string()),
-    message: "Prism instance created/updated and linked to your live Minecraft game directory.".to_string(),
+    message: "Prism instance created/updated.".to_string(),
   })
 }
 
@@ -422,7 +437,7 @@ fn validate_launcher_path(path: &str) -> LauncherResult<PathBuf> {
   Ok(candidate)
 }
 
-fn prism_root_dir() -> LauncherResult<PathBuf> {
+pub fn prism_root_dir() -> LauncherResult<PathBuf> {
   let config_dir = dirs::config_dir()
     .ok_or_else(|| LauncherError::Fs("failed to resolve user config directory for Prism".to_string()))?;
 
@@ -541,7 +556,7 @@ fn upsert_official_launcher_profile(
   Ok(())
 }
 
-fn slugify(input: &str) -> String {
+pub fn slugify(input: &str) -> String {
   let mut out = String::with_capacity(input.len());
 
   for ch in input.chars() {
@@ -555,4 +570,147 @@ fn slugify(input: &str) -> String {
   }
 
   out.trim_matches('-').to_string()
+}
+
+pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::state::AppState>, server_id: &str) -> Result<crate::types::OpenLauncherResponse, String> {
+
+  let settings = state.settings.lock().clone();
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected_id = selected_launcher_id(&settings, &detected);
+  let selected_launcher = selected_id
+    .clone()
+    .unwrap_or_else(|| "unknown".to_string());
+  let effective_server = effective_server_id(state.as_ref(), server_id);
+  let (minecraft_root, _) = resolve_launcher_minecraft_root(&settings).map_err(|e| format!("{e}"))?;
+
+  let mut pending_bootstrap: Option<LauncherBootstrapResult> = None;
+
+  if selected_id.as_deref() == Some("prism") || selected_id.as_deref() == Some("official") {
+    let mut paths = InstancePaths::new(
+      &state.config,
+      &effective_server,
+      &settings.install_mode,
+      settings.minecraft_root_override.as_deref(),
+    )
+    .map_err(|e| format!("{e}"))?;
+
+    let lock = load_local_lock(&paths)
+      .map_err(|e| format!("{e}"))?
+      .or(crate::profile::fetch_remote_lock(state.as_ref(), &effective_server).await.ok());
+
+    if selected_id.as_deref() == Some("prism") {
+      if let Some(ref l) = lock {
+        let _ = paths.apply_prism(l);
+      }
+    }
+
+    ensure_layout(&paths).map_err(|e| format!("{e}"))?;
+
+    if let Some(remote) = lock.as_ref() {
+      if remote.loader == "fabric" {
+        let _ = crate::runtime::ensure_fabric_runtime(
+          state.as_ref(),
+          &minecraft_root,
+          &remote.minecraft_version,
+          &remote.loader_version,
+        )
+        .await
+        .map_err(|e| format!("{e}"))?;
+      }
+    }
+
+    pending_bootstrap = Some(match (selected_id.as_deref(), lock) {
+      (Some("prism"), Some(lock)) => {
+        crate::launcher_apps::bootstrap_prism_instance(&state, &lock).await.map_err(|e| format!("{e}"))?
+      }
+      (Some("official"), Some(lock)) => crate::launcher_apps::bootstrap_official_version(
+        &lock,
+        &minecraft_root,
+        &minecraft_root,
+      )
+      .map_err(|e| format!("{e}"))?,
+      (Some(id), None::<crate::types::ProfileLock>) => LauncherBootstrapResult {
+        launcher_id: id.to_string(),
+        instance_name: "Not created".to_string(),
+        instance_path: None,
+        message: "Sync profile first so launcher bootstrap can be generated.".to_string(),
+      },
+      _ => LauncherBootstrapResult {
+        launcher_id: "unknown".to_string(),
+        instance_name: "Not created".to_string(),
+        instance_path: None,
+        message: "Launcher bootstrap skipped.".to_string(),
+      },
+    });
+  }
+
+  let paths = InstancePaths::new(
+    &state.config,
+    &effective_server,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )
+  .map_err(|e| format!("{e}"))?;
+  
+  let live_mc_dir = if selected_id.as_deref() == Some("prism") {
+    let mut modified_paths = paths.clone();
+    let lock = load_local_lock(&paths)
+      .map_err(|e| format!("{e}"))?
+      .or(crate::profile::fetch_remote_lock(state.as_ref(), &effective_server).await.ok());
+    
+    if let Some(ref l) = lock {
+      let _ = modified_paths.apply_prism(l);
+    }
+    modified_paths.minecraft_dir
+  } else {
+    minecraft_root.clone()
+  };
+
+  let session = crate::session::start_or_get_session(
+    app,
+    Arc::clone(&state),
+    &effective_server,
+    &selected_launcher,
+    &live_mc_dir,
+  )
+  .await
+  .map_err(|e| format!("{e}"))?;
+
+  let mut response = match crate::launcher_apps::open_from_settings(&settings, &detected) {
+    Ok(value) => value,
+    Err(error) => {
+      let _ = crate::session::restore_active_session(app, Arc::clone(&state)).await;
+      return Err(error.to_string());
+    }
+  };
+  response.bootstrap = pending_bootstrap;
+  response.session = Some(session.clone());
+
+  if !response.opened {
+    let _ = crate::session::restore_active_session(app, Arc::clone(&state)).await;
+    response.session = Some(crate::session::get_status(state.as_ref()));
+  }
+
+  Ok(response)
+
+}
+
+pub fn selected_launcher_id(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
+  if let Some(id) = settings.selected_launcher_id.as_deref() {
+    return Some(id.to_string());
+  }
+
+  if detected.iter().any(|candidate| candidate.id == "official") {
+    return Some("official".to_string());
+  }
+
+  detected.first().map(|candidate| candidate.id.clone())
+}
+
+pub fn managed_version_exists(minecraft_root: &Path, version_id: &str) -> bool {
+  minecraft_root
+    .join("versions")
+    .join(version_id)
+    .join(format!("{version_id}.json"))
+    .exists()
 }

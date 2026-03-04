@@ -19,6 +19,8 @@ export const LockItemSchema = BaseFileSchema.extend({
   side: SideSchema,
   projectId: z.string().min(1).optional(),
   versionId: z.string().min(1).optional(),
+  iconUrl: z.string().url().optional(),
+  slug: z.string().min(1).optional(),
 });
 export type LockItem = z.infer<typeof LockItemSchema>;
 

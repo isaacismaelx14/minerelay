@@ -1,5 +1,7 @@
 import {
   BadGatewayException,
+  BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   OnModuleInit,
@@ -8,9 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { basename, extname, resolve } from 'node:path';
+import { extname } from 'node:path';
 import {
   BrandingSchema,
   FancyMenuSettingsSchema,
@@ -22,22 +22,24 @@ import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
 import {
-  BuildFancyMenuPreviewDto,
+  decryptExarotonApiKey,
+  encryptExarotonApiKey,
+} from './crypto/exaroton-crypto';
+import {
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
   SaveDraftDto,
+  UpdateExarotonSettingsDto,
   UpdateSettingsDto,
 } from './admin.dto';
-import {
-  BundleSandboxClient,
-  SandboxPreviewResponse,
-} from './bundle-sandbox.client';
+import { BundleSandboxClient } from './bundle-sandbox.client';
 import { CoreModPolicyService, ManagedMod } from './core-mod-policy.service';
+import { ArtifactsStorageService } from '../artifacts/artifacts-storage.service';
 import {
-  FancyPreviewAssemblerService,
-  FancyPreviewModel,
-} from './fancy-preview-assembler.service';
+  ExarotonApiClient,
+  ExarotonServer,
+} from './exaroton/exaroton-api.client';
 
 import { AdminAuthService } from './auth/admin-auth.service';
 import {
@@ -48,21 +50,96 @@ import {
 
 const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
+const EXAROTON_INTEGRATION_ID = 'global';
+const EXAROTON_MODS_SYNC_STATE_PATH = 'mods/.mss-sync.json';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
-const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 50 * 1024 * 1024;
+const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+type ExarotonModsSyncSummary = {
+  add: number;
+  remove: number;
+  keep: number;
+};
+
+type ExarotonModsSyncResult = {
+  attempted: boolean;
+  success: boolean;
+  message: string;
+  summary: ExarotonModsSyncSummary;
+};
+
+type ExarotonSyncStateFile = {
+  version: 1;
+  syncedAt: string;
+  files: Array<{
+    filename: string;
+    sha256: string;
+    url?: string;
+    projectId?: string;
+    versionId?: string;
+  }>;
+};
+
+type PublishSummary = {
+  add: number;
+  remove: number;
+  update: number;
+  keep: number;
+};
+
+type ServerModDiffSummary = PublishSummary & {
+  hasChanges: boolean;
+};
+
+type PublishProfileResult = {
+  version: number;
+  releaseVersion: string;
+  bumpType: 'major' | 'minor' | 'patch';
+  lockUrl: string;
+  summary: PublishSummary;
+  serverModSummary: ServerModDiffSummary;
+  exarotonSync?: ExarotonModsSyncResult;
+};
+
+type PublishProgressStage =
+  | 'detecting-mod-changes'
+  | 'getting-mods'
+  | 'syncing-mods'
+  | 'done';
+
+type PublishProgressEvent = {
+  stage: PublishProgressStage;
+  message: string;
+};
+
+type PublishSession = {
+  createdAt: number;
+  done: boolean;
+  events: PublishProgressEvent[];
+  result: PublishProfileResult | null;
+  error: string | null;
+  listeners: Set<(event: { type: 'progress' | 'done' | 'error'; data: unknown }) => void>;
+};
 
 interface ModrinthSearchResponse {
   hits: Array<{
     project_id: string;
+    slug: string;
+    author: string;
     title: string;
     description: string;
+    categories?: string[];
+    icon_url?: string;
+    latest_version?: string;
   }>;
 }
 
 interface ModrinthProject {
   id: string;
+  slug: string;
   title: string;
+  icon_url?: string;
 }
 
 interface ModrinthDependency {
@@ -112,10 +189,12 @@ interface FancyMenuBundleValidation {
 export class AdminService implements OnModuleInit {
   private readonly modrinthApiBase = 'https://api.modrinth.com/v2';
   private readonly fabricMetaBase = 'https://meta.fabricmc.net';
+  private readonly publishSessionTtlMs = 15 * 60 * 1000;
   private readonly fabricCache = new Map<
     string,
     { expiresAt: number; value: FabricLoaderRow[] }
   >();
+  private readonly publishSessions = new Map<string, PublishSession>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -125,12 +204,14 @@ export class AdminService implements OnModuleInit {
     private readonly signing: SigningService,
     private readonly sandboxClient: BundleSandboxClient,
     private readonly coreModPolicy: CoreModPolicyService,
-    private readonly previewAssembler: FancyPreviewAssemblerService,
+    private readonly artifactsStorage: ArtifactsStorageService,
+    private readonly exarotonClient: ExarotonApiClient,
   ) {}
 
   async onModuleInit() {
     await this.ensureAppSettings();
     await this.ensureAdminCredential();
+    setInterval(() => this.cleanupPublishSessions(), 60_000).unref();
   }
 
   async login(password: string, request: Request, response: Response) {
@@ -209,13 +290,14 @@ export class AdminService implements OnModuleInit {
 
   async getBootstrap() {
     const serverId = this.getServerId();
-    const [server, latest, settings] = await Promise.all([
+    const [server, latest, settings, exaroton] = await Promise.all([
       this.prisma.server.findUnique({ where: { id: serverId } }),
       this.prisma.profileVersion.findFirst({
         where: { serverId },
         orderBy: { version: 'desc' },
       }),
       this.getAppSettings(),
+      this.getExarotonBootstrapState(),
     ]);
 
     if (!server || !latest) {
@@ -250,6 +332,12 @@ export class AdminService implements OnModuleInit {
       : null;
     const draft = this.extractDraft(settings.publishDraft);
 
+    const minecraftVersion = draft?.minecraftVersion || latest.minecraftVersion;
+    const loaderVersion = draft?.loaderVersion || latest.loaderVersion;
+    const mods = draft?.mods || normalizedMods;
+    const fancyMenu = draft?.fancyMenu || activeFancyMenu;
+    const branding = draft?.branding || lockBranding;
+
     return {
       server: {
         id: server.id,
@@ -266,18 +354,20 @@ export class AdminService implements OnModuleInit {
             minor: settings.releaseMinor,
             patch: settings.releasePatch,
           }),
-        minecraftVersion: latest.minecraftVersion,
+        minecraftVersion,
         loader: latest.loader,
-        loaderVersion: latest.loaderVersion,
-        mods: normalizedMods,
-        fancyMenu: activeFancyMenu,
+        loaderVersion,
+        mods,
+        fancyMenu,
         coreModPolicy: this.coreModPolicy.buildMetadata(
-          activeFancyMenu?.enabled === true,
+          fancyMenu?.enabled === true,
         ),
-        branding: lockBranding,
+        branding,
       },
       appSettings: settings,
       draft,
+      hasSavedDraft: settings.publishDraft !== null,
+      exaroton,
     };
   }
 
@@ -352,15 +442,25 @@ export class AdminService implements OnModuleInit {
     const serverName = input.serverName.trim();
     const serverAddress = input.serverAddress.trim();
     const profileId = input.profileId?.trim();
-
     const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
+    const minecraftVersion = input.minecraftVersion?.trim() || undefined;
+    const loaderVersion = input.loaderVersion?.trim() || undefined;
+    const mods = input.mods || undefined;
 
-    const branding = BrandingSchema.parse({
+    const rawBranding = {
       serverName,
       logoUrl: input.branding?.logoUrl?.trim() || undefined,
       backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
       newsUrl: input.branding?.newsUrl?.trim() || undefined,
-    });
+    };
+
+    const brandingParse = BrandingSchema.safeParse(rawBranding);
+    if (!brandingParse.success) {
+      throw new BadRequestException(
+        `Validation failed: ${brandingParse.error.message}`,
+      );
+    }
+    const branding = brandingParse.data;
 
     const setting = await this.prisma.appSetting.upsert({
       where: { id: APP_SETTING_ID },
@@ -375,6 +475,9 @@ export class AdminService implements OnModuleInit {
           serverName,
           serverAddress,
           profileId: profileId || null,
+          minecraftVersion,
+          loaderVersion,
+          mods,
           fancyMenu,
           branding,
         } as unknown as object,
@@ -384,6 +487,9 @@ export class AdminService implements OnModuleInit {
           serverName,
           serverAddress,
           profileId: profileId || null,
+          minecraftVersion,
+          loaderVersion,
+          mods,
           fancyMenu,
           branding,
         } as unknown as object,
@@ -406,6 +512,402 @@ export class AdminService implements OnModuleInit {
       }),
       draft,
     };
+  }
+
+  async connectExaroton(apiKey: string) {
+    const encryptionKey = this.requireExarotonEncryptionKey();
+    const cleanApiKey = apiKey.trim();
+    if (!cleanApiKey) {
+      throw new BadRequestException('Exaroton API key is required');
+    }
+
+    const [account, servers, existing] = await Promise.all([
+      this.exarotonClient.getAccount(cleanApiKey),
+      this.exarotonClient.listServers(cleanApiKey),
+      this.prisma.exarotonIntegration.findUnique({
+        where: { id: EXAROTON_INTEGRATION_ID },
+      }),
+    ]);
+
+    if (existing && existing.apiKeyCiphertext) {
+      throw new BadRequestException(
+        'An Exaroton account is already connected. Disconnect it first.',
+      );
+    }
+
+    const encrypted = encryptExarotonApiKey(cleanApiKey, encryptionKey);
+    const existingSettings = this.readExarotonSettings(existing);
+    const selected = existing?.selectedServerId
+      ? servers.find((entry: ExarotonServer) => entry.id === existing.selectedServerId) || null
+      : null;
+
+    await this.prisma.exarotonIntegration.upsert({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      create: ({
+        id: EXAROTON_INTEGRATION_ID,
+        apiKeyCiphertext: encrypted.ciphertext,
+        apiKeyIv: encrypted.iv,
+        apiKeyAuthTag: encrypted.authTag,
+        accountName: account.name,
+        accountEmail: account.email,
+        selectedServerId: selected?.id ?? null,
+        selectedServerName: selected?.name ?? null,
+        selectedServerAddress: selected?.address ?? null,
+        modsSyncEnabled: existingSettings.modsSyncEnabled,
+        playerCanViewStatus: existingSettings.playerCanViewStatus,
+        playerCanViewOnlinePlayers: existingSettings.playerCanViewOnlinePlayers,
+        playerCanModifyStatus: existingSettings.playerCanModifyStatus,
+        playerCanStartServer: existingSettings.playerCanStartServer,
+        playerCanStopServer: existingSettings.playerCanStopServer,
+        playerCanRestartServer: existingSettings.playerCanRestartServer,
+        connectedAt: new Date(),
+      } as unknown) as Prisma.ExarotonIntegrationCreateInput,
+      update: ({
+        apiKeyCiphertext: encrypted.ciphertext,
+        apiKeyIv: encrypted.iv,
+        apiKeyAuthTag: encrypted.authTag,
+        accountName: account.name,
+        accountEmail: account.email,
+        selectedServerId: selected?.id ?? null,
+        selectedServerName: selected?.name ?? null,
+        selectedServerAddress: selected?.address ?? null,
+        modsSyncEnabled: existingSettings.modsSyncEnabled,
+        playerCanViewStatus: existingSettings.playerCanViewStatus,
+        playerCanViewOnlinePlayers: existingSettings.playerCanViewOnlinePlayers,
+        playerCanModifyStatus: existingSettings.playerCanModifyStatus,
+        playerCanStartServer: existingSettings.playerCanStartServer,
+        playerCanStopServer: existingSettings.playerCanStopServer,
+        playerCanRestartServer: existingSettings.playerCanRestartServer,
+        connectedAt: new Date(),
+      } as unknown) as Prisma.ExarotonIntegrationUpdateInput,
+    });
+
+    return {
+      configured: true,
+      connected: true,
+      account,
+      servers: servers.map((entry: ExarotonServer) => this.mapExarotonServer(entry)),
+      selectedServer: selected ? this.mapExarotonServer(selected) : null,
+      settings: this.mapExarotonSettings(existingSettings),
+    };
+  }
+
+  async disconnectExaroton() {
+    await this.prisma.exarotonIntegration.deleteMany({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+
+    return { success: true };
+  }
+
+  async getExarotonStatus() {
+    return this.getExarotonBootstrapState();
+  }
+
+  async listExarotonServers() {
+    const { apiKey } = await this.requireExarotonConnection();
+    const servers = await this.exarotonClient.listServers(apiKey);
+    return {
+      servers: servers.map((entry) => this.mapExarotonServer(entry)),
+    };
+  }
+
+  async selectExarotonServer(serverId: string) {
+    const cleanServerId = serverId.trim();
+    if (!cleanServerId) {
+      throw new BadRequestException('Exaroton server ID is required');
+    }
+
+    const { apiKey } = await this.requireExarotonConnection();
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      cleanServerId,
+    );
+
+    await this.prisma.exarotonIntegration.update({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      data: {
+        selectedServerId: selectedServer.id,
+        selectedServerName: selectedServer.name,
+        selectedServerAddress: selectedServer.address,
+      },
+    });
+
+    return {
+      selectedServer: this.mapExarotonServer(selectedServer),
+    };
+  }
+
+  async exarotonServerAction(action: 'start' | 'stop' | 'restart') {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    if (action === 'start') {
+      await this.exarotonClient.startServer(apiKey, selectedServerId);
+    } else if (action === 'stop') {
+      await this.exarotonClient.stopServer(apiKey, selectedServerId);
+    } else {
+      await this.exarotonClient.restartServer(apiKey, selectedServerId);
+    }
+
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
+
+    await this.prisma.exarotonIntegration.update({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      data: {
+        selectedServerName: selectedServer.name,
+        selectedServerAddress: selectedServer.address,
+      },
+    });
+
+    return {
+      success: true,
+      action,
+      selectedServer: this.mapExarotonServer(selectedServer),
+    };
+  }
+
+  async updateExarotonSettings(input: UpdateExarotonSettingsDto) {
+    const integration = await this.prisma.exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+    if (!integration) {
+      throw new NotFoundException('Exaroton account is not connected');
+    }
+
+    const integrationSettings = this.readExarotonSettings(integration);
+    const baseStart = integrationSettings.playerCanStartServer;
+    const baseStop = integrationSettings.playerCanStopServer;
+    const baseRestart = integrationSettings.playerCanRestartServer;
+    const legacyModifyToggle = input.playerCanModifyStatus;
+
+    const nextPlayerCanStartServer =
+      input.playerCanStartServer ?? legacyModifyToggle ?? baseStart;
+    const nextPlayerCanStopServer =
+      input.playerCanStopServer ?? legacyModifyToggle ?? baseStop;
+    const nextPlayerCanRestartServer =
+      input.playerCanRestartServer ?? legacyModifyToggle ?? baseRestart;
+
+    const nextPlayerCanModifyStatus =
+      nextPlayerCanStartServer ||
+      nextPlayerCanStopServer ||
+      nextPlayerCanRestartServer;
+
+    const nextPlayerCanViewStatus = nextPlayerCanModifyStatus
+      ? true
+      : (input.playerCanViewStatus ?? integrationSettings.playerCanViewStatus);
+
+    const nextPlayerCanViewOnlinePlayers = nextPlayerCanViewStatus
+      ? (input.playerCanViewOnlinePlayers ??
+        integrationSettings.playerCanViewOnlinePlayers)
+      : false;
+
+    const updated = await this.prisma.exarotonIntegration.update({
+      where: { id: EXAROTON_INTEGRATION_ID },
+      data: ({
+        modsSyncEnabled: input.modsSyncEnabled ?? integrationSettings.modsSyncEnabled,
+        playerCanViewStatus: nextPlayerCanViewStatus,
+        playerCanViewOnlinePlayers: nextPlayerCanViewOnlinePlayers,
+        playerCanModifyStatus: nextPlayerCanModifyStatus,
+        playerCanStartServer: nextPlayerCanStartServer,
+        playerCanStopServer: nextPlayerCanStopServer,
+        playerCanRestartServer: nextPlayerCanRestartServer,
+      } as unknown) as Prisma.ExarotonIntegrationUpdateInput,
+    });
+
+    return {
+      settings: this.mapExarotonSettings(this.readExarotonSettings(updated)),
+    };
+  }
+
+  async syncExarotonModsNow(): Promise<ExarotonModsSyncResult> {
+    const serverId = this.getServerId();
+    const latest = await this.prisma.profileVersion.findFirst({
+      where: { serverId },
+      orderBy: { version: 'desc' },
+    });
+
+    if (!latest) {
+      throw new NotFoundException(`No profile version found for server '${serverId}'`);
+    }
+
+    const lock = ProfileLockSchema.parse(latest.lockJson);
+    return this.trySyncExarotonMods(lock);
+  }
+
+  async openExarotonStatusStream(handlers: {
+    onStatus: (server: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    }) => void;
+    onError: (message: string) => void;
+  }): Promise<() => void> {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    const initial = await this.exarotonClient.getServer(apiKey, selectedServerId);
+    handlers.onStatus(this.mapExarotonServer(initial));
+
+    const close = this.exarotonClient.openServerStatusStream(
+      apiKey,
+      selectedServerId,
+      {
+        onStatus: (server) => {
+          if (server.id !== selectedServerId) {
+            return;
+          }
+          handlers.onStatus(this.mapExarotonServer(server));
+        },
+        onError: handlers.onError,
+      },
+    );
+
+    return close;
+  }
+
+  async getLauncherPlayerServerStatus(): Promise<{
+    selectedServer: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    };
+    permissions: {
+      canViewStatus: boolean;
+      canViewOnlinePlayers: boolean;
+      canStartServer: boolean;
+      canStopServer: boolean;
+      canRestartServer: boolean;
+    };
+  }> {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    if (!integration.playerCanViewStatus) {
+      throw new ForbiddenException('Player status access is disabled');
+    }
+
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
+
+    return {
+      selectedServer: this.mapLauncherServerWithPlayerVisibility(
+        this.mapExarotonServer(selectedServer),
+        integration.playerCanViewOnlinePlayers,
+      ),
+      permissions: {
+        canViewStatus: integration.playerCanViewStatus,
+        canViewOnlinePlayers: integration.playerCanViewOnlinePlayers,
+        canStartServer: integration.playerCanStartServer,
+        canStopServer: integration.playerCanStopServer,
+        canRestartServer: integration.playerCanRestartServer,
+      },
+    };
+  }
+
+  async runLauncherPlayerServerAction(
+    action: 'start' | 'stop' | 'restart',
+  ): Promise<{
+    selectedServer: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    };
+    permissions: {
+      canViewStatus: boolean;
+      canViewOnlinePlayers: boolean;
+      canStartServer: boolean;
+      canStopServer: boolean;
+      canRestartServer: boolean;
+    };
+  }> {
+    const { apiKey, integration } = await this.requireExarotonConnection();
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      throw new BadRequestException('Select an Exaroton server first');
+    }
+
+    if (!integration.playerCanViewStatus) {
+      throw new ForbiddenException('Player status access is disabled');
+    }
+
+    if (action === 'start' && !integration.playerCanStartServer) {
+      throw new ForbiddenException('Player start server permission is disabled');
+    }
+    if (action === 'stop' && !integration.playerCanStopServer) {
+      throw new ForbiddenException('Player stop server permission is disabled');
+    }
+    if (action === 'restart' && !integration.playerCanRestartServer) {
+      throw new ForbiddenException('Player restart server permission is disabled');
+    }
+
+    await this.exarotonServerAction(action);
+    return this.getLauncherPlayerServerStatus();
+  }
+
+  async openLauncherPlayerStatusStream(handlers: {
+    onStatus: (server: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    }) => void;
+    onError: (message: string) => void;
+  }): Promise<() => void> {
+    const { integration } = await this.requireExarotonConnection();
+    if (!integration.playerCanViewStatus) {
+      throw new ForbiddenException('Player status access is disabled');
+    }
+
+    return this.openExarotonStatusStream({
+      onStatus: (server) => {
+        handlers.onStatus(
+          this.mapLauncherServerWithPlayerVisibility(
+            server,
+            integration.playerCanViewOnlinePlayers,
+          ),
+        );
+      },
+      onError: handlers.onError,
+    });
   }
 
   async getFabricVersions(minecraftVersion: string) {
@@ -468,17 +970,23 @@ export class AdminService implements OnModuleInit {
     const cleanQuery = query.trim();
     const cleanVersion = minecraftVersion.trim();
 
-    if (!cleanQuery) {
-      return [];
+    // For empty queries, use a simple search without version filter to get popular mods
+    const searchQuery = cleanQuery || '';
+    const searchIndex = cleanQuery ? 'relevance' : 'follows';
+
+    // Build facets array - only filter by project type for popular mods
+    const facetsArray = [['project_type:mod']];
+
+    // Only add version filter if we have both a query and version
+    if (cleanVersion && cleanQuery) {
+      facetsArray.push([`versions:${cleanVersion}`]);
     }
 
-    const facets = JSON.stringify([
-      ['project_type:mod'],
-      ['categories:fabric'],
-      [`versions:${cleanVersion}`],
-    ]);
+    const facets = JSON.stringify(facetsArray);
 
-    const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(cleanQuery)}&index=relevance&limit=12&facets=${encodeURIComponent(facets)}`;
+    const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(searchQuery)}&index=${searchIndex}&limit=12&facets=${encodeURIComponent(facets)}`;
+
+    console.log(`Modrinth API request: ${url}`);
 
     const response = await fetch(url, {
       headers: {
@@ -487,9 +995,18 @@ export class AdminService implements OnModuleInit {
     });
 
     if (!response.ok) {
-      throw new BadGatewayException(
-        `Modrinth search failed (${response.status})`,
-      );
+      let errorDetails = `Modrinth search failed (${response.status})`;
+      try {
+        const errorBody = await response.text();
+        if (errorBody) {
+          errorDetails += `: ${errorBody}`;
+        }
+      } catch {
+        // Ignore error parsing error body
+      }
+      console.error(`Modrinth API Error: ${errorDetails}`);
+      console.error(`Request URL: ${url}`);
+      throw new BadGatewayException(errorDetails);
     }
 
     const payload = (await response.json()) as ModrinthSearchResponse;
@@ -498,6 +1015,11 @@ export class AdminService implements OnModuleInit {
       projectId: hit.project_id,
       title: hit.title,
       description: hit.description,
+      iconUrl: hit.icon_url,
+      slug: hit.slug,
+      author: hit.author,
+      categories: hit.categories,
+      latestVersion: hit.latest_version,
     }));
   }
 
@@ -645,11 +1167,94 @@ export class AdminService implements OnModuleInit {
     });
   }
 
-  async publishProfile(input: PublishProfileDto, requestOrigin: string) {
+  async startPublishProfile(
+    input: PublishProfileDto,
+    requestOrigin: string,
+  ): Promise<{ jobId: string }> {
+    const jobId = randomBytes(12).toString('hex');
+    const session: PublishSession = {
+      createdAt: Date.now(),
+      done: false,
+      events: [],
+      result: null,
+      error: null,
+      listeners: new Set(),
+    };
+    this.publishSessions.set(jobId, session);
+
+    void this.publishProfile(input, requestOrigin, {
+      onProgress: (event) => this.pushPublishProgress(jobId, event),
+    })
+      .then((result) => {
+        this.finishPublishSession(jobId, result);
+      })
+      .catch((error) => {
+        this.failPublishSession(
+          jobId,
+          (error as Error).message || 'Publish failed',
+        );
+      });
+
+    return { jobId };
+  }
+
+  async openPublishStream(
+    jobId: string,
+    handlers: {
+      onProgress: (event: PublishProgressEvent) => void;
+      onDone: (result: PublishProfileResult) => void;
+      onError: (message: string) => void;
+    },
+  ): Promise<() => void> {
+    const session = this.publishSessions.get(jobId.trim());
+    if (!session) {
+      throw new NotFoundException('Publish job not found');
+    }
+
+    for (const event of session.events) {
+      handlers.onProgress(event);
+    }
+
+    if (session.done) {
+      if (session.error) {
+        handlers.onError(session.error);
+      } else if (session.result) {
+        handlers.onDone(session.result);
+      }
+      return () => undefined;
+    }
+
+    const listener = (event: {
+      type: 'progress' | 'done' | 'error';
+      data: unknown;
+    }) => {
+      if (event.type === 'progress') {
+        handlers.onProgress(event.data as PublishProgressEvent);
+        return;
+      }
+      if (event.type === 'done') {
+        handlers.onDone(event.data as PublishProfileResult);
+        return;
+      }
+      handlers.onError(String(event.data || 'Publish failed'));
+    };
+
+    session.listeners.add(listener);
+    return () => {
+      session.listeners.delete(listener);
+    };
+  }
+
+  async publishProfile(
+    input: PublishProfileDto,
+    requestOrigin: string,
+    options?: { onProgress?: (event: PublishProgressEvent) => void },
+  ): Promise<PublishProfileResult> {
+    const onProgress = options?.onProgress;
     const serverId = this.getServerId();
     const publicBase = this.resolvePublicBaseUrl(requestOrigin);
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const published = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const [server, latest] = await Promise.all([
         tx.server.findUnique({ where: { id: serverId } }),
         tx.profileVersion.findFirst({
@@ -688,10 +1293,22 @@ export class AdminService implements OnModuleInit {
 
       const lockUrl = `${publicBase}/v1/locks/${encodeURIComponent(profileId)}/${nextVersion}`;
       const summary = this.computeDiffSummary(latest.lockJson, generated);
+      const serverModSummary = this.computeServerModDiffSummary(
+        latest.lockJson,
+        generated,
+      );
       const lockSignature = this.signing.signLockPayload(generated);
       const allowedVersions = Array.from(
         new Set([...server.allowedMinecraftVersions, input.minecraftVersion]),
       );
+
+      onProgress?.({
+        stage: 'detecting-mod-changes',
+        message: `Getting mod changes (+${serverModSummary.add} / ~${serverModSummary.update} / -${serverModSummary.remove}).`,
+      });
+
+      await this.ensurePublishAllowedForServerModChanges(serverModSummary);
+
       const [appSettings] = await Promise.all([
         tx.appSetting.upsert({
           where: { id: APP_SETTING_ID },
@@ -761,6 +1378,7 @@ export class AdminService implements OnModuleInit {
           releaseMinor: nextSemver.minor,
           releasePatch: nextSemver.patch,
           supportedMinecraftVersions: allowedVersions,
+          publishDraft: Prisma.DbNull,
         },
       });
 
@@ -770,8 +1388,36 @@ export class AdminService implements OnModuleInit {
         bumpType,
         lockUrl,
         summary,
+        serverModSummary,
+        generatedLock: generated,
       };
     });
+
+    const { generatedLock, serverModSummary, ...publishPayload } = published;
+
+    let exarotonSync: ExarotonModsSyncResult | undefined;
+    if (serverModSummary.hasChanges) {
+      exarotonSync = await this.trySyncExarotonMods(generatedLock, {
+        onProgress,
+      });
+    } else {
+      exarotonSync = {
+        attempted: false,
+        success: false,
+        message: 'No server mod changes detected. Exaroton sync skipped.',
+        summary: { add: 0, remove: 0, keep: 0 },
+      };
+      onProgress?.({
+        stage: 'done',
+        message: 'Done. No server mod changes were pending for sync.',
+      });
+    }
+
+    return {
+      ...publishPayload,
+      serverModSummary,
+      exarotonSync,
+    };
   }
 
   async uploadMedia(
@@ -801,23 +1447,24 @@ export class AdminService implements OnModuleInit {
           ? '.webp'
           : '.jpg';
 
-    if (file.size > 5 * 1024 * 1024) {
-      throw new BadGatewayException('Image must be 5MB or smaller');
+    if (file.size > 10 * 1024 * 1024) {
+      throw new BadGatewayException('Image must be 10MB or smaller');
     }
-
-    const root = this.getArtifactsRoot();
-    await mkdir(root, { recursive: true });
 
     const stamp = Date.now().toString(36);
     const token = randomBytes(6).toString('hex');
     const fileName = `admin-image-${stamp}-${token}${ext}`;
-    const target = resolve(root, basename(fileName));
-    await writeFile(target, file.buffer);
-    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
+    const key = this.buildServerAssetKey('media', fileName);
+    await this.artifactsStorage.putArtifact({
+      key,
+      body: file.buffer,
+      contentType: file.mimetype,
+    });
 
     return {
       fileName,
-      url: `${publicBase}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      key,
+      url: this.artifactsStorage.artifactUrlForKey(key, requestOrigin),
       size: file.size,
       contentType: file.mimetype,
     };
@@ -837,7 +1484,7 @@ export class AdminService implements OnModuleInit {
     }
 
     if (file.size > MAX_FANCY_BUNDLE_UPLOAD_BYTES) {
-      throw new BadGatewayException('FancyMenu bundle must be 50MB or smaller');
+      throw new BadGatewayException('FancyMenu bundle must be 10MB or smaller');
     }
 
     const fileExt = extname(file.originalname || '').toLowerCase();
@@ -848,82 +1495,26 @@ export class AdminService implements OnModuleInit {
     const validation = await this.sandboxClient.validateBundle(file.buffer);
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
 
-    const root = this.getArtifactsRoot();
-    await mkdir(root, { recursive: true });
-
     const stamp = Date.now().toString(36);
     const token = randomBytes(6).toString('hex');
     const fileName = `fancymenu-bundle-${stamp}-${token}.zip`;
-    const target = resolve(root, basename(fileName));
-    await writeFile(target, file.buffer);
-    const publicBase = this.resolvePublicBaseUrl(requestOrigin);
+    const key = this.buildServerAssetKey('bundles', fileName);
+    await this.artifactsStorage.putArtifact({
+      key,
+      body: file.buffer,
+      contentType: 'application/zip',
+    });
 
     return {
       fileName,
-      url: `${publicBase}/v1/artifacts/${encodeURIComponent(fileName)}`,
+      key,
+      url: this.artifactsStorage.artifactUrlForKey(key, requestOrigin),
       sha256,
       size: file.size,
       entryCount: validation.entryCount,
     };
   }
 
-  async buildFancyMenuPreview(input: BuildFancyMenuPreviewDto): Promise<{
-    model: FancyPreviewModel;
-    expiresAt?: string;
-  }> {
-    const fancyMenu = this.normalizeFancyMenuSettings(input.fancyMenu);
-    const baseline = this.previewAssembler.buildSimplePreview({
-      serverName: input.serverName?.trim() || undefined,
-      fancyMenu,
-      branding: {
-        logoUrl: input.branding?.logoUrl?.trim() || undefined,
-        backgroundUrl: input.branding?.backgroundUrl?.trim() || undefined,
-      },
-    });
-
-    if (
-      !fancyMenu.enabled ||
-      fancyMenu.mode !== 'custom' ||
-      !fancyMenu.customLayoutUrl ||
-      !fancyMenu.customLayoutSha256
-    ) {
-      return { model: baseline };
-    }
-
-    const bundlePath = this.resolveArtifactPathFromUrl(
-      fancyMenu.customLayoutUrl,
-    );
-    const payload = await readFile(bundlePath).catch(() => null);
-    if (!payload || payload.length === 0) {
-      throw new BadGatewayException(
-        'FancyMenu preview bundle is missing or unreadable',
-      );
-    }
-
-    const actualSha = createHash('sha256').update(payload).digest('hex');
-    if (
-      actualSha.toLowerCase() !== fancyMenu.customLayoutSha256.toLowerCase()
-    ) {
-      throw new BadGatewayException(
-        'FancyMenu preview bundle SHA-256 does not match',
-      );
-    }
-
-    const sandboxPreview: SandboxPreviewResponse =
-      await this.sandboxClient.buildPreview(payload);
-    return {
-      model: this.previewAssembler.mergeCustomPreview(
-        baseline,
-        sandboxPreview,
-        '/v1/admin/fancymenu/preview/assets',
-      ),
-      expiresAt: sandboxPreview.expiresAt,
-    };
-  }
-
-  async getFancyMenuPreviewAsset(token: string, assetId: string) {
-    return this.sandboxClient.fetchPreviewAsset(token, assetId);
-  }
 
   private async ensureAdminCredential(): Promise<void> {
     const existing = await this.prisma.adminCredential.findUnique({
@@ -1013,6 +1604,646 @@ export class AdminService implements OnModuleInit {
     };
   }
 
+  private exarotonStatusLabel(status: number): string {
+    if (status === 0) return 'OFFLINE';
+    if (status === 1) return 'ONLINE';
+    if (status === 2) return 'STARTING';
+    if (status === 3) return 'STOPPING';
+    if (status === 4) return 'RESTARTING';
+    if (status === 5) return 'SAVING';
+    if (status === 6) return 'LOADING';
+    if (status === 7) return 'CRASHED';
+    if (status === 8) return 'PENDING';
+    if (status === 9) return 'TRANSFERRING';
+    if (status === 10) return 'PREPARING';
+    return 'UNKNOWN';
+  }
+
+  private mapExarotonServer(server: ExarotonServer) {
+    return {
+      id: server.id,
+      name: server.name,
+      address: server.address,
+      motd: server.motd,
+      status: server.status,
+      statusLabel: this.exarotonStatusLabel(server.status),
+      players: {
+        max: server.players?.max ?? 0,
+        count: server.players?.count ?? 0,
+      },
+      software: server.software
+        ? {
+            id: server.software.id,
+            name: server.software.name,
+            version: server.software.version,
+          }
+        : null,
+      shared: server.shared,
+    };
+  }
+
+  private mapExarotonSettings(input: {
+    modsSyncEnabled?: boolean | null;
+    playerCanViewStatus?: boolean | null;
+    playerCanViewOnlinePlayers?: boolean | null;
+    playerCanModifyStatus?: boolean | null;
+    playerCanStartServer?: boolean | null;
+    playerCanStopServer?: boolean | null;
+    playerCanRestartServer?: boolean | null;
+  }) {
+    const playerCanStartServer = input.playerCanStartServer === true;
+    const playerCanStopServer = input.playerCanStopServer === true;
+    const playerCanRestartServer = input.playerCanRestartServer === true;
+    const playerCanModifyStatus =
+      input.playerCanModifyStatus === true ||
+      playerCanStartServer ||
+      playerCanStopServer ||
+      playerCanRestartServer;
+    return {
+      serverStatusEnabled: true as const,
+      modsSyncEnabled: input.modsSyncEnabled ?? true,
+      playerCanViewStatus: playerCanModifyStatus || input.playerCanViewStatus !== false,
+      playerCanViewOnlinePlayers:
+        input.playerCanViewOnlinePlayers !== false &&
+        (playerCanModifyStatus || input.playerCanViewStatus !== false),
+      playerCanStartServer,
+      playerCanStopServer,
+      playerCanRestartServer,
+    };
+  }
+
+  private readExarotonSettings(input: unknown): {
+    modsSyncEnabled: boolean;
+    playerCanViewStatus: boolean;
+    playerCanViewOnlinePlayers: boolean;
+    playerCanModifyStatus: boolean;
+    playerCanStartServer: boolean;
+    playerCanStopServer: boolean;
+    playerCanRestartServer: boolean;
+  } {
+    const source = (input ?? {}) as {
+      modsSyncEnabled?: unknown;
+      playerCanViewStatus?: unknown;
+      playerCanViewOnlinePlayers?: unknown;
+      playerCanModifyStatus?: unknown;
+      playerCanStartServer?: unknown;
+      playerCanStopServer?: unknown;
+      playerCanRestartServer?: unknown;
+    };
+
+    const playerCanStartServer = source.playerCanStartServer === true;
+    const playerCanStopServer = source.playerCanStopServer === true;
+    const playerCanRestartServer = source.playerCanRestartServer === true;
+    const playerCanModifyStatus =
+      source.playerCanModifyStatus === true ||
+      playerCanStartServer ||
+      playerCanStopServer ||
+      playerCanRestartServer;
+    const playerCanViewStatus =
+      playerCanModifyStatus || source.playerCanViewStatus !== false;
+    return {
+      modsSyncEnabled: source.modsSyncEnabled !== false,
+      playerCanViewStatus,
+      playerCanViewOnlinePlayers:
+        source.playerCanViewOnlinePlayers !== false && playerCanViewStatus,
+      playerCanModifyStatus,
+      playerCanStartServer,
+      playerCanStopServer,
+      playerCanRestartServer,
+    };
+  }
+
+  private getExarotonEncryptionKey(): string | null {
+    const value = this.config.get<string>('EXAROTON_ENCRYPTION_KEY')?.trim();
+    return value && value.length > 0 ? value : null;
+  }
+
+  private requireExarotonEncryptionKey(): string {
+    const encryptionKey = this.getExarotonEncryptionKey();
+    if (!encryptionKey) {
+      throw new BadRequestException(
+        'Exaroton integration is not configured: EXAROTON_ENCRYPTION_KEY is missing',
+      );
+    }
+    return encryptionKey;
+  }
+
+  private async requireExarotonConnection(): Promise<{
+    apiKey: string;
+    integration: {
+      id: string;
+      accountName: string | null;
+      accountEmail: string | null;
+      apiKeyCiphertext: string;
+      apiKeyIv: string;
+      apiKeyAuthTag: string;
+      selectedServerId: string | null;
+      selectedServerName: string | null;
+      selectedServerAddress: string | null;
+      modsSyncEnabled: boolean;
+      playerCanViewStatus: boolean;
+      playerCanViewOnlinePlayers: boolean;
+      playerCanModifyStatus: boolean;
+      playerCanStartServer: boolean;
+      playerCanStopServer: boolean;
+      playerCanRestartServer: boolean;
+    };
+  }> {
+    const integration = await this.prisma.exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+    if (!integration) {
+      throw new NotFoundException('Exaroton account is not connected');
+    }
+
+    const encryptionKey = this.requireExarotonEncryptionKey();
+    const apiKey = decryptExarotonApiKey(
+      {
+        ciphertext: integration.apiKeyCiphertext,
+        iv: integration.apiKeyIv,
+        authTag: integration.apiKeyAuthTag,
+      },
+      encryptionKey,
+    );
+
+    if (!apiKey) {
+      throw new BadGatewayException('Exaroton API key could not be decrypted');
+    }
+
+    const integrationSettings = this.readExarotonSettings(integration);
+
+    return {
+      apiKey,
+      integration: {
+        id: integration.id,
+        accountName: integration.accountName,
+        accountEmail: integration.accountEmail,
+        apiKeyCiphertext: integration.apiKeyCiphertext,
+        apiKeyIv: integration.apiKeyIv,
+        apiKeyAuthTag: integration.apiKeyAuthTag,
+        selectedServerId: integration.selectedServerId,
+        selectedServerName: integration.selectedServerName,
+        selectedServerAddress: integration.selectedServerAddress,
+        modsSyncEnabled: integrationSettings.modsSyncEnabled,
+        playerCanViewStatus: integrationSettings.playerCanViewStatus,
+        playerCanViewOnlinePlayers: integrationSettings.playerCanViewOnlinePlayers,
+        playerCanModifyStatus: integrationSettings.playerCanModifyStatus,
+        playerCanStartServer: integrationSettings.playerCanStartServer,
+        playerCanStopServer: integrationSettings.playerCanStopServer,
+        playerCanRestartServer: integrationSettings.playerCanRestartServer,
+      },
+    };
+  }
+
+  private mapLauncherServerWithPlayerVisibility(
+    server: {
+      id: string;
+      name: string;
+      address: string;
+      motd: string;
+      status: number;
+      statusLabel: string;
+      players: { max: number; count: number };
+      software: { id: string; name: string; version: string } | null;
+      shared: boolean;
+    },
+    canViewOnlinePlayers: boolean,
+  ) {
+    if (canViewOnlinePlayers) {
+      return server;
+    }
+
+    return {
+      ...server,
+      players: {
+        max: 0,
+        count: 0,
+      },
+    };
+  }
+
+  private async getExarotonBootstrapState() {
+    const encryptionKey = this.getExarotonEncryptionKey();
+    if (!encryptionKey) {
+      return {
+        configured: false,
+        connected: false,
+        account: null,
+        selectedServer: null,
+        settings: this.mapExarotonSettings({}),
+        error:
+          'EXAROTON_ENCRYPTION_KEY is not configured. Set it to enable this feature.',
+      };
+    }
+
+    const integration = await this.prisma.exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+
+    if (!integration) {
+      return {
+        configured: true,
+        connected: false,
+        account: null,
+        selectedServer: null,
+        settings: this.mapExarotonSettings({}),
+        error: null,
+      };
+    }
+
+    const integrationSettings = this.readExarotonSettings(integration);
+
+    let apiKey = '';
+    try {
+      apiKey = decryptExarotonApiKey(
+        {
+          ciphertext: integration.apiKeyCiphertext,
+          iv: integration.apiKeyIv,
+          authTag: integration.apiKeyAuthTag,
+        },
+        encryptionKey,
+      );
+    } catch {
+      return {
+        configured: true,
+        connected: false,
+        account: null,
+        selectedServer: null,
+        settings: this.mapExarotonSettings(integrationSettings),
+        error: 'Stored Exaroton credentials could not be decrypted',
+      };
+    }
+
+    const selectedServerId = integration.selectedServerId?.trim();
+    let selectedServer = null;
+
+    if (selectedServerId) {
+      try {
+        const live = await this.exarotonClient.getServer(apiKey, selectedServerId);
+        selectedServer = this.mapExarotonServer(live);
+      } catch {
+        selectedServer = {
+          id: selectedServerId,
+          name: integration.selectedServerName || selectedServerId,
+          address: integration.selectedServerAddress || '',
+          motd: '',
+          status: 0,
+          statusLabel: this.exarotonStatusLabel(0),
+          players: { max: 0, count: 0 },
+          software: null,
+          shared: false,
+        };
+      }
+    }
+
+    return {
+      configured: true,
+      connected: true,
+      account: {
+        name: integration.accountName || null,
+        email: integration.accountEmail || null,
+      },
+      selectedServer,
+      settings: this.mapExarotonSettings(integrationSettings),
+      error: null,
+    };
+  }
+
+  private pushPublishProgress(jobId: string, event: PublishProgressEvent) {
+    const session = this.publishSessions.get(jobId);
+    if (!session || session.done) {
+      return;
+    }
+    session.events.push(event);
+    for (const listener of session.listeners) {
+      listener({ type: 'progress', data: event });
+    }
+  }
+
+  private finishPublishSession(jobId: string, result: PublishProfileResult) {
+    const session = this.publishSessions.get(jobId);
+    if (!session || session.done) {
+      return;
+    }
+    session.done = true;
+    session.result = result;
+    for (const listener of session.listeners) {
+      listener({ type: 'done', data: result });
+    }
+  }
+
+  private failPublishSession(jobId: string, message: string) {
+    const session = this.publishSessions.get(jobId);
+    if (!session || session.done) {
+      return;
+    }
+    session.done = true;
+    session.error = message;
+    for (const listener of session.listeners) {
+      listener({ type: 'error', data: message });
+    }
+  }
+
+  private cleanupPublishSessions() {
+    const now = Date.now();
+    for (const [jobId, session] of this.publishSessions.entries()) {
+      if (now - session.createdAt > this.publishSessionTtlMs) {
+        this.publishSessions.delete(jobId);
+      }
+    }
+  }
+
+  private async ensurePublishAllowedForServerModChanges(
+    serverModSummary: ServerModDiffSummary,
+  ) {
+    if (!serverModSummary.hasChanges) {
+      return;
+    }
+
+    const integration = await this.prisma.exarotonIntegration.findUnique({
+      where: { id: EXAROTON_INTEGRATION_ID },
+    });
+    if (!integration) {
+      return;
+    }
+
+    const settings = this.readExarotonSettings(integration);
+    if (!settings.modsSyncEnabled) {
+      return;
+    }
+
+    const selectedServerId = integration.selectedServerId?.trim();
+    if (!selectedServerId) {
+      return;
+    }
+
+    const encryptionKey = this.requireExarotonEncryptionKey();
+    const apiKey = decryptExarotonApiKey(
+      {
+        ciphertext: integration.apiKeyCiphertext,
+        iv: integration.apiKeyIv,
+        authTag: integration.apiKeyAuthTag,
+      },
+      encryptionKey,
+    );
+
+    const selectedServer = await this.exarotonClient.getServer(
+      apiKey,
+      selectedServerId,
+    );
+
+    const isRunning = ![0, 7].includes(selectedServer.status);
+    if (isRunning) {
+      throw new BadRequestException(
+        'Cannot publish pending server mod changes while server is running. Stop the Exaroton server first.',
+      );
+    }
+  }
+
+  private async trySyncExarotonMods(
+    lock: ProfileLock,
+    options?: { onProgress?: (event: PublishProgressEvent) => void },
+  ): Promise<ExarotonModsSyncResult> {
+    const zero: ExarotonModsSyncSummary = { add: 0, remove: 0, keep: 0 };
+    const onProgress = options?.onProgress;
+    try {
+      const integration = await this.prisma.exarotonIntegration.findUnique({
+        where: { id: EXAROTON_INTEGRATION_ID },
+      });
+      if (!integration) {
+        return {
+          attempted: false,
+          success: false,
+          message: 'Exaroton account is not connected.',
+          summary: zero,
+        };
+      }
+
+      const integrationSettings = this.readExarotonSettings(integration);
+      if (!integrationSettings.modsSyncEnabled) {
+        return {
+          attempted: false,
+          success: false,
+          message: 'Exaroton mods sync is disabled in settings.',
+          summary: zero,
+        };
+      }
+
+      const selectedServerId = integration.selectedServerId?.trim();
+      if (!selectedServerId) {
+        return {
+          attempted: false,
+          success: false,
+          message: 'Select an Exaroton server first.',
+          summary: zero,
+        };
+      }
+
+      const encryptionKey = this.requireExarotonEncryptionKey();
+      const apiKey = decryptExarotonApiKey(
+        {
+          ciphertext: integration.apiKeyCiphertext,
+          iv: integration.apiKeyIv,
+          authTag: integration.apiKeyAuthTag,
+        },
+        encryptionKey,
+      );
+
+      const serverMods = lock.items.filter(
+        (item) => item.kind === 'mod' && (item.side === 'server' || item.side === 'both'),
+      );
+
+      const desired = new Map<
+        string,
+        {
+          sha256: string;
+          url: string;
+          projectId?: string;
+          versionId?: string;
+        }
+      >();
+
+      for (const mod of serverMods) {
+        const filename = this.extractRemoteFilename(mod.url);
+        desired.set(filename, {
+          sha256: mod.sha256,
+          url: mod.url,
+          projectId: mod.projectId,
+          versionId: mod.versionId,
+        });
+      }
+
+      const modsFolderProbe = await this.exarotonClient.getFileData(
+        apiKey,
+        selectedServerId,
+        'mods',
+      );
+      if (!modsFolderProbe) {
+        await this.exarotonClient.putFileData(
+          apiKey,
+          selectedServerId,
+          'mods',
+          '',
+          'inode/directory',
+        );
+      }
+
+      const state = await this.readExarotonModsSyncState(apiKey, selectedServerId);
+      const previous = new Map(
+        (state?.files ?? []).map((file) => [file.filename, file]),
+      );
+
+      const summary: ExarotonModsSyncSummary = { add: 0, remove: 0, keep: 0 };
+      let announcedDownloadStage = false;
+      let announcedSyncStage = false;
+
+      for (const [filename, desiredFile] of desired.entries()) {
+        const existing = previous.get(filename);
+        if (existing?.sha256?.toLowerCase() === desiredFile.sha256.toLowerCase()) {
+          summary.keep += 1;
+          continue;
+        }
+
+        if (!announcedDownloadStage) {
+          onProgress?.({
+            stage: 'getting-mods',
+            message: 'Getting mods to upload to server...',
+          });
+          announcedDownloadStage = true;
+        }
+
+        const body = await this.downloadRemoteAsset(desiredFile.url);
+        if (!announcedSyncStage) {
+          onProgress?.({
+            stage: 'syncing-mods',
+            message: 'Syncing mods with server...',
+          });
+          announcedSyncStage = true;
+        }
+        await this.exarotonClient.putFileData(
+          apiKey,
+          selectedServerId,
+          `mods/${filename}`,
+          body,
+        );
+        summary.add += 1;
+      }
+
+      for (const [filename] of previous.entries()) {
+        if (desired.has(filename)) {
+          continue;
+        }
+        if (!announcedSyncStage) {
+          onProgress?.({
+            stage: 'syncing-mods',
+            message: 'Syncing mods with server...',
+          });
+          announcedSyncStage = true;
+        }
+        await this.exarotonClient.deleteFileData(
+          apiKey,
+          selectedServerId,
+          `mods/${filename}`,
+        );
+        summary.remove += 1;
+      }
+
+      const nextState: ExarotonSyncStateFile = {
+        version: 1,
+        syncedAt: new Date().toISOString(),
+        files: Array.from(desired.entries()).map(([filename, value]) => ({
+          filename,
+          sha256: value.sha256,
+          url: value.url,
+          projectId: value.projectId,
+          versionId: value.versionId,
+        })),
+      };
+
+      await this.exarotonClient.putFileData(
+        apiKey,
+        selectedServerId,
+        EXAROTON_MODS_SYNC_STATE_PATH,
+        JSON.stringify(nextState, null, 2),
+        'application/json',
+      );
+
+      onProgress?.({
+        stage: 'done',
+        message: 'Done. Mods synchronized with server.',
+      });
+
+      return {
+        attempted: true,
+        success: true,
+        message: 'Exaroton server mods synchronized.',
+        summary,
+      };
+    } catch (error) {
+      return {
+        attempted: true,
+        success: false,
+        message:
+          (error as Error).message ||
+          'Exaroton server mod sync failed.',
+        summary: zero,
+      };
+    }
+  }
+
+  private async readExarotonModsSyncState(
+    apiKey: string,
+    serverId: string,
+  ): Promise<ExarotonSyncStateFile | null> {
+    const payload = await this.exarotonClient.getFileData(
+      apiKey,
+      serverId,
+      EXAROTON_MODS_SYNC_STATE_PATH,
+    );
+
+    if (!payload || payload.length === 0) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(payload.toString('utf8')) as ExarotonSyncStateFile;
+      if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.files)) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private async downloadRemoteAsset(url: string): Promise<Buffer> {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'mvl-admin-mvp/0.2.0',
+      },
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
+      throw new BadGatewayException('Could not download server mod artifact');
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  private extractRemoteFilename(url: string): string {
+    try {
+      const parsed = new URL(url);
+      const pieces = parsed.pathname.split('/').filter(Boolean);
+      const last = pieces[pieces.length - 1]?.trim();
+      if (!last) {
+        throw new Error();
+      }
+      return last;
+    } catch {
+      throw new BadGatewayException(`Invalid mod URL for server sync: ${url}`);
+    }
+  }
+
   private async collectMod(
     projectId: string,
     minecraftVersion: string,
@@ -1099,6 +2330,8 @@ export class AdminService implements OnModuleInit {
         versionId: selected.id,
         url: file.url,
         sha256,
+        iconUrl: project.icon_url,
+        slug: project.slug,
       },
       requiredDependencies,
     };
@@ -1289,6 +2522,59 @@ export class AdminService implements OnModuleInit {
     return { add, remove, update, keep };
   }
 
+  private computeServerModDiffSummary(
+    previousLockJson: unknown,
+    nextLock: ProfileLock,
+  ): ServerModDiffSummary {
+    const previous = ProfileLockSchema.safeParse(previousLockJson);
+    const previousMods = previous.success
+      ? previous.data.items.filter(
+          (item) =>
+            item.kind === 'mod' &&
+            (item.side === 'server' || item.side === 'both'),
+        )
+      : [];
+    const nextMods = nextLock.items.filter(
+      (item) =>
+        item.kind === 'mod' && (item.side === 'server' || item.side === 'both'),
+    );
+
+    const prevMap = new Map(
+      previousMods.map((item) => [this.itemKey(item), item.sha256]),
+    );
+    const nextMap = new Map(nextMods.map((item) => [this.itemKey(item), item.sha256]));
+
+    let add = 0;
+    let remove = 0;
+    let update = 0;
+    let keep = 0;
+
+    for (const [key, sha] of nextMap.entries()) {
+      const prevSha = prevMap.get(key);
+      if (!prevSha) {
+        add += 1;
+      } else if (prevSha === sha) {
+        keep += 1;
+      } else {
+        update += 1;
+      }
+    }
+
+    for (const key of prevMap.keys()) {
+      if (!nextMap.has(key)) {
+        remove += 1;
+      }
+    }
+
+    return {
+      add,
+      remove,
+      update,
+      keep,
+      hasChanges: add + remove + update > 0,
+    };
+  }
+
   private flattenLockItems(lock: ProfileLock) {
     return [
       ...lock.items,
@@ -1317,11 +2603,13 @@ export class AdminService implements OnModuleInit {
       kind: 'mod';
       name: string;
       provider: 'modrinth' | 'direct';
-      side: 'client';
+      side: 'client' | 'server' | 'both';
       projectId?: string;
       versionId?: string;
       url: string;
       sha256: string;
+      iconUrl?: string;
+      slug?: string;
     }>;
     fancyMenu: {
       enabled?: boolean;
@@ -1479,8 +2767,7 @@ export class AdminService implements OnModuleInit {
     bundleUrl: string,
     expectedSha256: string,
   ): Promise<FancyMenuBundleValidation> {
-    const filePath = this.resolveArtifactPathFromUrl(bundleUrl);
-    const payload = await readFile(filePath).catch(() => null);
+    const payload = await this.loadFancyMenuBundlePayload(bundleUrl);
     if (!payload || payload.length === 0) {
       throw new BadGatewayException(
         'FancyMenu bundle artifact is missing or unreadable',
@@ -1491,7 +2778,7 @@ export class AdminService implements OnModuleInit {
       throw new BadGatewayException('FancyMenu bundle must be 50MB or smaller');
     }
 
-    if (extname(filePath).toLowerCase() !== '.zip') {
+    if (extname(bundleUrl).toLowerCase() !== '.zip') {
       throw new BadGatewayException(
         'FancyMenu bundle artifact must be a .zip file',
       );
@@ -1507,30 +2794,49 @@ export class AdminService implements OnModuleInit {
     return this.sandboxClient.validateBundle(payload);
   }
 
-  private resolveArtifactPathFromUrl(url: string): string {
-    let parsed: URL;
+  private tryResolveArtifactKeyFromUrl(url: string): string | null {
     try {
-      parsed = new URL(url);
+      return this.artifactsStorage.keyFromArtifactUrl(url);
     } catch {
-      throw new BadGatewayException('Invalid FancyMenu customLayoutUrl');
+      return null;
+    }
+  }
+
+  private async loadFancyMenuBundlePayload(bundleUrl: string): Promise<Buffer> {
+    const fileKey = this.tryResolveArtifactKeyFromUrl(bundleUrl);
+    if (fileKey) {
+      const artifact = await this.artifactsStorage
+        .getArtifact(fileKey)
+        .catch(() => null);
+      if (artifact?.body && artifact.body.length > 0) {
+        return artifact.body;
+      }
     }
 
-    const marker = '/v1/artifacts/';
-    const idx = parsed.pathname.indexOf(marker);
-    if (idx < 0) {
+    const response = await fetch(bundleUrl, {
+      headers: {
+        'User-Agent': 'mvl-admin-mvp/0.2.0',
+      },
+    }).catch(() => null);
+
+    if (!response || !response.ok) {
       throw new BadGatewayException(
-        'FancyMenu customLayoutUrl must reference /v1/artifacts/',
+        'FancyMenu bundle artifact is missing or unreadable',
       );
     }
 
-    const rawFileName = parsed.pathname.slice(idx + marker.length);
-    const decodedFileName = decodeURIComponent(rawFileName);
-    const safeFileName = basename(decodedFileName);
-    if (!safeFileName || safeFileName !== decodedFileName) {
-      throw new BadGatewayException('Invalid FancyMenu bundle artifact path');
+    const body = Buffer.from(await response.arrayBuffer());
+    if (body.length === 0) {
+      throw new BadGatewayException(
+        'FancyMenu bundle artifact is missing or unreadable',
+      );
     }
 
-    return resolve(this.getArtifactsRoot(), safeFileName);
+    if (body.length > MAX_FANCY_BUNDLE_UPLOAD_BYTES) {
+      throw new BadGatewayException('FancyMenu bundle must be 10MB or smaller');
+    }
+
+    return body;
   }
 
   private extractFancyMenu(value: unknown) {
@@ -1547,6 +2853,9 @@ export class AdminService implements OnModuleInit {
       profileId?: unknown;
       serverName?: unknown;
       serverAddress?: unknown;
+      minecraftVersion?: unknown;
+      loaderVersion?: unknown;
+      mods?: unknown;
       fancyMenu?: unknown;
       branding?: unknown;
     };
@@ -1570,6 +2879,17 @@ export class AdminService implements OnModuleInit {
         typeof draft.profileId === 'string' && draft.profileId.trim().length > 0
           ? draft.profileId.trim()
           : null,
+      minecraftVersion:
+        typeof draft.minecraftVersion === 'string' &&
+        draft.minecraftVersion.trim().length > 0
+          ? draft.minecraftVersion.trim()
+          : null,
+      loaderVersion:
+        typeof draft.loaderVersion === 'string' &&
+        draft.loaderVersion.trim().length > 0
+          ? draft.loaderVersion.trim()
+          : null,
+      mods: Array.isArray(draft.mods) ? (draft.mods as ManagedMod[]) : null,
       fancyMenu,
       branding,
     };
@@ -1633,13 +2953,41 @@ export class AdminService implements OnModuleInit {
     return `${parts.major}.${parts.minor}.${parts.patch}`;
   }
 
-  private getArtifactsRoot() {
-    const configured = this.config.get<string>('ARTIFACTS_DIR')?.trim();
-    if (configured) {
-      return resolve(configured);
+  private buildServerAssetKey(
+    kind: 'media' | 'bundles',
+    fileName: string,
+  ): string {
+    const rootPrefix = this.getAssetsRootPrefix();
+    const serverFolder = this.getServerId().replace(/[^a-zA-Z0-9._-]+/g, '-');
+    const safeServerFolder = serverFolder || 'mvl';
+    const safeFileName = fileName.replace(/[\\/]+/g, '-');
+    return `${rootPrefix}/${safeServerFolder}/${kind}/${safeFileName}`;
+  }
+
+  private getAssetsRootPrefix(): string {
+    const configured = this.config.get<string>('ASSETS_KEY_PREFIX')?.trim();
+    const defaultPrefix =
+      (this.config.get<string>('NODE_ENV')?.trim().toLowerCase() ||
+        'development') === 'production'
+        ? 'assets'
+        : 'dev/assets';
+
+    const rawPrefix = configured || defaultPrefix;
+    const normalizedPrefix = rawPrefix
+      .replace(/\\/g, '/')
+      .replace(/^\/+/, '')
+      .replace(/\/+$/, '');
+
+    if (!normalizedPrefix) {
+      return defaultPrefix;
     }
 
-    return resolve(homedir(), '.mss-client', 'artifacts');
+    const segments = normalizedPrefix.split('/');
+    if (segments.some((segment) => segment === '.' || segment === '..')) {
+      return defaultPrefix;
+    }
+
+    return normalizedPrefix;
   }
 
   private resolvePublicBaseUrl(fallbackOrigin: string): string {

@@ -2,18 +2,20 @@ mod commands;
 mod config;
 mod error;
 mod events;
-mod instance;
-mod launcher_apps;
-mod notifications;
-mod profile;
-mod providers;
-mod runtime;
-mod session;
-mod settings;
-mod state;
-mod sync;
-mod telemetry;
-mod types;
+pub mod instance;
+pub mod launcher_control;
+pub mod launcher_apps;
+pub mod notifications;
+pub mod profile;
+pub mod providers;
+pub mod runtime;
+pub mod session;
+pub mod settings;
+pub mod state;
+pub mod sync;
+pub mod telemetry;
+pub mod types;
+pub mod utils;
 
 use std::{
   sync::{
@@ -85,6 +87,10 @@ pub fn run() {
       commands::instance_get_state,
       commands::instance_check_version_readiness,
       commands::runtime_ensure_fabric,
+      commands::launcher_server_controls_get,
+      commands::launcher_server_action,
+      commands::launcher_server_stream_start,
+      commands::launcher_server_stream_stop,
       commands::launcher_update_check,
       commands::launcher_update_install,
       commands::app_request_close,

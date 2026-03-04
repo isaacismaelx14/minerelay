@@ -91,7 +91,7 @@ Sample mod set includes:
 - `GET /v1/servers/:serverId/profile`
 - `GET /v1/servers/:serverId/updates?clientVersion=#`
 - `GET /v1/locks/:profileId/:version`
-- `GET /v1/artifacts/:fileName` (sample server-lock jar)
+- `GET /v1/artifacts/:key` (sample server-lock jar or nested asset key like `assets/<serverId>/...`)
 
 Swagger docs: `/docs`
 

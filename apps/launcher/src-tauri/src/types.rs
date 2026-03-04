@@ -320,6 +320,55 @@ pub struct AppCloseResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LauncherServerPermissions {
+  pub can_view_status: bool,
+  #[serde(default)]
+  pub can_view_online_players: bool,
+  pub can_start_server: bool,
+  pub can_stop_server: bool,
+  pub can_restart_server: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherServerStatus {
+  pub id: String,
+  pub name: String,
+  pub address: String,
+  pub motd: String,
+  pub status: i32,
+  pub status_label: String,
+  pub players: LauncherServerPlayers,
+  pub software: Option<LauncherServerSoftware>,
+  pub shared: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherServerPlayers {
+  pub max: i32,
+  pub count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherServerSoftware {
+  pub id: String,
+  pub name: String,
+  pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherServerControlsState {
+  pub enabled: bool,
+  pub reason: Option<String>,
+  pub permissions: LauncherServerPermissions,
+  pub selected_server: Option<LauncherServerStatus>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LauncherUpdateStatus {
   pub current_version: String,
   #[serde(default)]

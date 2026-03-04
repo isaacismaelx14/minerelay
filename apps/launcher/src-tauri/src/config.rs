@@ -5,6 +5,7 @@ pub struct LauncherConfig {
   pub api_base_url: Option<String>,
   pub profile_lock_url: Option<String>,
   pub profile_signature_public_key: Option<String>,
+  pub launcher_install_code: Option<String>,
   pub server_id: String,
   pub data_root: PathBuf,
   pub updater_endpoint: String,
@@ -28,6 +29,16 @@ impl LauncherConfig {
       .filter(|value| !value.is_empty())
       .or_else(|| {
         option_env!("PROFILE_SIGNATURE_PUBLIC_KEY")
+          .map(|value| value.trim().to_string())
+          .filter(|value| !value.is_empty())
+      });
+
+    let launcher_install_code = env::var("LAUNCHER_INSTALL_CODE")
+      .ok()
+      .map(|value| value.trim().to_string())
+      .filter(|value| !value.is_empty())
+      .or_else(|| {
+        option_env!("LAUNCHER_INSTALL_CODE")
           .map(|value| value.trim().to_string())
           .filter(|value| !value.is_empty())
       });
@@ -69,6 +80,7 @@ impl LauncherConfig {
       api_base_url,
       profile_lock_url,
       profile_signature_public_key,
+      launcher_install_code,
       server_id,
       data_root,
       updater_endpoint,

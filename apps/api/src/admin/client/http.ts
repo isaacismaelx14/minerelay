@@ -1,4 +1,4 @@
-export type RequestMethod = 'GET' | 'POST' | 'PATCH';
+export type RequestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 const GET_CACHE_TTL_MS = 15_000;
 const PREVIEW_POST_CACHE_TTL_MS = 15_000;
@@ -11,6 +11,17 @@ export async function readError(
 ): Promise<string> {
   try {
     const text = await response.text();
+    try {
+      const parsed = JSON.parse(text) as { message?: string | string[] };
+      if (parsed && parsed.message) {
+        if (Array.isArray(parsed.message)) {
+          return parsed.message[0] || text || fallback;
+        }
+        return parsed.message;
+      }
+    } catch {
+      // ignore
+    }
     return text || fallback;
   } catch {
     return fallback;

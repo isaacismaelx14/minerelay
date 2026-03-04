@@ -111,7 +111,7 @@ pub async fn start_or_get_session(
   }
 
   let settings = state.settings.lock().clone();
-  let paths = managed_instance_paths(state.as_ref(), server_id, &settings)?;
+  let paths = managed_instance_paths(state.as_ref(), server_id, &settings).await?;
   let Some(local_lock) = load_local_lock(&paths)? else {
     let idle = GameSessionStatus::default();
     set_status(app, state.as_ref(), idle.clone());
@@ -127,6 +127,8 @@ pub async fn start_or_get_session(
     set_status(app, state.as_ref(), idle.clone());
     return Ok(idle);
   }
+
+  let is_same_dir = paths.minecraft_dir == live_minecraft_dir;
 
   let mut entries = Vec::with_capacity(relative_paths.len());
   for relative in relative_paths {
@@ -156,40 +158,44 @@ pub async fn start_or_get_session(
 
   persist_journal(state.as_ref(), &journal)?;
 
-  for idx in 0..journal.entries.len() {
-    let (managed, live);
-    {
-      let entry = &journal.entries[idx];
-      managed = PathBuf::from(&entry.managed_path);
-      live = PathBuf::from(&entry.live_path);
-    }
+  if !is_same_dir {
+    for idx in 0..journal.entries.len() {
+      let (managed, live);
+      {
+        let entry = &journal.entries[idx];
+        managed = PathBuf::from(&entry.managed_path);
+        live = PathBuf::from(&entry.live_path);
+      }
 
-    if !managed.exists() {
-      continue;
-    }
+      if !managed.exists() {
+        continue;
+      }
 
-    if let Some(parent) = live.parent() {
-      fs::create_dir_all(parent)?;
-    }
-
-    if live.exists() {
-      let backup = backup_path_for_live(&live, &session_id)?;
-      if let Some(parent) = backup.parent() {
+      if let Some(parent) = live.parent() {
         fs::create_dir_all(parent)?;
       }
-      move_file(&live, &backup)?;
-      {
-        let entry = &mut journal.entries[idx];
-        entry.backup_path = Some(backup.to_string_lossy().to_string());
-        entry.backup_taken = true;
+
+      if live.exists() {
+        let backup = backup_path_for_live(&live, &session_id)?;
+        if let Some(parent) = backup.parent() {
+          fs::create_dir_all(parent)?;
+        }
+        move_file(&live, &backup)?;
+        {
+          let entry = &mut journal.entries[idx];
+          entry.backup_path = Some(backup.to_string_lossy().to_string());
+          entry.backup_taken = true;
+        }
+        persist_journal(state.as_ref(), &journal)?;
       }
+
+      move_file(&managed, &live)?;
+      journal.entries[idx].promoted = true;
       persist_journal(state.as_ref(), &journal)?;
     }
-
-    move_file(&managed, &live)?;
-    journal.entries[idx].promoted = true;
-    persist_journal(state.as_ref(), &journal)?;
   }
+
+
 
   let status = GameSessionStatus {
     phase: GameSessionPhase::AwaitingGameStart,
@@ -310,43 +316,57 @@ async fn restore_internal(
   };
   set_status(app, state.as_ref(), restoring);
 
-  for idx in 0..journal.entries.len() {
-    let (managed, live, promoted, backup_taken, backup_path);
-    {
-      let entry = &journal.entries[idx];
-      managed = PathBuf::from(&entry.managed_path);
-      live = PathBuf::from(&entry.live_path);
-      promoted = entry.promoted;
-      backup_taken = entry.backup_taken;
-      backup_path = entry.backup_path.clone();
-    }
-
-    if promoted {
-      if live.exists() {
-        if let Some(parent) = managed.parent() {
-          fs::create_dir_all(parent)?;
+  let is_same_dir = journal.live_minecraft_dir == journal.entries.get(0).map(|e| {
+    let mut managed_root = PathBuf::from(&e.managed_path);
+    if let Ok(relative) = PathBuf::from(&e.relative_path).strip_prefix("") {
+      for _ in relative.components() {
+        if let Some(parent) = managed_root.parent() {
+          managed_root = parent.to_path_buf();
         }
-        move_file(&live, &managed)?;
       }
-      journal.entries[idx].restored_to_managed = true;
-      persist_journal(state.as_ref(), &journal)?;
     }
+    managed_root.to_string_lossy().to_string()
+  }).unwrap_or_default() || journal.entries.iter().all(|e| e.managed_path == e.live_path);
 
-    if backup_taken {
-      if let Some(backup) = backup_path.as_ref().map(PathBuf::from) {
-        if backup.exists() {
-          if live.exists() {
-            let _ = fs::remove_file(&live);
-          }
-          if let Some(parent) = live.parent() {
+  if !is_same_dir {
+    for idx in 0..journal.entries.len() {
+      let (managed, live, promoted, backup_taken, backup_path);
+      {
+        let entry = &journal.entries[idx];
+        managed = PathBuf::from(&entry.managed_path);
+        live = PathBuf::from(&entry.live_path);
+        promoted = entry.promoted;
+        backup_taken = entry.backup_taken;
+        backup_path = entry.backup_path.clone();
+      }
+
+      if promoted {
+        if live.exists() {
+          if let Some(parent) = managed.parent() {
             fs::create_dir_all(parent)?;
           }
-          move_file(&backup, &live)?;
+          move_file(&live, &managed)?;
         }
+        journal.entries[idx].restored_to_managed = true;
+        persist_journal(state.as_ref(), &journal)?;
       }
 
-      journal.entries[idx].backup_restored = true;
-      persist_journal(state.as_ref(), &journal)?;
+      if backup_taken {
+        if let Some(backup) = backup_path.as_ref().map(PathBuf::from) {
+          if backup.exists() {
+            if live.exists() {
+              let _ = fs::remove_file(&live);
+            }
+            if let Some(parent) = live.parent() {
+              fs::create_dir_all(parent)?;
+            }
+            move_file(&backup, &live)?;
+          }
+        }
+
+        journal.entries[idx].backup_restored = true;
+        persist_journal(state.as_ref(), &journal)?;
+      }
     }
   }
 
@@ -632,13 +652,26 @@ fn set_status(app: &AppHandle, state: &AppState, status: GameSessionStatus) {
   emit_session_status(app, &status);
 }
 
-fn managed_instance_paths(state: &AppState, server_id: &str, settings: &AppSettings) -> LauncherResult<InstancePaths> {
-  let paths = InstancePaths::new(
+async fn managed_instance_paths(state: &AppState, server_id: &str, settings: &AppSettings) -> LauncherResult<InstancePaths> {
+  let effective_server = crate::utils::effective_server_id(state, server_id);
+  let mut paths = InstancePaths::new(
     &state.config,
     server_id,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let lock_for_prism = load_local_lock(&paths).unwrap_or(None)
+      .or(crate::profile::fetch_remote_lock(state, &effective_server).await.ok());
+    
+    if let Some(ref lock) = lock_for_prism {
+      let _ = paths.apply_prism(lock);
+    }
+  }
+
   ensure_layout(&paths)?;
   Ok(paths)
 }

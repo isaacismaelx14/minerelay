@@ -1,3 +1,4 @@
+use crate::{utils::*, types::VersionReadiness};
 use std::{
   fs,
   path::{Path, PathBuf},
@@ -47,6 +48,34 @@ impl InstancePaths {
       servers_dat: minecraft_dir.join("servers.dat"),
       minecraft_dir,
     })
+  }
+
+  pub fn apply_prism(&mut self, lock: &ProfileLock) -> LauncherResult<()> {
+    let prism_root = crate::launcher_apps::prism_root_dir()?;
+    let instance_key = crate::launcher_apps::slugify(&lock.branding.server_name);
+    let instance_dir = prism_root.join("instances").join(&instance_key);
+
+    #[cfg(target_os = "macos")]
+    let minecraft_folder = "minecraft";
+    #[cfg(not(target_os = "macos"))]
+    let minecraft_folder = ".minecraft";
+
+    let minecraft_dir = instance_dir.join(minecraft_folder);
+    let mvl_root = instance_dir.join(".mvl");
+
+    self.root = mvl_root.clone();
+    self.manifest_lock = mvl_root.join("manifest.lock.json");
+    self.sync_dir = mvl_root.join(".sync");
+    self.logs = mvl_root.join("logs");
+
+    self.mods = minecraft_dir.join("mods");
+    self.resourcepacks = minecraft_dir.join("resourcepacks");
+    self.shaderpacks = minecraft_dir.join("shaderpacks");
+    self.config = minecraft_dir.join("config");
+    self.servers_dat = minecraft_dir.join("servers.dat");
+    self.minecraft_dir = minecraft_dir;
+
+    Ok(())
   }
 }
 
@@ -125,4 +154,98 @@ pub fn ensure_default_server(paths: &InstancePaths, server: &DefaultServer) -> L
 
 pub fn resolve_target_path(paths: &InstancePaths, relative: &str) -> PathBuf {
   paths.minecraft_dir.join(Path::new(relative))
+}
+
+pub async fn check_version_readiness(state: &crate::state::AppState, server_id: &str) -> Result<crate::types::VersionReadiness, String> {
+
+  let effective_server = effective_server_id(state, server_id);
+  let settings = state.settings.lock().clone();
+  let remote = crate::profile::fetch_remote_lock(state, &effective_server)
+    .await
+    .map_err(|e| format!("{e}"))?;
+  let metadata = crate::profile::fetch_profile_metadata(state, &effective_server).await.ok();
+
+  let allowed_minecraft_versions = allowed_versions(metadata.as_ref(), &remote.minecraft_version);
+  let allowlisted = allowed_minecraft_versions
+    .iter()
+    .any(|value| value == &remote.minecraft_version);
+
+  let mut paths = InstancePaths::new(
+    &state.config,
+    &effective_server,
+    &settings.install_mode,
+    settings.minecraft_root_override.as_deref(),
+  )
+  .map_err(|e| format!("{e}"))?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote);
+  }
+
+  ensure_layout(&paths).map_err(|e| format!("{e}"))?;
+
+  let (minecraft_root, using_override_root) =
+    resolve_launcher_minecraft_root(&settings).map_err(|e| format!("{e}"))?;
+  let versions_dir = minecraft_root.join("versions");
+
+  let expected_fabric = crate::runtime::fabric_version_id(&remote.minecraft_version, &remote.loader_version);
+  
+  let is_prism = selected.as_deref() == Some("prism");
+
+  let fabric_present = if is_prism {
+    true // Prism manages its own loader components via mmc-pack.json
+  } else {
+    versions_dir
+      .join(&expected_fabric)
+      .join(format!("{expected_fabric}.json"))
+      .exists()
+  };
+
+  let expected_managed = crate::launcher_apps::server_release_version_id(&remote);
+  let managed_version_present = if is_prism {
+    true
+  } else {
+    crate::launcher_apps::managed_version_exists(&minecraft_root, &expected_managed)
+  };
+
+  let found = fabric_present && managed_version_present;
+
+  let guidance = if !allowlisted {
+    format!(
+      "Minecraft {} is not allowlisted for this server.",
+      remote.minecraft_version
+    )
+  } else if !fabric_present {
+    "The required Fabric runtime is missing. Click the button below to install it.".to_string()
+  } else if !managed_version_present {
+    "Launcher configuration needs preparation. Click the button below to continue.".to_string()
+  } else {
+    "The required Fabric runtime is ready. You can now proceed to sync your profile.".to_string()
+  };
+
+  let live_minecraft_root = if is_prism {
+    paths.minecraft_dir.clone()
+  } else {
+    minecraft_root.clone()
+  };
+
+  Ok(VersionReadiness {
+    minecraft_version: remote.minecraft_version,
+    loader: remote.loader,
+    loader_version: remote.loader_version,
+    managed_minecraft_dir: paths.minecraft_dir.to_string_lossy().to_string(),
+    live_minecraft_root: live_minecraft_root.to_string_lossy().to_string(),
+    minecraft_root: minecraft_root.to_string_lossy().to_string(),
+    found_in_minecraft_root_dir: found,
+    using_override_root,
+    allowlisted,
+    allowed_minecraft_versions,
+    expected_fabric_version_id: expected_fabric,
+    expected_managed_version_id: expected_managed,
+    managed_version_present,
+    guidance,
+  })
+
 }

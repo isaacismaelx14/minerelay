@@ -7,7 +7,7 @@ build/
 coverage/
 *.tsbuildinfo
 .turbo/
-apps/api/src/admin/public/
+apps/api/src/admin/public/*.js
 
 # Rust/Tauri
 **/target/
@@ -46,3 +46,6 @@ apps/launcher/.updater/
 .DS_Store
 
 .playwright-cli/
+output/playwright
+
+launcher-trust-store.json

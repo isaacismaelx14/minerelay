@@ -16,7 +16,7 @@ function statusClass(tone: LoginStatus['tone']): string {
 function LoginApp(): ReactElement {
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<LoginStatus>({
-    text: 'Ready.',
+    text: '',
     tone: 'idle',
   });
   const disabled = useMemo(() => password.trim().length === 0, [password]);
@@ -78,9 +78,11 @@ function LoginApp(): ReactElement {
         </button>
       </form>
 
-      <div id="loginStatus" className={statusClass(status.tone)}>
-        {status.text}
-      </div>
+      {status.text !== '' && (
+        <div id="loginStatus" className={statusClass(status.tone)}>
+          {status.text}
+        </div>
+      )}
     </main>
   );
 }

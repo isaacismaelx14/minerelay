@@ -109,12 +109,17 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
   let context = plan_context(state, server_id).await?;
   let settings = state.settings.lock().clone();
-  let paths = InstancePaths::new(
+  let mut paths = InstancePaths::new(
     &state.config,
     server_id,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )?;
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&context.remote_lock);
+  }
   ensure_layout(&paths)?;
 
   emit_sync_progress(
@@ -875,12 +880,19 @@ async fn plan_context(state: &AppState, server_id: &str) -> LauncherResult<PlanC
   strip_server_lock_items(&mut remote_lock);
 
   let settings = state.settings.lock().clone();
-  let paths = InstancePaths::new(
+  let mut paths = InstancePaths::new(
     &state.config,
     server_id,
     &settings.install_mode,
     settings.minecraft_root_override.as_deref(),
   )?;
+
+  let detected = crate::launcher_apps::detect_installed_launchers();
+  let selected = crate::launcher_apps::selected_launcher_id(&settings, &detected);
+  if selected.as_deref() == Some("prism") {
+    let _ = paths.apply_prism(&remote_lock);
+  }
+
   ensure_layout(&paths)?;
 
   let local_lock = load_local_lock(&paths)?;
@@ -992,6 +1004,10 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
   let mut map = HashMap::new();
 
   for item in &lock.items {
+    if !should_sync_mod_to_client(item) {
+      continue;
+    }
+
     validate_download_url(&item.provider, &item.url)?;
 
     let filename = extract_filename(&item.url)?;
@@ -1015,6 +1031,13 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
   extend_configs(&mut map, &lock.configs)?;
 
   Ok(map)
+}
+
+fn should_sync_mod_to_client(item: &LockItem) -> bool {
+  match item.side.as_deref() {
+    Some("server") => false,
+    _ => true,
+  }
 }
 
 fn extend_resources(

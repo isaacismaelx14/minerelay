@@ -14,6 +14,14 @@ use crate::{
   types::{AppSettings, GameSessionStatus, InstallMode, ProfileLock},
 };
 
+#[derive(Clone)]
+pub struct LauncherAuthState {
+  pub api_base: String,
+  pub access_token: String,
+  pub token_id: String,
+  pub signing_secret: [u8; 32],
+}
+
 pub struct AppState {
   pub config: LauncherConfig,
   pub http: reqwest::Client,
@@ -24,6 +32,8 @@ pub struct AppState {
   pub remote_lock_cache: Mutex<HashMap<String, ProfileLock>>,
   pub session_status: Mutex<GameSessionStatus>,
   pub session_monitor: Mutex<Option<JoinHandle<()>>>,
+  pub launcher_auth: Mutex<Option<LauncherAuthState>>,
+  pub launcher_server_stream: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl AppState {
@@ -52,6 +62,8 @@ impl AppState {
       remote_lock_cache: Mutex::new(HashMap::new()),
       session_status: Mutex::new(GameSessionStatus::default()),
       session_monitor: Mutex::new(None),
+      launcher_auth: Mutex::new(None),
+      launcher_server_stream: Mutex::new(None),
     }
   }
 }

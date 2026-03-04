@@ -2,11 +2,13 @@ export type AdminMod = {
   kind: 'mod';
   name: string;
   provider: 'modrinth' | 'direct';
-  side: 'client';
+  side: 'client' | 'server' | 'both';
   projectId?: string;
   versionId?: string;
   url: string;
   sha256: string;
+  iconUrl?: string;
+  slug?: string;
 };
 
 export type CoreModPolicy = {
@@ -39,6 +41,47 @@ export type BrandingPayload = {
   newsUrl?: string;
 };
 
+export type ExarotonServerPayload = {
+  id: string;
+  name: string;
+  address: string;
+  motd: string;
+  status: number;
+  statusLabel: string;
+  players: {
+    max: number;
+    count: number;
+  };
+  software: {
+    id: string;
+    name: string;
+    version: string;
+  } | null;
+  shared: boolean;
+};
+
+export type ExarotonStatusPayload = {
+  configured: boolean;
+  connected: boolean;
+  account: {
+    name: string | null;
+    email: string | null;
+  } | null;
+  selectedServer: ExarotonServerPayload | null;
+  settings: ExarotonSettingsPayload;
+  error: string | null;
+};
+
+export type ExarotonSettingsPayload = {
+  serverStatusEnabled: true;
+  modsSyncEnabled: boolean;
+  playerCanViewStatus: boolean;
+  playerCanViewOnlinePlayers: boolean;
+  playerCanStartServer: boolean;
+  playerCanStopServer: boolean;
+  playerCanRestartServer: boolean;
+};
+
 export type BootstrapPayload = {
   server: {
     id: string;
@@ -66,9 +109,14 @@ export type BootstrapPayload = {
     serverName?: string | null;
     serverAddress?: string | null;
     profileId?: string | null;
+    minecraftVersion?: string | null;
+    loaderVersion?: string | null;
+    mods?: AdminMod[] | null;
     fancyMenu?: Partial<FancyMenuPayload> | null;
     branding?: BrandingPayload | null;
   } | null;
+  hasSavedDraft: boolean;
+  exaroton: ExarotonStatusPayload;
 };
 
 export type FabricVersionsPayload = {
@@ -79,8 +127,13 @@ export type FabricVersionsPayload = {
 
 export type SearchResult = {
   projectId: string;
+  slug: string;
   title: string;
   description: string;
+  author: string;
+  iconUrl?: string;
+  categories?: string[];
+  latestVersion?: string;
 };
 
 export type DependencyAnalysis = {
@@ -136,6 +189,29 @@ export type PublishPayload = {
     update: number;
     keep: number;
   };
+  serverModSummary: {
+    add: number;
+    remove: number;
+    update: number;
+    keep: number;
+    hasChanges: boolean;
+  };
+  exarotonSync?: ExarotonSyncModsPayload;
+};
+
+export type PublishStartPayload = {
+  jobId: string;
+};
+
+export type PublishProgressStage =
+  | 'detecting-mod-changes'
+  | 'getting-mods'
+  | 'syncing-mods'
+  | 'done';
+
+export type PublishProgressPayload = {
+  stage: PublishProgressStage;
+  message: string;
 };
 
 export type UploadImagePayload = {
@@ -146,6 +222,53 @@ export type UploadBundlePayload = {
   url: string;
   sha256: string;
   entryCount: number;
+};
+
+export type ConnectExarotonPayload = {
+  configured: boolean;
+  connected: boolean;
+  account: {
+    name: string;
+    email: string;
+    verified: boolean;
+    credits: number;
+  };
+  servers: ExarotonServerPayload[];
+  selectedServer: ExarotonServerPayload | null;
+  settings: ExarotonSettingsPayload;
+};
+
+export type ExarotonServersPayload = {
+  servers: ExarotonServerPayload[];
+};
+
+export type ExarotonSelectPayload = {
+  selectedServer: ExarotonServerPayload;
+};
+
+export type ExarotonActionPayload = {
+  success: boolean;
+  action: 'start' | 'stop' | 'restart';
+  selectedServer: ExarotonServerPayload;
+};
+
+export type ExarotonSyncModsPayload = {
+  attempted: boolean;
+  success: boolean;
+  message: string;
+  summary: {
+    add: number;
+    remove: number;
+    keep: number;
+  };
+};
+
+export type ExarotonSettingsUpdatePayload = {
+  settings: ExarotonSettingsPayload;
+};
+
+export type ExarotonStreamStatusPayload = {
+  selectedServer: ExarotonServerPayload;
 };
 
 export type FancyMenuPreviewAssetRef = {

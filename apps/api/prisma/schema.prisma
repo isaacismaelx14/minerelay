@@ -84,3 +84,41 @@ model AppSetting {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 }
+
+model ExarotonIntegration {
+  id                    String   @id
+  apiKeyCiphertext      String
+  apiKeyIv              String
+  apiKeyAuthTag         String
+  accountName           String?
+  accountEmail          String?
+  selectedServerId      String?
+  selectedServerName    String?
+  selectedServerAddress String?
+  modsSyncEnabled       Boolean  @default(true)
+  playerCanViewStatus   Boolean  @default(true)
+  playerCanViewOnlinePlayers Boolean  @default(true)
+  playerCanModifyStatus Boolean  @default(false)
+  playerCanStartServer  Boolean  @default(false)
+  playerCanStopServer   Boolean  @default(false)
+  playerCanRestartServer Boolean @default(false)
+  connectedAt           DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model LauncherTrustedDevice {
+  id            String   @id
+  installationId String  @unique
+  publicKeyHash String
+  publicKeyBase64 String
+  lastSeenAt    DateTime?
+  trustedAt     DateTime @default(now())
+  rotatedAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([revokedAt])
+  @@index([publicKeyHash])
+}

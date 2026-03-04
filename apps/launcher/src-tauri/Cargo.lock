@@ -2267,6 +2267,7 @@ dependencies = [
  "hex",
  "objc2-app-kit",
  "parking_lot",
+ "rand 0.8.5",
  "reqwest 0.12.28",
  "rfd",
  "serde",

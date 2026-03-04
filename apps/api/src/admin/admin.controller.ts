@@ -1,8 +1,8 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
-  Param,
   Patch,
   Post,
   Query,
@@ -18,7 +18,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   AdminLoginDto,
-  BuildFancyMenuPreviewDto,
+  ConnectExarotonDto,
+  ExarotonServerActionDto,
+  UpdateExarotonSettingsDto,
+  SelectExarotonServerDto,
   GenerateLockfileDto,
   InstallModDto,
   PublishProfileDto,
@@ -123,6 +126,92 @@ export class AdminController {
     return this.adminService.saveDraft(payload);
   }
 
+  @Post('/v1/admin/exaroton/connect')
+  connectExaroton(@Body() payload: ConnectExarotonDto) {
+    return this.adminService.connectExaroton(payload.apiKey);
+  }
+
+  @Delete('/v1/admin/exaroton/disconnect')
+  disconnectExaroton() {
+    return this.adminService.disconnectExaroton();
+  }
+
+  @Get('/v1/admin/exaroton/status')
+  getExarotonStatus() {
+    return this.adminService.getExarotonStatus();
+  }
+
+  @Get('/v1/admin/exaroton/servers')
+  listExarotonServers() {
+    return this.adminService.listExarotonServers();
+  }
+
+  @Post('/v1/admin/exaroton/server/select')
+  selectExarotonServer(@Body() payload: SelectExarotonServerDto) {
+    return this.adminService.selectExarotonServer(payload.serverId);
+  }
+
+  @Post('/v1/admin/exaroton/server/action')
+  exarotonServerAction(@Body() payload: ExarotonServerActionDto) {
+    return this.adminService.exarotonServerAction(payload.action);
+  }
+
+  @Patch('/v1/admin/exaroton/settings')
+  updateExarotonSettings(@Body() payload: UpdateExarotonSettingsDto) {
+    return this.adminService.updateExarotonSettings(payload);
+  }
+
+  @Post('/v1/admin/exaroton/mods/sync')
+  syncExarotonMods() {
+    return this.adminService.syncExarotonModsNow();
+  }
+
+  @Get('/v1/admin/exaroton/server/stream')
+  async exarotonServerStream(@Req() req: Request, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closeUpstream: (() => void) | null = null;
+    const heartbeat = setInterval(() => {
+      send('ping', { ts: Date.now() });
+    }, 15000);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      if (closeUpstream) {
+        closeUpstream();
+        closeUpstream = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    req.on('close', cleanup);
+
+    try {
+      closeUpstream = await this.adminService.openExarotonStatusStream({
+        onStatus: (server) => send('status', { selectedServer: server }),
+        onError: (message) => send('stream-error', { message }),
+      });
+      send('ready', { ok: true });
+    } catch (error) {
+      send('stream-error', {
+        message:
+          (error as Error).message || 'Failed to open Exaroton status stream',
+      });
+      cleanup();
+    }
+  }
+
   @Get('/v1/admin/fabric/versions')
   getFabricVersions(@Query('minecraftVersion') minecraftVersion = ''): Promise<{
     minecraftVersion: string;
@@ -198,6 +287,87 @@ export class AdminController {
     return this.adminService.publishProfile(payload, origin);
   }
 
+  @Post('/v1/admin/profile/publish/start')
+  startPublishProfile(
+    @Body() payload: PublishProfileDto,
+    @Req() request: Request,
+  ) {
+    const host = request.get('host') ?? 'localhost:3000';
+    const forwardedProto = request
+      .get('x-forwarded-proto')
+      ?.split(',')[0]
+      ?.trim()
+      ?.toLowerCase();
+    const protocol =
+      forwardedProto === 'https' || forwardedProto === 'http'
+        ? forwardedProto
+        : request.protocol;
+    const origin = `${protocol}://${host}`;
+    return this.adminService.startPublishProfile(payload, origin);
+  }
+
+  @Get('/v1/admin/profile/publish/stream')
+  async publishProfileStream(
+    @Query('jobId') jobId = '',
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const cleanJobId = jobId.trim();
+    if (!cleanJobId) {
+      res.status(400).json({ message: 'Missing publish job id' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closeUpstream: (() => void) | null = null;
+    const heartbeat = setInterval(() => {
+      send('ping', { ts: Date.now() });
+    }, 15000);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      if (closeUpstream) {
+        closeUpstream();
+        closeUpstream = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    req.on('close', cleanup);
+
+    try {
+      closeUpstream = await this.adminService.openPublishStream(cleanJobId, {
+        onProgress: (event) => send('progress', event),
+        onDone: (result) => {
+          send('done', result);
+          cleanup();
+        },
+        onError: (message) => {
+          send('error', { message });
+          cleanup();
+        },
+      });
+      send('ready', { ok: true });
+    } catch (error) {
+      send('error', {
+        message: (error as Error).message || 'Failed to open publish stream',
+      });
+      cleanup();
+    }
+  }
+
   @Post('/v1/admin/media/upload')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
@@ -228,7 +398,7 @@ export class AdminController {
 
   @Post('/v1/admin/fancymenu/bundle/upload')
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }),
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )
   uploadFancyMenuBundle(
     @UploadedFile()
@@ -252,25 +422,5 @@ export class AdminController {
         : request.protocol;
     const origin = `${protocol}://${host}`;
     return this.adminService.uploadFancyMenuBundle(file, origin);
-  }
-
-  @Post('/v1/admin/fancymenu/preview/build')
-  buildFancyMenuPreview(@Body() payload: BuildFancyMenuPreviewDto) {
-    return this.adminService.buildFancyMenuPreview(payload);
-  }
-
-  @Get('/v1/admin/fancymenu/preview/assets/:token/:assetId')
-  async getFancyMenuPreviewAsset(
-    @Param('token') token: string,
-    @Param('assetId') assetId: string,
-    @Res() response: Response,
-  ) {
-    const payload = await this.adminService.getFancyMenuPreviewAsset(
-      token,
-      assetId,
-    );
-    response.setHeader('content-type', payload.contentType);
-    response.setHeader('cache-control', payload.cacheControl);
-    response.status(200).send(payload.body);
   }
 }
