@@ -306,3 +306,25 @@ export type FancyMenuPreviewPayload = {
   model: FancyMenuPreviewModel;
   expiresAt?: string;
 };
+
+export type LauncherPairingClaimIssuePayload = {
+  claimId: string;
+  pairingToken: string;
+  pairingCode: string;
+  deepLink: string;
+  expiresAt: string;
+};
+
+export type LauncherPairingClaimListItem = {
+  id: string;
+  expiresAt: string;
+  issuedAt: string;
+  issuedBy: string | null;
+  consumedAt: string | null;
+  revokedAt: string | null;
+  consumedByInstallationId: string | null;
+};
+
+export type LauncherTrustResetPayload = {
+  resetAt: string;
+};

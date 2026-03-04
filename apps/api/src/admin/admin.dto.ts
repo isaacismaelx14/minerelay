@@ -300,3 +300,9 @@ export class UpdateExarotonSettingsDto {
   @IsOptional()
   playerCanRestartServer?: boolean;
 }
+
+export class CreateLauncherPairingClaimDto {
+  @IsString()
+  @IsOptional()
+  apiBaseUrl?: string;
+}

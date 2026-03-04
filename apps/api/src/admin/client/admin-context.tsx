@@ -124,11 +124,17 @@ type PublishSnapshot = {
   mods: AdminMod[];
 };
 
+type AdminView =
+  | 'overview'
+  | 'identity'
+  | 'mods'
+  | 'fancy'
+  | 'servers'
+  | 'launcher';
+
 type AdminContextValue = {
-  view: 'overview' | 'identity' | 'mods' | 'fancy' | 'servers';
-  setView: (
-    view: 'overview' | 'identity' | 'mods' | 'fancy' | 'servers',
-  ) => void;
+  view: AdminView;
+  setView: (view: AdminView) => void;
   form: FormState;
   setTextFieldFromEvent: (
     event: ChangeEvent<
@@ -616,9 +622,7 @@ function isValidUrl(val: string): boolean {
 }
 
 export function AdminProvider({ children }: PropsWithChildren): ReactElement {
-  const [view, setView] = useState<
-    'overview' | 'identity' | 'mods' | 'fancy' | 'servers'
-  >('overview');
+  const [view, setView] = useState<AdminView>('overview');
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [selectedMods, setSelectedMods] = useState<AdminMod[]>([]);
   const [coreModPolicy, setCoreModPolicy] =

@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -20,7 +21,7 @@ export class LauncherAuthGuard implements CanActivate {
     private readonly launcherService: LauncherService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(
       LAUNCHER_PUBLIC_KEY,
       [context.getHandler(), context.getClass()],
@@ -30,36 +31,40 @@ export class LauncherAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<Request>();
-    const bearer = this.readBearerToken(request);
+    try {
+      const request = context.switchToHttp().getRequest<Request>();
+      const bearer = this.readBearerToken(request);
 
-    const timestampRaw = request.header(HEADER_TIMESTAMP)?.trim() ?? '';
-    const nonce = request.header(HEADER_NONCE)?.trim() ?? '';
-    const signature = request.header(HEADER_SIGNATURE)?.trim() ?? '';
+      const timestampRaw = request.header(HEADER_TIMESTAMP)?.trim() ?? '';
+      const nonce = request.header(HEADER_NONCE)?.trim() ?? '';
+      const signature = request.header(HEADER_SIGNATURE)?.trim() ?? '';
 
-    if (!timestampRaw || !nonce || !signature) {
-      throw new UnauthorizedException(
-        'Missing launcher signed request headers',
-      );
+      if (!timestampRaw || !nonce || !signature) {
+        throw new UnauthorizedException(
+          'Missing launcher signed request headers',
+        );
+      }
+
+      const timestampMs = Number(timestampRaw);
+      if (!Number.isFinite(timestampMs)) {
+        throw new UnauthorizedException('Invalid launcher request timestamp');
+      }
+
+      await this.launcherService.verifySignedRequest({
+        bearerToken: bearer,
+        method: request.method,
+        pathWithQuery: request.originalUrl || request.url,
+        body: request.body ?? {},
+        timestampMs,
+        nonce,
+        signatureBase64: signature,
+        userAgent: request.get('user-agent') ?? '',
+      });
+
+      return true;
+    } catch {
+      throw new NotFoundException('Not Found');
     }
-
-    const timestampMs = Number(timestampRaw);
-    if (!Number.isFinite(timestampMs)) {
-      throw new UnauthorizedException('Invalid launcher request timestamp');
-    }
-
-    this.launcherService.verifySignedRequest({
-      bearerToken: bearer,
-      method: request.method,
-      pathWithQuery: request.originalUrl || request.url,
-      body: request.body ?? {},
-      timestampMs,
-      nonce,
-      signatureBase64: signature,
-      userAgent: request.get('user-agent') ?? '',
-    });
-
-    return true;
   }
 
   private readBearerToken(request: Request): string {

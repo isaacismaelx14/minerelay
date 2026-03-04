@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useMemo,
   type ReactNode,
@@ -12,7 +13,12 @@ import { createPortal } from 'react-dom';
 
 import { useAdminContext } from './admin-context';
 import { requestJson } from './http';
-import type { ExarotonServerPayload } from './types';
+import type {
+  ExarotonServerPayload,
+  LauncherPairingClaimIssuePayload,
+  LauncherPairingClaimListItem,
+  LauncherTrustResetPayload,
+} from './types';
 
 const ExarotonLogo = memo(function ExarotonLogo({
   className,
@@ -368,6 +374,25 @@ const Sidebar = memo(function Sidebar() {
             <line x1="6" y1="18" x2="6.01" y2="18"></line>
           </svg>
           <span>Servers</span>
+        </button>
+        <button
+          className={`nav-item ${view === 'launcher' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setView('launcher')}
+        >
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <path d="M9 12l2 2 4-4"></path>
+          </svg>
+          <span>Launcher Pairing</span>
         </button>
       </nav>
 
@@ -1683,6 +1708,267 @@ const ExternalLinkIcon = () => (
   </svg>
 );
 
+function toIsoLocalInputValue(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return '-';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+const LauncherPairingPanel = memo(function LauncherPairingPanel() {
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => toIsoLocalInputValue(window.location.origin));
+  const [claims, setClaims] = useState<LauncherPairingClaimListItem[]>([]);
+  const [latestClaim, setLatestClaim] = useState<LauncherPairingClaimIssuePayload | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const refreshClaims = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const next = await requestJson<LauncherPairingClaimListItem[]>(
+        '/v1/admin/launcher/pairing/claims',
+        'GET',
+      );
+      setClaims(next);
+    } catch (requestError) {
+      setError((requestError as Error).message || 'Failed to load pairing claims');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshClaims();
+  }, [refreshClaims]);
+
+  const createClaim = async () => {
+    setIsCreating(true);
+    setError('');
+    setMessage('');
+    try {
+      const payload = await requestJson<LauncherPairingClaimIssuePayload>(
+        '/v1/admin/launcher/pairing/claims',
+        'POST',
+        {
+          apiBaseUrl: apiBaseUrl.trim() || undefined,
+        },
+      );
+      setLatestClaim(payload);
+      setMessage('Pairing claim generated.');
+      await refreshClaims();
+    } catch (requestError) {
+      setError((requestError as Error).message || 'Failed to create pairing claim');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const copyValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage(`${label} copied.`);
+      setError('');
+    } catch {
+      setError('Clipboard permission denied in this browser.');
+    }
+  };
+
+  const revokeClaim = async (claimId: string) => {
+    setError('');
+    setMessage('');
+    try {
+      await requestJson<{ revoked: boolean }>(
+        `/v1/admin/launcher/pairing/claims/${encodeURIComponent(claimId)}`,
+        'DELETE',
+      );
+      setClaims((prev) => prev.map((entry) =>
+        entry.id === claimId
+          ? { ...entry, revokedAt: new Date().toISOString() }
+          : entry,
+      ));
+      if (latestClaim?.claimId === claimId) {
+        setLatestClaim(null);
+      }
+      setMessage('Pairing claim revoked.');
+    } catch (requestError) {
+      setError((requestError as Error).message || 'Failed to revoke pairing claim');
+    }
+  };
+
+  const resetTrust = async () => {
+    setIsResetting(true);
+    setError('');
+    setMessage('');
+    try {
+      const payload = await requestJson<LauncherTrustResetPayload>(
+        '/v1/admin/launcher/trust/reset',
+        'POST',
+      );
+      setLatestClaim(null);
+      setMessage(`Launcher trust reset at ${formatDateTime(payload.resetAt)}.`);
+      await refreshClaims();
+    } catch (requestError) {
+      setError((requestError as Error).message || 'Failed to reset launcher trust');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const activeClaims = claims.filter(
+    (entry) => !entry.revokedAt && !entry.consumedAt && new Date(entry.expiresAt).getTime() > Date.now(),
+  );
+
+  return (
+    <article className="panel">
+      <div className="panel-header">
+        <h3>Launcher Pairing</h3>
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => void refreshClaims()}
+          disabled={isLoading || isCreating || isResetting}
+        >
+          Refresh
+        </button>
+      </div>
+      <p className="hint">
+        Generate one-time claims for secure launcher enrollment. Give users the deep link or the fallback pairing code.
+      </p>
+
+      <div className="grid">
+        <TextInput
+          name="pairingApiBaseUrl"
+          label="Server API URL for pairing link"
+          value={apiBaseUrl}
+          placeholder="https://api.example.com"
+          onChange={(event) => setApiBaseUrl(event.currentTarget.value)}
+        />
+      </div>
+
+      <div className="row" style={{ marginTop: 12 }}>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => void createClaim()}
+          disabled={isCreating || isResetting}
+        >
+          {isCreating ? 'Generating...' : 'Generate Pairing Claim'}
+        </button>
+        <button
+          className="btn danger ghost"
+          type="button"
+          onClick={() => void resetTrust()}
+          disabled={isResetting || isCreating}
+          title="Invalidates all trusted launcher devices and sessions"
+        >
+          {isResetting ? 'Resetting...' : 'Reset Launcher Trust'}
+        </button>
+      </div>
+
+      {latestClaim ? (
+        <div className="alert-box" style={{ marginTop: 12 }}>
+          <div className="grid" style={{ gap: 8 }}>
+            <DataItem label="Claim ID" value={latestClaim.claimId} />
+            <DataItem label="Expires" value={formatDateTime(latestClaim.expiresAt)} />
+            <TextInput
+              name="latestPairingCode"
+              label="Pairing Code"
+              value={latestClaim.pairingCode}
+              readOnly
+              onChange={() => undefined}
+            />
+            <div className="row">
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => void copyValue(latestClaim.pairingCode, 'Pairing code')}
+              >
+                Copy Pairing Code
+              </button>
+            </div>
+            <TextInput
+              name="latestDeepLink"
+              label="Deep Link"
+              value={latestClaim.deepLink}
+              readOnly
+              onChange={() => undefined}
+            />
+            <div className="row">
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => void copyValue(latestClaim.deepLink, 'Deep link')}
+              >
+                Copy Deep Link
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="panel-header" style={{ marginTop: 16 }}>
+        <h3>Active Claims</h3>
+      </div>
+      {!activeClaims.length ? (
+        <p className="hint">No active pairing claims.</p>
+      ) : (
+        <div className="list compact">
+          {activeClaims.map((claim) => (
+            <div key={claim.id} className="item" style={{ alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}>
+                <div className="name">{claim.id}</div>
+                <div className="meta">Expires {formatDateTime(claim.expiresAt)}</div>
+              </div>
+              <button
+                className="btn danger ghost"
+                type="button"
+                onClick={() => void revokeClaim(claim.id)}
+                style={{ padding: '6px 10px' }}
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error ? <div className="status error">{error}</div> : null}
+      {message ? <div className="status ok">{message}</div> : null}
+    </article>
+  );
+});
+
+const LauncherPairingPage = memo(function LauncherPairingPage() {
+  return (
+    <section className="exaroton-wizard">
+      <div className="step-header">
+        <h2>Launcher Pairing</h2>
+        <p>
+          Generate and manage one-time claims used to enroll trusted launcher
+          installations.
+        </p>
+      </div>
+      <LauncherPairingPanel />
+    </section>
+  );
+});
+
 const AddModsModal = memo(function AddModsModal({
   onClose,
   onInstall,
@@ -2859,6 +3145,7 @@ export const AdminApp = memo(function AdminApp() {
               {view === 'mods' ? <ModManagerPage /> : null}
               {view === 'fancy' ? <FancyMenuPage /> : null}
               {view === 'servers' ? <ServersPage /> : null}
+              {view === 'launcher' ? <LauncherPairingPage /> : null}
             </>
           )}
         </section>

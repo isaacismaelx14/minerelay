@@ -21,6 +21,7 @@ import {
 import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
+import { LauncherSecurityUseCases } from '../launcher-security/application/launcher-security.use-cases';
 import {
   decryptExarotonApiKey,
   encryptExarotonApiKey,
@@ -206,6 +207,7 @@ export class AdminService implements OnModuleInit {
     private readonly coreModPolicy: CoreModPolicyService,
     private readonly artifactsStorage: ArtifactsStorageService,
     private readonly exarotonClient: ExarotonApiClient,
+    private readonly launcherSecurity: LauncherSecurityUseCases,
   ) {}
 
   async onModuleInit() {
@@ -724,6 +726,28 @@ export class AdminService implements OnModuleInit {
     return {
       settings: this.mapExarotonSettings(this.readExarotonSettings(updated)),
     };
+  }
+
+  async createLauncherPairingClaim(apiBaseUrl?: string) {
+    return this.launcherSecurity.issuePairingClaim({
+      issuedBy: 'admin',
+      apiBaseUrl,
+    });
+  }
+
+  async listLauncherPairingClaims() {
+    return this.launcherSecurity.listPairingClaims();
+  }
+
+  async revokeLauncherPairingClaim(claimId: string) {
+    if (!claimId) {
+      throw new BadRequestException('claimId is required');
+    }
+    return this.launcherSecurity.revokePairingClaim(claimId);
+  }
+
+  async resetLauncherTrust() {
+    return this.launcherSecurity.resetTrust();
   }
 
   async syncExarotonModsNow(): Promise<ExarotonModsSyncResult> {
