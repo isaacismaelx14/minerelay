@@ -164,8 +164,8 @@ function readSignature(path: string): string {
   return readFileSync(path, "utf-8").trim();
 }
 
-function inferMacArch(assetName: string): "universal" | "aarch64" | "x86_64" {
-  const lower = assetName.toLowerCase();
+function parseArchFromName(name: string): "universal" | "aarch64" | "x86_64" | null {
+  const lower = name.toLowerCase();
   if (lower.includes("universal")) {
     return "universal";
   }
@@ -175,7 +175,40 @@ function inferMacArch(assetName: string): "universal" | "aarch64" | "x86_64" {
   if (lower.includes("x86_64") || lower.includes("x64") || lower.includes("amd64")) {
     return "x86_64";
   }
-  throw new Error(`Cannot infer macOS arch from updater asset: ${assetName}`);
+  return null;
+}
+
+function inferMacArch(assetName: string, files: string[]): "universal" | "aarch64" | "x86_64" {
+  const direct = parseArchFromName(assetName);
+  if (direct) {
+    return direct;
+  }
+
+  const inferred = new Set<"universal" | "aarch64" | "x86_64">();
+  for (const file of files) {
+    const base = basename(file);
+    const arch = parseArchFromName(base);
+    if (arch) {
+      inferred.add(arch);
+    }
+  }
+
+  if (inferred.has("universal")) {
+    return "universal";
+  }
+  if (inferred.size === 1) {
+    const first = inferred.values().next().value;
+    if (first) {
+      return first;
+    }
+  }
+
+  // Some CI outputs use generic names (e.g., "MSS+ Client.app.tar.gz").
+  // Falling back to universal avoids failing the release pipeline on naming differences.
+  console.warn(
+    `Could not infer macOS arch from '${assetName}'. Falling back to 'universal'.`,
+  );
+  return "universal";
 }
 
 function pickWindowsUpdater(files: string[]): MatchResult {
@@ -255,7 +288,7 @@ export function generateManifest(input: ParsedArgs): ManifestContent {
     const macAssetName = basename(mac.assetPath);
     const macSignature = readSignature(mac.sigPath);
     const url = releaseAssetUrl(input.owner, input.repo, input.tag, macAssetName);
-    const arch = inferMacArch(macAssetName);
+    const arch = inferMacArch(macAssetName, files);
 
     if (arch === "universal") {
       manifest.platforms["darwin-aarch64"] = { signature: macSignature, url };

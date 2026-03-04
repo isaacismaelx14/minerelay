@@ -46,6 +46,14 @@ function runFixtures(): void {
     assert.ok(dual.platforms["darwin-aarch64"]);
     assert.ok(dual.platforms["darwin-x86_64"]);
 
+    const genericMacDir = join(tempRoot, "generic-mac");
+    mkdirSync(genericMacDir, { recursive: true });
+    writeFileSync(join(genericMacDir, "MSS+ Client.app.tar.gz"), "bin");
+    writeFileSync(join(genericMacDir, "MSS+ Client.app.tar.gz.sig"), "sig-generic");
+    writeFileSync(join(genericMacDir, "MSS+.Client_0.1.0-beta.999_aarch64.dmg"), "dmg");
+    const genericMac = generateManifest(buildArgs(genericMacDir, new Set(["macos"])));
+    assert.ok(genericMac.platforms["darwin-aarch64"]);
+
     const incompleteDir = join(tempRoot, "incomplete");
     mkdirSync(incompleteDir, { recursive: true });
     writeFileSync(join(incompleteDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"), "bin");
