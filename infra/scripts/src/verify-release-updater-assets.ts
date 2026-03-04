@@ -26,6 +26,9 @@ function parseArgs(argv: string[]): VerifyArgs {
     if (!token) {
       continue;
     }
+    if (token === "--") {
+      continue;
+    }
     if (!token.startsWith("--")) {
       continue;
     }

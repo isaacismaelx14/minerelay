@@ -39,6 +39,9 @@ function parseArgs(argv: string[]): ParsedArgs {
     if (!token) {
       continue;
     }
+    if (token === "--") {
+      continue;
+    }
     if (!token.startsWith("--")) {
       continue;
     }
