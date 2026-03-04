@@ -296,13 +296,13 @@ jobs:
 
       - name: Generate updater latest.json
         run: |
-          mkdir -p release-artifacts/generated
+          mkdir -p "${GITHUB_WORKSPACE}/release-artifacts/generated"
           pnpm --filter @mvl/infra-scripts manifest:generate -- \
             --owner isaacismaelx14 \
             --repo minecraft-server-sync \
             --tag "${{ steps.meta.outputs.tag }}" \
-            --artifacts-dir release-artifacts \
-            --output release-artifacts/generated/latest.json \
+            --artifacts-dir "${GITHUB_WORKSPACE}/release-artifacts" \
+            --output "${GITHUB_WORKSPACE}/release-artifacts/generated/latest.json" \
             --required windows,macos
 
       - name: Publish beta GitHub Release
