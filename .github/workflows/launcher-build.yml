@@ -181,15 +181,15 @@ jobs:
 
             if [ "$missing_secret" -eq 1 ]; then
               # Force unsigned build when secrets are absent/partial.
-              echo "::warning::Building unsigned macOS DMG (Apple signing/notarization secrets missing)."
+              echo "::warning::Building unsigned macOS APP+DMG (Apple signing/notarization secrets missing)."
               unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
-              pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles dmg
+              pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles app,dmg
             else
               # Try signed build first, then fallback to unsigned to avoid release failures.
-              if ! pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles dmg; then
-                echo "::warning::Signed macOS build failed; retrying unsigned DMG."
+              if ! pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles app,dmg; then
+                echo "::warning::Signed macOS build failed; retrying unsigned APP+DMG."
                 unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
-                pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles dmg
+                pnpm tauri build --config src-tauri/tauri.release.conf.json --bundles app,dmg
               fi
             fi
           fi
@@ -245,19 +245,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: launcher-updater-${{ runner.os }}
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             apps/launcher/src-tauri/target/release/bundle/**/*.sig
             apps/launcher/src-tauri/target/release/bundle/**/*.zip
             apps/launcher/src-tauri/target/release/bundle/**/*.tar.gz
-
-      - name: Upload updater latest.json
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: launcher-updater-latest-json
-          if-no-files-found: warn
-          path: apps/launcher/src-tauri/target/release/bundle/**/latest.json
 
   release-launcher:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -274,6 +266,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
 
       - name: Compute beta release metadata
         id: meta
@@ -294,6 +294,17 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Generate updater latest.json
+        run: |
+          mkdir -p release-artifacts/generated
+          pnpm --filter @mvl/infra-scripts manifest:generate -- \
+            --owner isaacismaelx14 \
+            --repo minecraft-server-sync \
+            --tag "${{ steps.meta.outputs.tag }}" \
+            --artifacts-dir release-artifacts \
+            --output release-artifacts/generated/latest.json \
+            --required windows,macos
+
       - name: Publish beta GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -305,7 +316,17 @@ jobs:
             release-artifacts/launcher-windows-nsis/*.exe
             release-artifacts/launcher-windows-msi/*.msi
             release-artifacts/launcher-macos-dmg/*.dmg
-            release-artifacts/launcher-updater-latest-json/**/latest.json
             release-artifacts/launcher-updater-*/**/*.sig
             release-artifacts/launcher-updater-*/**/*.zip
             release-artifacts/launcher-updater-*/**/*.tar.gz
+            release-artifacts/generated/latest.json
+
+      - name: Verify beta release updater assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm --filter @mvl/infra-scripts updater:verify -- \
+            --owner isaacismaelx14 \
+            --repo minecraft-server-sync \
+            --tag "${{ steps.meta.outputs.tag }}" \
+            --required windows,macos

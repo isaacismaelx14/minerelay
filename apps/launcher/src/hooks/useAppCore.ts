@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getVersion as getAppVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -83,6 +84,9 @@ export function useAppCore() {
   const [hint, setHint] = useState<string | null>(null);
   const [launcherUpdate, setLauncherUpdate] =
     useState<LauncherUpdateStatus | null>(null);
+  const [launcherAppVersion, setLauncherAppVersion] = useState<string | null>(
+    null,
+  );
   const [isCheckingLauncherUpdate, setIsCheckingLauncherUpdate] =
     useState(false);
   const [isInstallingLauncherUpdate, setIsInstallingLauncherUpdate] =
@@ -817,6 +821,16 @@ export function useAppCore() {
         return installLauncherUpdate(status.latestVersion ?? undefined);
       } catch (cause) {
         const raw = cause instanceof Error ? cause.message : String(cause);
+        console.error("launcher_update_check failed", cause);
+        setLauncherUpdate((current) =>
+          current ?? {
+            currentVersion: launcherAppVersion ?? "unknown",
+            latestVersion: null,
+            available: false,
+            body: null,
+            pubDate: null,
+          },
+        );
         const message = /valid release json/iu.test(raw)
           ? "No updater release metadata is published yet. This does not affect server sync."
           : "Launcher updates are temporarily unavailable. This does not affect server sync.";
@@ -830,7 +844,7 @@ export function useAppCore() {
         setIsCheckingLauncherUpdate(false);
       }
     },
-    [installLauncherUpdate],
+    [installLauncherUpdate, launcherAppVersion],
   );
 
   const runSyncCycle = useCallback(
@@ -918,6 +932,8 @@ export function useAppCore() {
   const bootstrap = useCallback(async () => {
     try {
       setError(null);
+      const localVersion = await getAppVersion().catch(() => null);
+      setLauncherAppVersion(localVersion);
       const loaded = await loadSettingsAndLaunchers();
       await refreshSessionStatus();
 

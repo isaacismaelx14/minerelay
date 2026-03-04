@@ -199,7 +199,7 @@ The desktop launcher now checks GitHub release updates and can download + instal
 
 Required runtime env:
 
-- `LAUNCHER_UPDATE_ENDPOINT` (default: `https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json`)
+- `LAUNCHER_UPDATE_ENDPOINT` (default: `https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json`)
 - `LAUNCHER_UPDATE_PUBKEY` (public key generated with `tauri signer generate`)
 
 Required GitHub secrets for signed release builds:

@@ -31,9 +31,9 @@ use crate::{
 };
 
 const DEFAULT_UPDATER_ENDPOINT: &str =
-  "https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json";
+  "https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json";
 const GITHUB_RELEASES_API: &str =
-  "https://api.github.com/repos/isaacismaelx14/mc-client-center/releases?per_page=20";
+  "https://api.github.com/repos/isaacismaelx14/minecraft-server-sync/releases?per_page=20";
 
 #[derive(Debug, Deserialize)]
 struct GithubReleaseAsset {

@@ -6,6 +6,6 @@
   "devtoolsSecretCommand": "optional-dev-only-secret",
   "launcherInstallCode": "optional-install-enrollment-code",
   "serverId": "mvl",
-  "updaterEndpoint": "https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json",
+  "updaterEndpoint": "https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json",
   "updaterPubkey": "minisign-public-key"
 }

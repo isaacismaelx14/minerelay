@@ -187,7 +187,7 @@ impl LauncherConfig {
       option_env!("LAUNCHER_UPDATE_ENDPOINT"),
     );
     let updater_endpoint = raw_updater_endpoint.unwrap_or_else(|| {
-      "https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json"
+      "https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json"
         .to_string()
     });
     resolution_report.push(ConfigResolution {
