@@ -47,3 +47,5 @@ apps/launcher/.updater/
 
 .playwright-cli/
 output/playwright
+
+launcher-trust-store.json

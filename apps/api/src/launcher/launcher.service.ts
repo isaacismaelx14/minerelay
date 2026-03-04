@@ -3,12 +3,16 @@ import {
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import nacl from 'tweetnacl';
 import { AdminService } from '../admin/admin.service';
 
 const AUTH_INPUT = 'launcher-auth-v1';
 const REQUEST_INPUT = 'launcher-request-v1';
+const TRUST_STORE_FILENAME = 'launcher-trust-store.json';
 
 type LauncherChallenge = {
   id: string;
@@ -59,10 +63,27 @@ export class LauncherService implements OnModuleInit {
   private readonly sessionTtlMs = 15 * 60 * 1000;
   private readonly requestSkewMs = 60 * 1000;
   private readonly nonceTtlMs = 3 * 60 * 1000;
+  private readonly trustedPublicKeyHashes = new Set<string>();
+  private readonly trustStorePath: string;
+  private readonly installCodeHash: string | null;
 
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly config: ConfigService,
+  ) {
+    const configuredPath =
+      this.config.get<string>('LAUNCHER_TRUST_STORE_PATH')?.trim() ?? '';
+    this.trustStorePath = configuredPath
+      ? resolve(configuredPath)
+      : resolve(process.cwd(), TRUST_STORE_FILENAME);
+
+    const installCode =
+      this.config.get<string>('LAUNCHER_INSTALL_CODE')?.trim() ?? '';
+    this.installCodeHash = installCode ? this.sha256(installCode) : null;
+  }
 
   onModuleInit() {
+    this.loadTrustedKeys();
     setInterval(() => this.cleanup(), 30_000).unref();
   }
 
@@ -97,42 +118,14 @@ export class LauncherService implements OnModuleInit {
     },
     userAgent: string,
   ) {
-    const challenge = this.challenges.get(input.challengeId);
-    if (!challenge || challenge.consumed || challenge.expiresAt <= Date.now()) {
-      throw new UnauthorizedException('Invalid or expired launcher challenge');
-    }
+    const { challenge, publicKeyBytes, publicKeyBase64 } =
+      this.verifyChallengeSignature(input);
 
-    const publicKeyBytes = this.base64ToBytes(
-      input.clientPublicKey,
-      'public key',
-    );
-    if (publicKeyBytes.length !== 32) {
-      throw new UnauthorizedException('Launcher public key must be 32 bytes');
-    }
-
-    const signatureBytes = this.base64ToBytes(input.signature, 'signature');
-    if (signatureBytes.length !== 64) {
-      throw new UnauthorizedException('Launcher signature must be 64 bytes');
-    }
-
-    const message = this.stableStringify({
-      signatureInput: AUTH_INPUT,
-      payload: {
-        challengeId: challenge.id,
-        nonce: challenge.nonce,
-        issuedAt: challenge.issuedAt,
-        expiresAt: new Date(challenge.expiresAt).toISOString(),
-      },
-    });
-
-    const valid = nacl.sign.detached.verify(
-      Buffer.from(message, 'utf8'),
-      signatureBytes,
-      publicKeyBytes,
-    );
-
-    if (!valid) {
-      throw new UnauthorizedException('Invalid launcher challenge signature');
+    const publicKeyHash = this.sha256(publicKeyBase64);
+    if (!this.trustedPublicKeyHashes.has(publicKeyHash)) {
+      throw new UnauthorizedException(
+        'Launcher installation is not trusted. Enroll this installation first.',
+      );
     }
 
     challenge.consumed = true;
@@ -162,6 +155,48 @@ export class LauncherService implements OnModuleInit {
       expiresAt: new Date(expiresAt).toISOString(),
       signatureInput: REQUEST_INPUT,
     };
+  }
+
+  enrollInstallation(input: {
+    challengeId: string;
+    clientPublicKey: string;
+    signature: string;
+    installCode?: string;
+  }) {
+    const { challenge, publicKeyBase64 } = this.verifyChallengeSignature(input);
+    const publicKeyHash = this.sha256(publicKeyBase64);
+
+    if (this.trustedPublicKeyHashes.has(publicKeyHash)) {
+      challenge.consumed = true;
+      return { trusted: true, alreadyTrusted: true };
+    }
+
+    if (!this.installCodeHash) {
+      if (this.trustedPublicKeyHashes.size === 0) {
+        this.trustedPublicKeyHashes.add(publicKeyHash);
+        this.persistTrustedKeys();
+        challenge.consumed = true;
+        return {
+          trusted: true,
+          bootstrapTrusted: true,
+        };
+      }
+
+      throw new UnauthorizedException(
+        'Launcher install code is not configured on server',
+      );
+    }
+
+    const installCode = input.installCode?.trim() ?? '';
+    if (!installCode || this.sha256(installCode) !== this.installCodeHash) {
+      throw new UnauthorizedException('Invalid launcher install code');
+    }
+
+    this.trustedPublicKeyHashes.add(publicKeyHash);
+    this.persistTrustedKeys();
+    challenge.consumed = true;
+
+    return { trusted: true, newlyTrusted: true };
   }
 
   verifySignedRequest(input: {
@@ -296,6 +331,60 @@ export class LauncherService implements OnModuleInit {
     return createHash('sha256').update(value).digest('hex');
   }
 
+  private bytesToBase64(value: Uint8Array): string {
+    return Buffer.from(value).toString('base64');
+  }
+
+  private verifyChallengeSignature(input: {
+    challengeId: string;
+    clientPublicKey: string;
+    signature: string;
+  }) {
+    const challenge = this.challenges.get(input.challengeId);
+    if (!challenge || challenge.consumed || challenge.expiresAt <= Date.now()) {
+      throw new UnauthorizedException('Invalid or expired launcher challenge');
+    }
+
+    const publicKeyBytes = this.base64ToBytes(
+      input.clientPublicKey,
+      'public key',
+    );
+    if (publicKeyBytes.length !== 32) {
+      throw new UnauthorizedException('Launcher public key must be 32 bytes');
+    }
+
+    const signatureBytes = this.base64ToBytes(input.signature, 'signature');
+    if (signatureBytes.length !== 64) {
+      throw new UnauthorizedException('Launcher signature must be 64 bytes');
+    }
+
+    const message = this.stableStringify({
+      signatureInput: AUTH_INPUT,
+      payload: {
+        challengeId: challenge.id,
+        nonce: challenge.nonce,
+        issuedAt: challenge.issuedAt,
+        expiresAt: new Date(challenge.expiresAt).toISOString(),
+      },
+    });
+
+    const valid = nacl.sign.detached.verify(
+      Buffer.from(message, 'utf8'),
+      signatureBytes,
+      publicKeyBytes,
+    );
+
+    if (!valid) {
+      throw new UnauthorizedException('Invalid launcher challenge signature');
+    }
+
+    return {
+      challenge,
+      publicKeyBytes,
+      publicKeyBase64: this.bytesToBase64(publicKeyBytes),
+    };
+  }
+
   private base64ToBytes(value: string, label: string): Uint8Array {
     const trimmed = value.trim();
     if (!/^[A-Za-z0-9+/=]+$/.test(trimmed)) {
@@ -314,6 +403,90 @@ export class LauncherService implements OnModuleInit {
 
   private stableStringify(value: unknown): string {
     return JSON.stringify(this.normalize(value));
+  }
+
+  private loadTrustedKeys() {
+    const configured =
+      this.config.get<string>('LAUNCHER_TRUSTED_PUBLIC_KEYS')?.trim() ?? '';
+
+    if (configured) {
+      for (const raw of configured.split(',')) {
+        const key = raw.trim();
+        if (!key) {
+          continue;
+        }
+        try {
+          const bytes = this.base64ToBytes(key, 'public key');
+          if (bytes.length !== 32) {
+            continue;
+          }
+          this.trustedPublicKeyHashes.add(
+            this.sha256(this.bytesToBase64(bytes)),
+          );
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    try {
+      const raw = readFileSync(this.trustStorePath, 'utf8');
+      const parsed = JSON.parse(raw) as {
+        trustedPublicKeyHashes?: unknown;
+        trustedPublicKeys?: unknown;
+      };
+      const hashEntries = Array.isArray(parsed.trustedPublicKeyHashes)
+        ? parsed.trustedPublicKeyHashes
+        : [];
+      for (const entry of hashEntries) {
+        if (typeof entry === 'string' && entry.trim()) {
+          this.trustedPublicKeyHashes.add(entry.trim());
+        }
+      }
+
+      const entries = Array.isArray(parsed.trustedPublicKeys)
+        ? parsed.trustedPublicKeys
+        : [];
+
+      for (const value of entries) {
+        if (typeof value !== 'string') {
+          continue;
+        }
+        try {
+          const bytes = this.base64ToBytes(value, 'public key');
+          if (bytes.length !== 32) {
+            continue;
+          }
+          this.trustedPublicKeyHashes.add(
+            this.sha256(this.bytesToBase64(bytes)),
+          );
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      return;
+    }
+  }
+
+  private persistTrustedKeys() {
+    try {
+      const dir = dirname(this.trustStorePath);
+      mkdirSync(dir, { recursive: true });
+
+      const payload = {
+        trustedPublicKeyHashes: Array.from(
+          this.trustedPublicKeyHashes.values(),
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+
+      writeFileSync(this.trustStorePath, JSON.stringify(payload, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch {
+      throw new UnauthorizedException('Failed to persist launcher trust store');
+    }
   }
 
   private normalize(value: unknown): unknown {

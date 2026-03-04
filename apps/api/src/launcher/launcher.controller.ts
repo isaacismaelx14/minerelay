@@ -12,6 +12,7 @@ import type { Request, Response } from 'express';
 import { LauncherPublic } from './launcher-auth.decorator';
 import { LauncherAuthGuard } from './launcher-auth.guard';
 import {
+  LauncherAuthEnrollDto,
   LauncherAuthSessionDto,
   LauncherServerActionDto,
 } from './launcher.dto';
@@ -34,6 +35,12 @@ export class LauncherController {
   session(@Body() payload: LauncherAuthSessionDto, @Req() req: Request) {
     const userAgent = req.get('user-agent') ?? '';
     return this.launcherService.createSession(payload, userAgent);
+  }
+
+  @Post('/auth/enroll')
+  @LauncherPublic()
+  enroll(@Body() payload: LauncherAuthEnrollDto) {
+    return this.launcherService.enrollInstallation(payload);
   }
 
   @Get('/server/status')
