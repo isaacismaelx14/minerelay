@@ -17,7 +17,7 @@ import {
   LockBundleItem,
   ProfileLock,
   ProfileLockSchema,
-} from '@mvl/shared';
+} from '@mss/shared';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';

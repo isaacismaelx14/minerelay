@@ -30,7 +30,7 @@ type MatchResult = {
 };
 
 const USAGE =
-  "Usage: pnpm --filter @mvl/infra-scripts manifest:generate --owner <owner> --repo <repo> --tag <tag> --artifacts-dir <dir> --output <file> [--notes <notes>] [--required windows,macos]";
+  "Usage: pnpm --filter @mss/infra-scripts manifest:generate --owner <owner> --repo <repo> --tag <tag> --artifacts-dir <dir> --output <file> [--notes <notes>] [--required windows,macos]";
 
 function parseArgs(argv: string[]): ParsedArgs {
   const values = new Map<string, string>();

@@ -16,7 +16,7 @@ function hashFile(path: string): Promise<string> {
 async function main() {
   const fileArg = process.argv[2];
   if (!fileArg) {
-    throw new Error('Usage: pnpm --filter @mvl/infra-scripts sha256 <file-path>');
+    throw new Error('Usage: pnpm --filter @mss/infra-scripts sha256 <file-path>');
   }
 
   const absolute = resolve(process.cwd(), fileArg);

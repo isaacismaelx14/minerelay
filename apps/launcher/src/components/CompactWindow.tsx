@@ -5,6 +5,7 @@ import { ServerControlBar } from "./ServerControlBar";
 export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> }) {
   const {
     APP_NAME, SERVER_ID, catalog, sessionStatus, lastCheckAt, isChecking,
+    launcherAppVersion,
     canRenderLogo, markLogoAsBroken, serverInitial, compactPlaying,
     runSyncCycle, openLauncherFromCompact, openSetupWindow, cancelSession,
     settings, launchers, updateLauncherSelection,
@@ -80,8 +81,8 @@ export function CompactWindow({ core }: { core: ReturnType<typeof useAppCore> })
                 <p className="compact-server" title={catalog?.serverName ?? `Server ${SERVER_ID}`}>
                   {catalog?.serverName ?? `Server ${SERVER_ID}`}
                 </p>
-                <p className="compact-version" title={`MC ${catalog?.minecraftVersion ?? "--"} · ${catalog?.loader ?? "fabric"} ${catalog?.loaderVersion ?? "--"}`}>
-                  MC {catalog?.minecraftVersion ?? "--"} · {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
+                <p className="compact-version" title={`App v${launcherAppVersion ?? "--"} · MC ${catalog?.minecraftVersion ?? "--"} · ${catalog?.loader ?? "fabric"} ${catalog?.loaderVersion ?? "--"}`}>
+                  App v{launcherAppVersion ?? "--"} · MC {catalog?.minecraftVersion ?? "--"} · {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
                 </p>
               </div>
             </div>

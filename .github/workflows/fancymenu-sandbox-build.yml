@@ -41,7 +41,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build FancyMenu sandbox
-        run: pnpm --filter @mvl/fancymenu-sandbox build
+        run: pnpm --filter @mss/fancymenu-sandbox build
 
   deploy-fancymenu-sandbox:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

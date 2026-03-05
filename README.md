@@ -131,27 +131,27 @@ cp apps/api/.env.example apps/api/.env
 4. Build shared package:
 
 ```bash
-pnpm --filter @mvl/shared build
+pnpm --filter @mss/shared build
 ```
 
 5. Prepare API DB:
 
 ```bash
-pnpm --filter @mvl/api prisma:generate
-pnpm --filter @mvl/api prisma:migrate
-pnpm --filter @mvl/api prisma:seed
+pnpm --filter @mss/api prisma:generate
+pnpm --filter @mss/api prisma:migrate
+pnpm --filter @mss/api prisma:seed
 ```
 
 6. Run API:
 
 ```bash
-pnpm --filter @mvl/api dev
+pnpm --filter @mss/api dev
 ```
 
 7. Run desktop app:
 
 ```bash
-pnpm --filter @mvl/launcher tauri:dev
+pnpm --filter @mss/launcher tauri:dev
 ```
 
 ## Packaged App Configuration
@@ -186,7 +186,7 @@ If automation is not feasible, app shows guidance:
 ## Build Installers
 
 ```bash
-pnpm --filter @mvl/launcher tauri:build
+pnpm --filter @mss/launcher tauri:build
 ```
 
 Outputs:
@@ -230,9 +230,9 @@ mods/server-lock/build/devlibs/server-lock-0.1.0.jar
 ## Profile Publishing
 
 ```bash
-pnpm --filter @mvl/infra-scripts publish-profile
-pnpm --filter @mvl/infra-scripts sha256 <file-path>
-pnpm --filter @mvl/infra-scripts release-notes
+pnpm --filter @mss/infra-scripts publish-profile
+pnpm --filter @mss/infra-scripts sha256 <file-path>
+pnpm --filter @mss/infra-scripts release-notes
 ```
 
 ## Troubleshooting

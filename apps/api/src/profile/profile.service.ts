@@ -6,7 +6,7 @@ import {
   FancyMenuSettingsSchema,
   ProfileMetadataResponse,
   ProfileMetadataResponseSchema,
-} from '@mvl/shared';
+} from '@mss/shared';
 
 @Injectable()
 export class ProfileService {

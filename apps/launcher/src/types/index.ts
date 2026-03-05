@@ -1,4 +1,4 @@
-import type { UpdateSummary } from "@mvl/shared";
+import type { UpdateSummary } from "@mss/shared";
 
 export type ScreenState = "booting" | "syncing" | "ready";
 export type InstallMode = "dedicated" | "global";

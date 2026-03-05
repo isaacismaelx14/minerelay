@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import * as express from 'express';
 import { randomUUID } from 'crypto';
 import { AppModule } from './app.module';
+import { getApiMetadata } from './app-metadata';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -75,12 +76,13 @@ async function bootstrap() {
 
   const isSwaggerEnabled = config.get<string>('ENABLE_SWAGGER') === 'true';
   if (!isProd || isSwaggerEnabled) {
+    const metadata = getApiMetadata();
     const swagger = new DocumentBuilder()
       .setTitle('Minecraft Server Syncer API')
       .setDescription(
         'Profile metadata and lockfile API for the Minecraft Server Syncer',
       )
-      .setVersion('1.0.0')
+      .setVersion(metadata.version)
       .build();
 
     const document = SwaggerModule.createDocument(app, swagger);

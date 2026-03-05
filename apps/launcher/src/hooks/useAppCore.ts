@@ -3,10 +3,11 @@ import { getVersion as getAppVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SyncPlan, UpdateSummary } from "@mvl/shared";
+import type { SyncPlan, UpdateSummary } from "@mss/shared";
 
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
 const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MSS+ Client";
+const BUNDLED_APP_VERSION = __APP_VERSION__;
 const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const LAUNCHER_STREAM_RETRY_DELAY_MS = 30_000;
 const LAUNCHER_STREAM_MAX_RETRIES = 3;
@@ -85,7 +86,7 @@ export function useAppCore() {
   const [launcherUpdate, setLauncherUpdate] =
     useState<LauncherUpdateStatus | null>(null);
   const [launcherAppVersion, setLauncherAppVersion] = useState<string | null>(
-    null,
+    BUNDLED_APP_VERSION,
   );
   const [isCheckingLauncherUpdate, setIsCheckingLauncherUpdate] =
     useState(false);
@@ -933,7 +934,7 @@ export function useAppCore() {
     try {
       setError(null);
       const localVersion = await getAppVersion().catch(() => null);
-      setLauncherAppVersion(localVersion);
+      setLauncherAppVersion(localVersion ?? BUNDLED_APP_VERSION);
       const loaded = await loadSettingsAndLaunchers();
       await refreshSessionStatus();
 
@@ -1586,6 +1587,7 @@ export function useAppCore() {
     error, setError,
     hint, setHint,
     launcherUpdate, setLauncherUpdate,
+    launcherAppVersion, setLauncherAppVersion,
     isCheckingLauncherUpdate, setIsCheckingLauncherUpdate,
     isInstallingLauncherUpdate, setIsInstallingLauncherUpdate,
     launcherUpdateNotice, setLauncherUpdateNotice,

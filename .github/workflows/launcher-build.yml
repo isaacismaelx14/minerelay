@@ -3,6 +3,8 @@ name: launcher-build
 on:
   push:
     branches: [main]
+    tags:
+      - "@mss/shared/v*"
     paths:
       - 'apps/launcher/**'
       - 'packages/shared/**'
@@ -44,12 +46,18 @@ jobs:
         shell: bash
         run: |
           BASE_VERSION=$(node -p "require('./apps/launcher/package.json').version")
-          BETA_NUMBER=${{ github.run_number }}
-          if [ "$BETA_NUMBER" -gt 65535 ]; then
-            BETA_NUMBER=$(( (BETA_NUMBER % 65535) + 1 ))
+          if [[ "${GITHUB_REF}" == refs/tags/@mss/shared/v* ]]; then
+            VERSION="${BASE_VERSION}"
+            WINDOWS_BUILD_VERSION="${BASE_VERSION}"
+            BETA_NUMBER=0
+          else
+            BETA_NUMBER=${{ github.run_number }}
+            if [ "$BETA_NUMBER" -gt 65535 ]; then
+              BETA_NUMBER=$(( (BETA_NUMBER % 65535) + 1 ))
+            fi
+            VERSION="${BASE_VERSION}-beta.${BETA_NUMBER}"
+            WINDOWS_BUILD_VERSION="${BASE_VERSION}-${BETA_NUMBER}"
           fi
-          VERSION="${BASE_VERSION}-beta.${BETA_NUMBER}"
-          WINDOWS_BUILD_VERSION="${BASE_VERSION}-${BETA_NUMBER}"
           echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "beta_number=${BETA_NUMBER}" >> "$GITHUB_OUTPUT"
@@ -68,7 +76,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build shared package
-        run: pnpm --filter @mvl/shared build
+        run: pnpm --filter @mss/shared build
 
       - name: Validate updater signing key for beta release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -114,7 +122,7 @@ jobs:
 
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
-          if ! pnpm --filter @mvl/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
+          if ! pnpm --filter @mss/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
             echo "Unable to decrypt TAURI_SIGNING_PRIVATE_KEY with TAURI_SIGNING_PRIVATE_KEY_PASSWORD." >&2
             echo "Re-save both secrets in GitHub without surrounding quotes and without trailing newlines." >&2
             rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
@@ -272,7 +280,7 @@ jobs:
       - name: Generate updater latest.json
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/release-artifacts/generated"
-          pnpm --filter @mvl/infra-scripts manifest:generate -- \
+          pnpm --filter @mss/infra-scripts manifest:generate -- \
             --owner isaacismaelx14 \
             --repo minecraft-server-sync \
             --tag "${{ steps.meta.outputs.tag }}" \
@@ -300,7 +308,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pnpm --filter @mvl/infra-scripts updater:verify -- \
+          pnpm --filter @mss/infra-scripts updater:verify -- \
             --owner isaacismaelx14 \
             --repo minecraft-server-sync \
             --tag "${{ steps.meta.outputs.tag }}" \

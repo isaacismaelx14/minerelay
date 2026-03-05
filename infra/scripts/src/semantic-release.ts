@@ -1,0 +1,457 @@
+import { execFileSync, execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  dedupeEntries,
+  determineReleaseLevel,
+  parseCommits,
+  type GitCommit,
+  type ParsedReleaseConfig,
+  type ReleaseLevel,
+} from "./release/commit-parser";
+import { buildChangelogEntry, buildReleaseBody, prependChangelog, type ChangeItem } from "./release/changelog";
+import { createGithubRelease, getGithubRepoFromGitRemote } from "./release/github";
+import {
+  computeNextVersion,
+  normalizeSemver,
+  type BumpType,
+  type ReleaseChannel,
+} from "./release/versioning";
+
+type ReleaseConfig = ParsedReleaseConfig & {
+  defaultBranch: string;
+  releaseNamespace: string;
+  targets: Record<string, string>;
+};
+
+type CliArgs = {
+  target: string;
+  dryRun: boolean;
+  skipGithub: boolean;
+  skipPush: boolean;
+  channel: ReleaseChannel;
+  bump?: BumpType;
+  nextVersion?: string;
+  fromTag?: string;
+};
+
+const USAGE =
+  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
+
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+  const repoRoot = resolve(process.cwd(), "../..");
+  const config = loadConfig(resolve(repoRoot, "release.config.json"));
+
+  if (!config.targets[args.target]) {
+    throw new Error(`Unknown target \"${args.target}\". Allowed: ${Object.keys(config.targets).join(", ")}`);
+  }
+
+  if (!args.dryRun) {
+    ensureOnDefaultBranch(config.defaultBranch);
+    ensureCleanWorkingTree();
+  }
+
+  const targetRelativePath = config.targets[args.target];
+  if (!targetRelativePath) {
+    throw new Error(`Missing target path for ${args.target} in release.config.json`);
+  }
+  const targetPath = resolve(repoRoot, targetRelativePath);
+  const packageJsonPath = resolve(targetPath, "package.json");
+  const changelogPath = resolve(targetPath, "CHANGELOG.md");
+
+  const currentVersion = readPackageVersion(packageJsonPath);
+  const previousTag = args.fromTag ?? getLatestTargetTag(config.releaseNamespace, args.target);
+  const commits = getCommitsSinceTag(previousTag);
+
+  if (commits.length === 0) {
+    console.log(`No commits found since ${previousTag ?? "repo start"}. Nothing to release.`);
+    return;
+  }
+
+  const parsedCommits = parseCommits(commits, config);
+  const errors = parsedCommits.flatMap((commit) => commit.errors);
+  if (errors.length > 0) {
+    throw new Error(`Release aborted due to invalid commits:\n- ${errors.join("\n- ")}`);
+  }
+
+  const { changes, breakingNotes } = collectTargetChanges(parsedCommits, args.target);
+
+  if (changes.length === 0 && breakingNotes.length === 0) {
+    console.log(`No changes mapped to target \"${args.target}\" since ${previousTag ?? "repo start"}. Nothing to release.`);
+    return;
+  }
+
+  const detectedBump = determineReleaseLevel(
+    changes.map((change) => ({
+      type: change.type,
+      scope: change.scope,
+      target: args.target,
+      description: change.description,
+      breaking: change.breaking,
+      section: change.section,
+      release: releaseFromType(change.type, config),
+      source: "header",
+    })),
+    breakingNotes,
+  );
+
+  const nextVersion = computeNextVersion({
+    currentVersion,
+    detectedBump,
+    channel: args.channel,
+    explicitBump: args.bump,
+    nextVersion: args.nextVersion,
+  });
+  const scopedReleaseName = `${config.releaseNamespace}/${args.target}`;
+  const newTag = `${scopedReleaseName}/v${nextVersion}`;
+  const repo = getGithubRepoFromGitRemote();
+  const date = new Date().toISOString().slice(0, 10);
+
+  const releaseBody = buildReleaseBody({
+    target: args.target,
+    version: nextVersion,
+    date,
+    repoWebUrl: repo.webUrl,
+    newTag,
+    previousTag,
+    changes,
+    breakingNotes,
+  });
+
+  const changelogEntry = buildChangelogEntry({
+    target: args.target,
+    version: nextVersion,
+    date,
+    repoWebUrl: repo.webUrl,
+    newTag,
+    previousTag,
+    changes,
+    breakingNotes,
+  });
+
+  console.log(`Target: ${args.target}`);
+  console.log(`Current version: ${currentVersion}`);
+  console.log(`Detected bump: ${detectedBump}`);
+  console.log(`Release channel: ${args.channel}`);
+  if (args.bump) {
+    console.log(`Bump override: ${args.bump}`);
+  }
+  console.log(`Next version: ${nextVersion}`);
+  console.log(`Previous tag: ${previousTag ?? "(none)"}`);
+  console.log(`New tag: ${newTag}`);
+
+  if (args.dryRun) {
+    console.log("\n--- CHANGELOG ENTRY ---\n");
+    console.log(changelogEntry);
+    console.log("\n--- RELEASE NOTES ---\n");
+    console.log(releaseBody);
+    console.log("\nDry run complete. No files or git refs were modified.");
+    return;
+  }
+
+  const modifiedFiles = bumpTargetVersion(args.target, nextVersion, repoRoot, packageJsonPath);
+  const existingChangelog = existsSync(changelogPath) ? readFileSync(changelogPath, "utf8") : null;
+  const nextChangelog = prependChangelog(existingChangelog, changelogEntry);
+  writeFileSync(changelogPath, nextChangelog, "utf8");
+
+  gitAdd([...modifiedFiles, changelogPath]);
+  gitCommit(`chore(release): ${newTag}`);
+  gitTag(newTag);
+
+  if (!args.skipPush) {
+    gitPush();
+    gitPushTag(newTag);
+  }
+
+  if (!args.skipGithub) {
+    const token = process.env.GITHUB_TOKEN?.trim();
+    if (!token) {
+      throw new Error("GITHUB_TOKEN is required to create a GitHub release (or pass --skip-github).");
+    }
+
+    const result = await createGithubRelease({
+      owner: repo.owner,
+      repo: repo.repo,
+      tagName: newTag,
+      name: `${scopedReleaseName} v${nextVersion}`,
+      body: releaseBody,
+      token,
+      prerelease: false,
+    });
+
+    console.log(`GitHub release created: ${result.htmlUrl}`);
+  }
+
+  console.log(`Release completed: ${newTag}`);
+}
+
+function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = {
+    target: "",
+    dryRun: false,
+    skipGithub: false,
+    skipPush: false,
+    channel: "beta",
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (!token || token === "--") {
+      continue;
+    }
+
+    if (token === "--dry-run") {
+      args.dryRun = true;
+      continue;
+    }
+
+    if (token === "--skip-github") {
+      args.skipGithub = true;
+      continue;
+    }
+
+    if (token === "--skip-push") {
+      args.skipPush = true;
+      continue;
+    }
+
+    if (token === "--target" || token === "--from-tag") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      if (token === "--target") {
+        args.target = next.trim();
+      } else {
+        args.fromTag = next.trim();
+      }
+      i += 1;
+      continue;
+    }
+
+    if (token === "--channel") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      if (next !== "alpha" && next !== "beta" && next !== "release") {
+        throw new Error(`Invalid --channel value: ${next}. Expected alpha|beta|release.`);
+      }
+      args.channel = next;
+      i += 1;
+      continue;
+    }
+
+    if (token === "--bump") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      if (next !== "major" && next !== "minor" && next !== "patch") {
+        throw new Error(`Invalid --bump value: ${next}. Expected major|minor|patch.`);
+      }
+      args.bump = next;
+      i += 1;
+      continue;
+    }
+
+    if (token === "--next-version") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      args.nextVersion = normalizeSemver(next);
+      i += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${token}. ${USAGE}`);
+  }
+
+  if (!args.target) {
+    throw new Error(`Missing --target. ${USAGE}`);
+  }
+
+  return args;
+}
+
+function loadConfig(configPath: string): ReleaseConfig {
+  const raw = JSON.parse(readFileSync(configPath, "utf8")) as ReleaseConfig;
+  if (!raw.defaultBranch || !raw.releaseNamespace || !raw.targets || !raw.scopeMap || !raw.types) {
+    throw new Error(`Invalid release config at ${configPath}`);
+  }
+  return raw;
+}
+
+function ensureOnDefaultBranch(defaultBranch: string): void {
+  const currentBranch = execSync("git branch --show-current", { encoding: "utf8" }).trim();
+  if (currentBranch !== defaultBranch) {
+    throw new Error(`Releases must run on ${defaultBranch}. Current branch is ${currentBranch}.`);
+  }
+}
+
+function ensureCleanWorkingTree(): void {
+  const status = execSync("git status --porcelain", { encoding: "utf8" }).trim();
+  if (status.length > 0) {
+    throw new Error("Working tree must be clean before running release.");
+  }
+}
+
+function readPackageVersion(packageJsonPath: string): string {
+  const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: string };
+  if (!parsed.version) {
+    throw new Error(`Expected semantic version in ${packageJsonPath}`);
+  }
+  return normalizeSemver(parsed.version);
+}
+
+function getLatestTargetTag(namespace: string, target: string): string | null {
+  const out = execSync(`git tag --list \"${namespace}/${target}/v*\" --sort=-v:refname`, { encoding: "utf8" }).trim();
+  const first = out.split(/\r?\n/u).find((line) => line.trim().length > 0);
+  return first ?? null;
+}
+
+function getCommitsSinceTag(tag: string | null): GitCommit[] {
+  const range = tag ? `${tag}..HEAD` : "HEAD";
+  const output = execSync(`git log ${range} --pretty=format:%H%x1f%s%x1f%b%x1e`, { encoding: "utf8" });
+  return output
+    .split("\x1e")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => {
+      const [hash = "", subject = "", body = ""] = entry.split("\x1f");
+      return {
+        hash: hash.trim(),
+        subject: subject.trim(),
+        body: body.trim(),
+      };
+    })
+    .filter((commit) => commit.hash.length > 0 && commit.subject.length > 0);
+}
+
+function collectTargetChanges(
+  parsedCommits: ReturnType<typeof parseCommits>,
+  target: string,
+): { changes: ChangeItem[]; breakingNotes: string[] } {
+  const result: ChangeItem[] = [];
+  const breakingNotes: string[] = [];
+
+  for (const commit of parsedCommits) {
+    const scopedEntries = dedupeEntries(commit.entries.filter((entry) => entry.target === target));
+    if (scopedEntries.length === 0) {
+      continue;
+    }
+
+    const headerEntries = scopedEntries.filter((entry) => entry.source === "header");
+    const bodyEntries = scopedEntries.filter((entry) => entry.source === "body");
+
+    for (const headerEntry of headerEntries) {
+      const details = bodyEntries
+        .map((bodyEntry) => `${bodyEntry.type}(${bodyEntry.scope}): ${bodyEntry.description}`)
+        .filter((detail, index, list) => list.indexOf(detail) === index);
+
+      result.push({
+        type: headerEntry.type,
+        section: headerEntry.section,
+        scope: headerEntry.scope,
+        description: headerEntry.description,
+        commitHash: commit.hash,
+        breaking: headerEntry.breaking,
+        details,
+      });
+    }
+
+    if (headerEntries.length === 0) {
+      for (const bodyEntry of bodyEntries) {
+        result.push({
+          type: bodyEntry.type,
+          section: bodyEntry.section,
+          scope: bodyEntry.scope,
+          description: bodyEntry.description,
+          commitHash: commit.hash,
+          breaking: bodyEntry.breaking,
+          details: [],
+        });
+      }
+    }
+
+    if (commit.breakingNotes.length > 0) {
+      breakingNotes.push(...commit.breakingNotes);
+    }
+  }
+
+  return {
+    changes: dedupeChanges(result),
+    breakingNotes: [...new Set(breakingNotes)],
+  };
+}
+
+function dedupeChanges(changes: ChangeItem[]): ChangeItem[] {
+  const seen = new Set<string>();
+  const deduped: ChangeItem[] = [];
+
+  for (const change of changes) {
+    const key = `${change.type}|${change.scope}|${change.description}|${change.commitHash}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(change);
+  }
+
+  return deduped;
+}
+
+function releaseFromType(type: string, config: ReleaseConfig): ReleaseLevel {
+  const rule = config.types[type];
+  if (!rule) {
+    return "patch";
+  }
+  return rule.release;
+}
+
+function bumpTargetVersion(target: string, nextVersion: string, repoRoot: string, packageJsonPath: string): string[] {
+  if (target === "launcher") {
+    execFileSync("node", ["apps/launcher/scripts/set-release-version.mjs", nextVersion], {
+      cwd: repoRoot,
+      stdio: "inherit",
+    });
+    return [
+      resolve(repoRoot, "apps/launcher/package.json"),
+      resolve(repoRoot, "apps/launcher/src-tauri/tauri.conf.json"),
+      resolve(repoRoot, "apps/launcher/src-tauri/Cargo.toml"),
+    ];
+  }
+
+  const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version: string };
+  pkg.version = nextVersion;
+  writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+  return [packageJsonPath];
+}
+
+function gitAdd(paths: string[]): void {
+  execFileSync("git", ["add", ...paths], { stdio: "inherit" });
+}
+
+function gitCommit(message: string): void {
+  execFileSync("git", ["commit", "-m", message], { stdio: "inherit" });
+}
+
+function gitTag(tagName: string): void {
+  execFileSync("git", ["tag", tagName], { stdio: "inherit" });
+}
+
+function gitPush(): void {
+  execFileSync("git", ["push"], { stdio: "inherit" });
+}
+
+function gitPushTag(tagName: string): void {
+  execFileSync("git", ["push", "origin", tagName], { stdio: "inherit" });
+}
+
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  process.exit(1);
+});

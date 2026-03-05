@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../db/prisma.service';
-import { UpdatesResponse, UpdatesResponseSchema } from '@mvl/shared';
+import { UpdatesResponse, UpdatesResponseSchema } from '@mss/shared';
 
 @Injectable()
 export class UpdatesService {

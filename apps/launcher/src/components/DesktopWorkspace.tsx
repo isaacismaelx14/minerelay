@@ -5,7 +5,7 @@ import { ServerControlBar } from "./ServerControlBar";
 export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore> }) {
   const {
     APP_NAME, SERVER_ID, catalog, sessionStatus, activeView, setActiveView,
-    lastCheckAt, nextCheckAt, versionReadiness, launcherUpdate,
+    lastCheckAt, nextCheckAt, versionReadiness, launcherUpdate, launcherAppVersion,
     canRenderLogo, markLogoAsBroken, serverInitial, returnToMainWindow, sourceLabel,
     screen, isChecking, sessionActive, hasFancyMenuMod, fancyMenuMode, hasFancyMenuCustomBundle,
     settings, instance, saveSettings, refreshVersionReadiness,
@@ -714,6 +714,7 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               ? `v${launcherUpdate.latestVersion ?? "new"} ready`
               : "none"}
           </p>
+          <p className="small-dark">Launcher version: v{launcherAppVersion ?? "--"}</p>
           <p className="small-dark">
             Session: {sessionStatus.phase.replaceAll("_", " ")}
           </p>
@@ -750,7 +751,7 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
           </div>
           <div className="workspace-header-actions">
             <div className="version-pill">
-              {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
+              v{launcherAppVersion ?? "--"} | {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
               {catalog?.minecraftVersion ?? "--"}
             </div>
             <button className="btn ghost" onClick={() => void returnToMainWindow()}>

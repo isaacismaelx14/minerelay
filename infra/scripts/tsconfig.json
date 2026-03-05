@@ -3,7 +3,11 @@
   "compilerOptions": {
     "moduleResolution": "node",
     "types": ["node"],
-    "outDir": "dist"
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@mss/shared": ["../../packages/shared/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

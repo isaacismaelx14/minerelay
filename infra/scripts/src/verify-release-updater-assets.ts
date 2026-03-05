@@ -22,7 +22,7 @@ type LatestJsonPlatform = {
 };
 
 const USAGE =
-  "Usage: pnpm --filter @mvl/infra-scripts updater:verify --owner <owner> --repo <repo> --tag <tag> [--required windows,macos]";
+  "Usage: pnpm --filter @mss/infra-scripts updater:verify --owner <owner> --repo <repo> --tag <tag> [--required windows,macos]";
 
 function parseArgs(argv: string[]): VerifyArgs {
   const values = new Map<string, string>();

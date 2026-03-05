@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ProfileLockSchema } from '@mvl/shared';
+import { ProfileLockSchema } from '@mss/shared';
 
 function main() {
   const lockPath = resolve(process.cwd(), '../../infra/sample-data/profile.lock.json');

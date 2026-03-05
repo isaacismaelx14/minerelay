@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
-import { ProfileLock, ProfileLockSchema } from '@mvl/shared';
+import { ProfileLock, ProfileLockSchema } from '@mss/shared';
 
 export interface SignedLockfileResponse {
   lock: ProfileLock;

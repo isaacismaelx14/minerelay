@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ProfileLockSchema } from '@mvl/shared';
+import { ProfileLockSchema } from '@mss/shared';
 
 interface SeedPayload {
   serverId: string;

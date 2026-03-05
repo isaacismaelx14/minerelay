@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      husky:
+        specifier: ^9.1.7
+        version: 9.1.7
       turbo:
         specifier: ^2.5.0
         version: 2.8.12
@@ -20,7 +23,7 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1001.0
         version: 3.1001.0
-      '@mvl/shared':
+      '@mss/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@nestjs/common':
@@ -202,7 +205,7 @@ importers:
 
   apps/launcher:
     dependencies:
-      '@mvl/shared':
+      '@mss/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@tauri-apps/api':
@@ -242,7 +245,7 @@ importers:
 
   infra/scripts:
     dependencies:
-      '@mvl/shared':
+      '@mss/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       zod:
@@ -261,6 +264,9 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@22.19.13)(jiti@2.6.1)(terser@5.46.0)(tsx@4.21.0)
 
   packages/shared:
     dependencies:
@@ -3232,6 +3238,11 @@ packages:
   human-signals@2.1.0:
     resolution: {integrity: sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==}
     engines: {node: '>=10.17.0'}
+
+  husky@9.1.7:
+    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
@@ -8221,6 +8232,8 @@ snapshots:
       toidentifier: 1.0.1
 
   human-signals@2.1.0: {}
+
+  husky@9.1.7: {}
 
   iconv-lite@0.7.2:
     dependencies:

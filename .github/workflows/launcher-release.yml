@@ -3,7 +3,7 @@ name: launcher-release
 on:
   push:
     tags:
-      - "v*"
+      - "@mss/launcher/v*"
 
 jobs:
   publish-launcher:
@@ -41,7 +41,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${GITHUB_REF_NAME#@mss/launcher/v}"
           if [ -z "$VERSION" ]; then
             echo "Failed to parse version from tag ${GITHUB_REF_NAME}" >&2
             exit 1
@@ -62,7 +62,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build shared package
-        run: pnpm --filter @mvl/shared build
+        run: pnpm --filter @mss/shared build
 
       - name: Validate updater signing key
         shell: bash
@@ -107,7 +107,7 @@ jobs:
 
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
-          if ! pnpm --filter @mvl/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
+          if ! pnpm --filter @mss/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
             echo "Unable to decrypt TAURI_SIGNING_PRIVATE_KEY with TAURI_SIGNING_PRIVATE_KEY_PASSWORD." >&2
             echo "Re-save both secrets in GitHub without surrounding quotes and without trailing newlines." >&2
             rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
@@ -149,8 +149,8 @@ jobs:
         with:
           projectPath: apps/launcher
           tagName: ${{ github.ref_name }}
-          releaseName: Launcher ${{ github.ref_name }}
-          releaseBody: Automated launcher release for ${{ github.ref_name }}.
+          releaseName: '@mss/launcher v${{ steps.version.outputs.version }}'
+          releaseBody: Automated @mss/launcher release for ${{ github.ref_name }}.
           releaseDraft: false
           prerelease: ${{ steps.version.outputs.is_prerelease }}
           uploadUpdaterJson: true
@@ -184,8 +184,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pnpm --filter @mvl/infra-scripts updater:verify -- \
+          pnpm --filter @mss/infra-scripts updater:verify -- \
             --owner isaacismaelx14 \
-            --repo minecraft-server-sync \
+            --repo mc-client-center \
             --tag "${{ github.ref_name }}" \
             --required windows,macos

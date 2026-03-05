@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { ProfileLockSchema } from '@mvl/shared';
+import { ProfileLockSchema } from '@mss/shared';
 
 const prisma = new PrismaClient();
 

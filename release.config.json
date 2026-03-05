@@ -1,0 +1,59 @@
+{
+  "defaultBranch": "main",
+  "releaseNamespace": "@mss",
+  "targets": {
+    "api": "apps/api",
+    "launcher": "apps/launcher",
+    "shared": "packages/shared"
+  },
+  "scopeMap": {
+    "api": "api",
+    "launcher": "launcher",
+    "platform": "launcher",
+    "desktop": "launcher",
+    "shared": "shared",
+    "core": "shared"
+  },
+  "types": {
+    "feat": {
+      "section": "Features",
+      "release": "minor"
+    },
+    "fix": {
+      "section": "Bug Fixes",
+      "release": "patch"
+    },
+    "perf": {
+      "section": "Performance",
+      "release": "patch"
+    },
+    "refactor": {
+      "section": "Refactoring",
+      "release": "patch"
+    },
+    "docs": {
+      "section": "Documentation",
+      "release": "patch"
+    },
+    "style": {
+      "section": "Styles",
+      "release": "patch"
+    },
+    "chore": {
+      "section": "Chores",
+      "release": "patch"
+    },
+    "build": {
+      "section": "Build",
+      "release": "patch"
+    },
+    "ci": {
+      "section": "CI",
+      "release": "patch"
+    },
+    "test": {
+      "section": "Tests",
+      "release": "patch"
+    }
+  }
+}
