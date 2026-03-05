@@ -17,6 +17,7 @@ import {
   type BumpType,
   type ReleaseChannel,
 } from "./release/versioning";
+import { generateAiReleaseNotes } from "./release/ai-release-notes";
 
 type ReleaseConfig = ParsedReleaseConfig & {
   defaultBranch: string;
@@ -32,11 +33,16 @@ type CliArgs = {
   channel: ReleaseChannel;
   bump?: BumpType;
   nextVersion?: string;
+  notesMode: "raw" | "ai";
+  notesModel?: string;
+  notesMaxInputChars?: number;
+  notesMaxOutputTokens?: number;
+  notesAiStrict: boolean;
   fromTag?: string;
 };
 
 const USAGE =
-  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
+  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -108,7 +114,7 @@ async function main(): Promise<void> {
   const repo = getGithubRepoFromGitRemote();
   const date = new Date().toISOString().slice(0, 10);
 
-  const releaseBody = buildReleaseBody({
+  const rawReleaseBody = buildReleaseBody({
     target: args.target,
     version: nextVersion,
     date,
@@ -130,6 +136,22 @@ async function main(): Promise<void> {
     breakingNotes,
   });
 
+  let releaseBody = rawReleaseBody;
+  if (args.notesMode === "ai") {
+    releaseBody = await buildAiBodyWithFallback({
+      args,
+      target: args.target,
+      version: nextVersion,
+      channel: args.channel,
+      newTag,
+      previousTag,
+      repoWebUrl: repo.webUrl,
+      changes,
+      breakingNotes,
+      rawReleaseBody,
+    });
+  }
+
   console.log(`Target: ${args.target}`);
   console.log(`Current version: ${currentVersion}`);
   console.log(`Detected bump: ${detectedBump}`);
@@ -137,6 +159,7 @@ async function main(): Promise<void> {
   if (args.bump) {
     console.log(`Bump override: ${args.bump}`);
   }
+  console.log(`Notes mode: ${args.notesMode}`);
   console.log(`Next version: ${nextVersion}`);
   console.log(`Previous tag: ${previousTag ?? "(none)"}`);
   console.log(`New tag: ${newTag}`);
@@ -186,6 +209,59 @@ async function main(): Promise<void> {
   console.log(`Release completed: ${newTag}`);
 }
 
+async function buildAiBodyWithFallback(params: {
+  args: CliArgs;
+  target: string;
+  version: string;
+  channel: string;
+  newTag: string;
+  previousTag: string | null;
+  repoWebUrl: string;
+  changes: ChangeItem[];
+  breakingNotes: string[];
+  rawReleaseBody: string;
+}): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    if (params.args.notesAiStrict) {
+      throw new Error("OPENAI_API_KEY is required for --notes-mode ai when --notes-ai-strict is enabled.");
+    }
+    console.warn("OPENAI_API_KEY is missing. Falling back to raw release notes.");
+    return params.rawReleaseBody;
+  }
+
+  try {
+    const aiBody = await generateAiReleaseNotes({
+      apiKey,
+      model: params.args.notesModel,
+      maxInputChars: params.args.notesMaxInputChars,
+      maxOutputTokens: params.args.notesMaxOutputTokens,
+      audience: "customer",
+      target: params.target,
+      version: params.version,
+      channel: params.channel,
+      newTag: params.newTag,
+      previousTag: params.previousTag,
+      repoWebUrl: params.repoWebUrl,
+      changes: params.changes,
+      breakingNotes: params.breakingNotes,
+    });
+
+    const compareLine = params.previousTag
+      ? `[Full Changelog](${params.repoWebUrl}/compare/${encodeURIComponent(params.previousTag)}...${encodeURIComponent(params.newTag)})`
+      : `[Release Tag](${params.repoWebUrl}/releases/tag/${encodeURIComponent(params.newTag)})`;
+
+    return `${compareLine}\n\n${aiBody}`.trim();
+  } catch (error) {
+    if (params.args.notesAiStrict) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`AI release notes failed, using raw notes fallback: ${message}`);
+    return params.rawReleaseBody;
+  }
+}
+
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     target: "",
@@ -193,6 +269,8 @@ function parseArgs(argv: string[]): CliArgs {
     skipGithub: false,
     skipPush: false,
     channel: "beta",
+    notesMode: "raw",
+    notesAiStrict: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -213,6 +291,11 @@ function parseArgs(argv: string[]): CliArgs {
 
     if (token === "--skip-push") {
       args.skipPush = true;
+      continue;
+    }
+
+    if (token === "--notes-ai-strict") {
+      args.notesAiStrict = true;
       continue;
     }
 
@@ -262,6 +345,57 @@ function parseArgs(argv: string[]): CliArgs {
         throw new Error(`Missing value for ${token}. ${USAGE}`);
       }
       args.nextVersion = normalizeSemver(next);
+      i += 1;
+      continue;
+    }
+
+    if (token === "--notes-mode") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      if (next !== "raw" && next !== "ai") {
+        throw new Error(`Invalid --notes-mode value: ${next}. Expected raw|ai.`);
+      }
+      args.notesMode = next;
+      i += 1;
+      continue;
+    }
+
+    if (token === "--notes-model") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      args.notesModel = next.trim();
+      i += 1;
+      continue;
+    }
+
+    if (token === "--notes-max-input-chars") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      const value = Number.parseInt(next, 10);
+      if (!Number.isFinite(value) || value < 1000) {
+        throw new Error("--notes-max-input-chars must be an integer >= 1000.");
+      }
+      args.notesMaxInputChars = value;
+      i += 1;
+      continue;
+    }
+
+    if (token === "--notes-max-output-tokens") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        throw new Error(`Missing value for ${token}. ${USAGE}`);
+      }
+      const value = Number.parseInt(next, 10);
+      if (!Number.isFinite(value) || value < 200) {
+        throw new Error("--notes-max-output-tokens must be an integer >= 200.");
+      }
+      args.notesMaxOutputTokens = value;
       i += 1;
       continue;
     }
