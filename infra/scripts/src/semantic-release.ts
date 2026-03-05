@@ -9,6 +9,7 @@ import {
   type ParsedReleaseConfig,
   type ReleaseLevel,
 } from "./release/commit-parser";
+import { inferScopedEntriesWithAi } from "./release/ai-scope-inference";
 import {
   buildChangelogEntry,
   buildReleaseBody,
@@ -38,6 +39,7 @@ type CliArgs = {
   dryRun: boolean;
   skipGithub: boolean;
   skipPush: boolean;
+  aiScopeInfer: boolean;
   channel: ReleaseChannel;
   bump?: BumpType;
   nextVersion?: string;
@@ -53,7 +55,7 @@ type GitHubRepo = ReturnType<typeof getGithubRepoFromGitRemote>;
 
 const AUTO_TARGET = "auto";
 const USAGE =
-  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared|auto> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
+  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|launcher|shared|auto> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--ai-scope-infer] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -89,7 +91,7 @@ async function main(): Promise<void> {
   const targetsToEvaluate =
     args.target === AUTO_TARGET ? allowedTargets : [args.target];
 
-  if (args.target === AUTO_TARGET) {
+  if (args.target === AUTO_TARGET && !args.aiScopeInfer) {
     const missingBootstrapTags: string[] = [];
     for (const target of targetsToEvaluate) {
       const existingTag = getLatestTargetTag(config.releaseNamespace, target);
@@ -190,12 +192,17 @@ async function releaseTarget(params: {
   const currentVersion = readPackageVersion(packageJsonPath);
   const previousTag =
     args.fromTag ?? getLatestTargetTag(config.releaseNamespace, target);
-  if (!previousTag) {
+  if (!previousTag && !args.aiScopeInfer) {
     const bootstrapTag = `${config.releaseNamespace}/${target}/v${currentVersion}`;
     throw new Error(
       `[${target}] No release tag found (${config.releaseNamespace}/${target}/v*). Bootstrap first:\n` +
         `  git tag ${bootstrapTag}\n` +
         `  git push origin ${bootstrapTag}`,
+    );
+  }
+  if (!previousTag && args.aiScopeInfer) {
+    console.log(
+      `[${target}] No baseline tag found. AI scope inference will evaluate full history.`,
     );
   }
   const commits = getCommitsSinceTag(previousTag, releaseHead);
@@ -207,7 +214,15 @@ async function releaseTarget(params: {
     return false;
   }
 
-  const parsedCommits = parseCommits(commits, config);
+  let parsedCommits = parseCommits(commits, config);
+  if (args.aiScopeInfer) {
+    parsedCommits = await recoverScopedCommitsWithAi({
+      args,
+      config,
+      target,
+      parsedCommits,
+    });
+  }
   const errors = parsedCommits.flatMap((commit) => commit.errors);
   if (errors.length > 0) {
     throw new Error(
@@ -421,6 +436,7 @@ function parseArgs(argv: string[]): CliArgs {
     dryRun: false,
     skipGithub: false,
     skipPush: false,
+    aiScopeInfer: false,
     channel: "beta",
     notesMode: "raw",
     notesAiStrict: false,
@@ -449,6 +465,11 @@ function parseArgs(argv: string[]): CliArgs {
 
     if (token === "--notes-ai-strict") {
       args.notesAiStrict = true;
+      continue;
+    }
+
+    if (token === "--ai-scope-infer") {
+      args.aiScopeInfer = true;
       continue;
     }
 
@@ -567,6 +588,65 @@ function parseArgs(argv: string[]): CliArgs {
   }
 
   return args;
+}
+
+async function recoverScopedCommitsWithAi(params: {
+  args: CliArgs;
+  config: ParsedReleaseConfig;
+  target: string;
+  parsedCommits: ReturnType<typeof parseCommits>;
+}): Promise<ReturnType<typeof parseCommits>> {
+  const recoverable = params.parsedCommits.filter((commit) =>
+    commit.errors.some(isRecoverableScopeError),
+  );
+  if (recoverable.length === 0) {
+    return params.parsedCommits;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      `[${params.target}] --ai-scope-infer requires OPENAI_API_KEY.`,
+    );
+  }
+
+  console.log(
+    `[${params.target}] AI scope inference enabled for ${recoverable.length} commit(s) with missing scope metadata.`,
+  );
+
+  const inferred = await inferScopedEntriesWithAi({
+    apiKey,
+    model: params.args.notesModel,
+    commits: recoverable,
+    config: params.config,
+  });
+
+  const next = params.parsedCommits.map((commit) => {
+    const recovery = inferred.get(commit.hash);
+    if (!recovery || recovery.entries.length === 0) {
+      return commit;
+    }
+
+    return {
+      ...commit,
+      entries: dedupeEntries([...commit.entries, ...recovery.entries]),
+      breakingNotes: [
+        ...new Set([...commit.breakingNotes, ...recovery.breakingNotes]),
+      ],
+      errors: commit.errors.filter((error) => !isRecoverableScopeError(error)),
+    };
+  });
+
+  return next;
+}
+
+function isRecoverableScopeError(error: string): boolean {
+  return (
+    error.includes("invalid conventional line without scope") ||
+    error.includes(
+      "commit subject is not conventional and no valid conventional scoped entries were found in the body",
+    )
+  );
 }
 
 function loadConfig(configPath: string): ReleaseConfig {

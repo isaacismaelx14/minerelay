@@ -59,6 +59,11 @@ on:
         required: true
         default: "900"
         type: string
+      ai_scope_infer:
+        description: Use AI to infer scope for legacy non-scoped commits
+        required: true
+        default: false
+        type: boolean
       dry_run:
         description: Dry run only
         required: true
@@ -114,6 +119,9 @@ jobs:
           EXTRA_ARGS+=(--notes-model "${{ github.event.inputs.notes_model }}")
           EXTRA_ARGS+=(--notes-max-input-chars "${{ github.event.inputs.notes_max_input_chars }}")
           EXTRA_ARGS+=(--notes-max-output-tokens "${{ github.event.inputs.notes_max_output_tokens }}")
+          if [ "${{ github.event.inputs.ai_scope_infer }}" = "true" ]; then
+            EXTRA_ARGS+=(--ai-scope-infer)
+          fi
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
             pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel "${{ github.event.inputs.channel }}" --dry-run --skip-github --skip-push "${EXTRA_ARGS[@]}"
           else
