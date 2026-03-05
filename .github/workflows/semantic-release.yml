@@ -6,6 +6,7 @@ on:
       target:
         description: Release target
         required: true
+        default: api
         type: choice
         options:
           - api
@@ -60,16 +61,19 @@ on:
       dry_run:
         description: Dry run only
         required: true
-        default: true
-        type: boolean
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 concurrency:
-  group: semantic-release-${{ inputs.target }}
+  group: semantic-release-${{ github.event.inputs.target }}
   cancel-in-progress: false
 
 jobs:
   release:
-    if: ${{ github.ref == 'refs/heads/main' || inputs.dry_run }}
+    if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.dry_run == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -99,24 +103,24 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           EXTRA_ARGS=()
-          if [ -n "${{ inputs.next_version }}" ]; then
-            EXTRA_ARGS+=(--next-version "${{ inputs.next_version }}")
+          if [ -n "${{ github.event.inputs.next_version }}" ]; then
+            EXTRA_ARGS+=(--next-version "${{ github.event.inputs.next_version }}")
           fi
-          if [ "${{ inputs.bump }}" != "auto" ]; then
-            EXTRA_ARGS+=(--bump "${{ inputs.bump }}")
+          if [ "${{ github.event.inputs.bump }}" != "auto" ]; then
+            EXTRA_ARGS+=(--bump "${{ github.event.inputs.bump }}")
           fi
-          EXTRA_ARGS+=(--notes-mode "${{ inputs.notes_mode }}")
-          EXTRA_ARGS+=(--notes-model "${{ inputs.notes_model }}")
-          EXTRA_ARGS+=(--notes-max-input-chars "${{ inputs.notes_max_input_chars }}")
-          EXTRA_ARGS+=(--notes-max-output-tokens "${{ inputs.notes_max_output_tokens }}")
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            pnpm release:target -- --target "${{ inputs.target }}" --channel "${{ inputs.channel }}" --dry-run --skip-github --skip-push "${EXTRA_ARGS[@]}"
+          EXTRA_ARGS+=(--notes-mode "${{ github.event.inputs.notes_mode }}")
+          EXTRA_ARGS+=(--notes-model "${{ github.event.inputs.notes_model }}")
+          EXTRA_ARGS+=(--notes-max-input-chars "${{ github.event.inputs.notes_max_input_chars }}")
+          EXTRA_ARGS+=(--notes-max-output-tokens "${{ github.event.inputs.notes_max_output_tokens }}")
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel "${{ github.event.inputs.channel }}" --dry-run --skip-github --skip-push "${EXTRA_ARGS[@]}"
           else
-            pnpm release:target -- --target "${{ inputs.target }}" --channel "${{ inputs.channel }}" "${EXTRA_ARGS[@]}"
+            pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel "${{ github.event.inputs.channel }}" "${EXTRA_ARGS[@]}"
           fi
 
   build-api-after-release:
-    if: ${{ needs.release.result == 'success' && inputs.dry_run != 'true' }}
+    if: ${{ needs.release.result == 'success' && github.event.inputs.dry_run != 'true' }}
     needs: release
     runs-on: ubuntu-latest
 
