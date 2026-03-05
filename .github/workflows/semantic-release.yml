@@ -13,15 +13,6 @@ on:
           - api
           - launcher
           - shared
-      channel:
-        description: Release channel
-        required: true
-        default: beta
-        type: choice
-        options:
-          - beta
-          - alpha
-          - release
       bump:
         description: Bump override (auto uses semantic commits)
         required: true
@@ -64,14 +55,6 @@ on:
         required: true
         default: false
         type: boolean
-      dry_run:
-        description: Dry run only
-        required: true
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
 
 concurrency:
   group: semantic-release-${{ github.event.inputs.target }}
@@ -79,7 +62,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ github.ref == 'refs/heads/main' || github.event.inputs.dry_run == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,17 +93,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Validate workflow fan-out token
-        if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
           if [ -z "${{ secrets.RELEASE_WORKFLOW_TOKEN }}" ]; then
-            echo "RELEASE_WORKFLOW_TOKEN is required for non-dry releases." >&2
+            echo "RELEASE_WORKFLOW_TOKEN is required." >&2
             echo "Reason: tags pushed with GITHUB_TOKEN do not trigger downstream tag workflows (api-build / launcher-build)." >&2
             exit 1
           fi
 
       - name: Run semantic release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           EXTRA_ARGS=()
@@ -137,14 +119,10 @@ jobs:
           if [ "${{ github.event.inputs.ai_scope_infer }}" = "true" ]; then
             EXTRA_ARGS+=(--ai-scope-infer)
           fi
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel "${{ github.event.inputs.channel }}" --dry-run --skip-github --skip-push "${EXTRA_ARGS[@]}"
-          else
-            pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel "${{ github.event.inputs.channel }}" "${EXTRA_ARGS[@]}"
-          fi
+          pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel release "${EXTRA_ARGS[@]}"
 
   build-api-after-release:
-    if: ${{ needs.release.result == 'success' && github.event.inputs.dry_run != 'true' }}
+    if: ${{ needs.release.result == 'success' }}
     needs: release
     runs-on: ubuntu-latest
 
