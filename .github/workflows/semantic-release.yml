@@ -89,6 +89,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -107,6 +108,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate workflow fan-out token
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          if [ -z "${{ secrets.RELEASE_WORKFLOW_TOKEN }}" ]; then
+            echo "RELEASE_WORKFLOW_TOKEN is required for non-dry releases." >&2
+            echo "Reason: tags pushed with GITHUB_TOKEN do not trigger downstream tag workflows (api-build / launcher-build)." >&2
+            exit 1
+          fi
 
       - name: Run semantic release
         env:

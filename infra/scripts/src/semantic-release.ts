@@ -870,7 +870,9 @@ function gitAdd(paths: string[]): void {
 }
 
 function gitCommit(message: string): void {
-  execFileSync("git", ["commit", "-m", message], { stdio: "inherit" });
+  execFileSync("git", ["commit", "--no-verify", "-m", message], {
+    stdio: "inherit",
+  });
 }
 
 function gitTag(tagName: string): void {
