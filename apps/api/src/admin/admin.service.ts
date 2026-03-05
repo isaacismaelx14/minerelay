@@ -890,7 +890,7 @@ export class AdminService implements OnModuleInit {
       canRestartServer: boolean;
     };
   }> {
-    const { apiKey, integration } = await this.requireExarotonConnection();
+    const { integration } = await this.requireExarotonConnection();
     const selectedServerId = integration.selectedServerId?.trim();
     if (!selectedServerId) {
       throw new BadRequestException('Select an Exaroton server first');
@@ -1207,10 +1207,10 @@ export class AdminService implements OnModuleInit {
     });
   }
 
-  async startPublishProfile(
+  startPublishProfile(
     input: PublishProfileDto,
     requestOrigin: string,
-  ): Promise<{ jobId: string }> {
+  ): { jobId: string } {
     const jobId = randomBytes(12).toString('hex');
     const session: PublishSession = {
       createdAt: Date.now(),
@@ -1238,14 +1238,14 @@ export class AdminService implements OnModuleInit {
     return { jobId };
   }
 
-  async openPublishStream(
+  openPublishStream(
     jobId: string,
     handlers: {
       onProgress: (event: PublishProgressEvent) => void;
       onDone: (result: PublishProfileResult) => void;
       onError: (message: string) => void;
     },
-  ): Promise<() => void> {
+  ): () => void {
     const session = this.publishSessions.get(jobId.trim());
     if (!session) {
       throw new NotFoundException('Publish job not found');
@@ -1276,7 +1276,15 @@ export class AdminService implements OnModuleInit {
         handlers.onDone(event.data as PublishProfileResult);
         return;
       }
-      handlers.onError(String(event.data || 'Publish failed'));
+      if (typeof event.data === 'string' && event.data.trim().length > 0) {
+        handlers.onError(event.data.trim());
+        return;
+      }
+      if (event.data instanceof Error && event.data.message.trim().length > 0) {
+        handlers.onError(event.data.message.trim());
+        return;
+      }
+      handlers.onError('Publish failed');
     };
 
     session.listeners.add(listener);

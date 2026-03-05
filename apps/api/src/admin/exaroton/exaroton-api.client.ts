@@ -199,7 +199,11 @@ export class ExarotonApiClient {
     socket.on('message', (raw) => {
       let message: ExarotonWebSocketMessage | null = null;
       try {
-        message = JSON.parse(raw.toString()) as ExarotonWebSocketMessage;
+        const payload = decodeWsPayload(raw);
+        if (!payload) {
+          return;
+        }
+        message = JSON.parse(payload) as ExarotonWebSocketMessage;
       } catch {
         return;
       }
@@ -377,4 +381,24 @@ export class ExarotonApiClient {
 
     return body.data;
   }
+}
+
+function decodeWsPayload(raw: unknown): string | null {
+  if (typeof raw === 'string') {
+    return raw;
+  }
+  if (Buffer.isBuffer(raw)) {
+    return raw.toString('utf8');
+  }
+  if (Array.isArray(raw)) {
+    const buffers = raw.filter((item): item is Buffer => Buffer.isBuffer(item));
+    if (buffers.length === 0) {
+      return null;
+    }
+    return Buffer.concat(buffers).toString('utf8');
+  }
+  if (raw instanceof ArrayBuffer) {
+    return Buffer.from(raw).toString('utf8');
+  }
+  return null;
 }

@@ -2070,7 +2070,6 @@ const AddModsModal = memo(function AddModsModal({
         /* silent */
       })
       .finally(() => setIsLoadingPopular(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [popularResults, setPopularResults] = useState<typeof searchResults>(

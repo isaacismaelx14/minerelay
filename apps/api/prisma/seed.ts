@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 async function main() {
   const root = resolve(__dirname, '../../../');
   const lockPath = resolve(root, 'infra/sample-data/profile.lock.json');
-  const lockRaw = JSON.parse(readFileSync(lockPath, 'utf-8'));
+  const lockRaw: unknown = JSON.parse(readFileSync(lockPath, 'utf-8'));
   const lock = ProfileLockSchema.parse(lockRaw);
 
   const serverId = process.env.SERVER_ID ?? 'mvl';

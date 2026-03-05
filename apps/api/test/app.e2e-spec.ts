@@ -25,14 +25,12 @@ describe('AppController (e2e)', () => {
       .get('/v1/profile')
       .expect(200);
 
-    expect(response.body).toEqual(
-      expect.objectContaining({
-        profileId: expect.any(String),
-        version: expect.any(Number),
-        lockUrl: expect.any(String),
-        serverName: expect.any(String),
-        serverAddress: expect.any(String),
-      }),
-    );
+    const body = response.body as Record<string, unknown>;
+
+    expect(typeof body.profileId).toBe('string');
+    expect(typeof body.version).toBe('number');
+    expect(typeof body.lockUrl).toBe('string');
+    expect(typeof body.serverName).toBe('string');
+    expect(typeof body.serverAddress).toBe('string');
   });
 });

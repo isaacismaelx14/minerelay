@@ -329,7 +329,7 @@ export class AdminController {
   }
 
   @Get('/v1/admin/profile/publish/stream')
-  async publishProfileStream(
+  publishProfileStream(
     @Query('jobId') jobId = '',
     @Req() req: Request,
     @Res() res: Response,
@@ -370,7 +370,7 @@ export class AdminController {
     req.on('close', cleanup);
 
     try {
-      closeUpstream = await this.adminService.openPublishStream(cleanJobId, {
+      closeUpstream = this.adminService.openPublishStream(cleanJobId, {
         onProgress: (event) => send('progress', event),
         onDone: (result) => {
           send('done', result);
