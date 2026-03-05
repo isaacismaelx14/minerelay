@@ -2,22 +2,8 @@ name: fancymenu-sandbox-build
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "apps/fancymenu-sandbox/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.base.json"
-      - ".github/workflows/fancymenu-sandbox-build.yml"
-  pull_request:
-    paths:
-      - "apps/fancymenu-sandbox/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "tsconfig.base.json"
-      - ".github/workflows/fancymenu-sandbox-build.yml"
+    tags:
+      - "@mss/fancymenu-sandbox/v*"
 
 jobs:
   build-fancymenu-sandbox:
@@ -44,7 +30,7 @@ jobs:
         run: pnpm --filter @mss/fancymenu-sandbox build
 
   deploy-fancymenu-sandbox:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/@mss/fancymenu-sandbox/v')
     needs: build-fancymenu-sandbox
     runs-on: ubuntu-latest
     permissions:

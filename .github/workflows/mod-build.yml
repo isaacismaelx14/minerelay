@@ -2,18 +2,8 @@ name: mod-build
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "mods/**"
-      - "gradle/**"
-      - "build.gradle"
-      - "build.gradle.kts"
-      - "settings.gradle"
-      - "settings.gradle.kts"
-      - "gradle.properties"
-      - "gradlew"
-      - "gradlew.bat"
-      - ".github/workflows/mod-build.yml"
+    tags:
+      - "@mss/mod/v*"
 
 jobs:
   build-mod:
