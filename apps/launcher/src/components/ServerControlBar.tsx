@@ -3,7 +3,9 @@ import type { LauncherServerControlsState } from "../types";
 type Props = {
   launcherServerControls: LauncherServerControlsState;
   isServerActionBusy: boolean;
-  runLauncherServerAction: (action: "start" | "stop" | "restart") => Promise<void>;
+  runLauncherServerAction: (
+    action: "start" | "stop" | "restart",
+  ) => Promise<void>;
   shellClassName?: string;
   labelClassName?: string;
   controlsClassName?: string;
@@ -55,7 +57,9 @@ export function ServerControlBar({
         </span>
 
         {launcherServerControls.reason ? (
-          <span className="compact-server-online">{launcherServerControls.reason}</span>
+          <span className="compact-server-online">
+            {launcherServerControls.reason}
+          </span>
         ) : launcherServerControls.permissions.canViewOnlinePlayers &&
           launcherServerControls.selectedServer ? (
           <span className="compact-server-online">

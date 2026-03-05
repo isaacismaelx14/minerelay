@@ -2,24 +2,69 @@ import type { useAppCore } from "../hooks/useAppCore";
 import { bytesToHuman, formatEta, formatTime, formatDateTime } from "../utils";
 import { ServerControlBar } from "./ServerControlBar";
 
-export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore> }) {
+export function DesktopWorkspace({
+  core,
+}: {
+  core: ReturnType<typeof useAppCore>;
+}) {
   const {
-    APP_NAME, SERVER_ID, catalog, sessionStatus, activeView, setActiveView,
-    lastCheckAt, nextCheckAt, versionReadiness, launcherUpdate, launcherAppVersion,
-    canRenderLogo, markLogoAsBroken, serverInitial, returnToMainWindow, sourceLabel,
-    screen, isChecking, sessionActive, hasFancyMenuMod, fancyMenuMode, hasFancyMenuCustomBundle,
-    settings, instance, saveSettings, refreshVersionReadiness,
-    profileSourceDraft, setProfileSourceDraft, saveProfileSource, updateLauncherSelection,
-    launchers, updateCustomPath, pickManualLauncherFromSettings, pickMinecraftRootFromSettings,
-    runSyncCycle, launcherUpdateNotice, isCheckingLauncherUpdate, isInstallingLauncherUpdate,
-    checkLauncherUpdate, installLauncherUpdate, isPlaying, sync, hasSyncTotal, progressPercent,
-    syncHasUnknownTotal, syncBytesLabel, hint, error,
-    isApiSourceMode, launcherServerControls, isServerActionBusy, runLauncherServerAction
+    APP_NAME,
+    SERVER_ID,
+    catalog,
+    sessionStatus,
+    activeView,
+    setActiveView,
+    lastCheckAt,
+    nextCheckAt,
+    versionReadiness,
+    launcherUpdate,
+    launcherAppVersion,
+    canRenderLogo,
+    markLogoAsBroken,
+    serverInitial,
+    returnToMainWindow,
+    sourceLabel,
+    screen,
+    isChecking,
+    sessionActive,
+    hasFancyMenuMod,
+    fancyMenuMode,
+    hasFancyMenuCustomBundle,
+    settings,
+    instance,
+    saveSettings,
+    refreshVersionReadiness,
+    profileSourceDraft,
+    setProfileSourceDraft,
+    saveProfileSource,
+    updateLauncherSelection,
+    launchers,
+    updateCustomPath,
+    pickManualLauncherFromSettings,
+    pickMinecraftRootFromSettings,
+    runSyncCycle,
+    launcherUpdateNotice,
+    isCheckingLauncherUpdate,
+    isInstallingLauncherUpdate,
+    checkLauncherUpdate,
+    installLauncherUpdate,
+    isPlaying,
+    sync,
+    hasSyncTotal,
+    progressPercent,
+    syncHasUnknownTotal,
+    syncBytesLabel,
+    hint,
+    error,
+    isApiSourceMode,
+    launcherServerControls,
+    isServerActionBusy,
+    runLauncherServerAction,
   } = core;
   const serverControlReady = Boolean(
     launcherServerControls?.enabled &&
-      !launcherServerControls.reason &&
-      launcherServerControls.permissions.canViewStatus,
+    !launcherServerControls.reason &&
+    launcherServerControls.permissions.canViewStatus,
   );
 
   const renderPrimary = () => {
@@ -46,12 +91,16 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             aria-valuemax={100}
             aria-valuenow={hasSyncTotal ? progressPercent : undefined}
             aria-valuetext={
-              syncHasUnknownTotal ? "Download progress total unknown" : undefined
+              syncHasUnknownTotal
+                ? "Download progress total unknown"
+                : undefined
             }
           >
             <div
               className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
-              style={{ width: syncHasUnknownTotal ? "30%" : `${progressPercent}%` }}
+              style={{
+                width: syncHasUnknownTotal ? "30%" : `${progressPercent}%`,
+              }}
             />
           </div>
           <div className="metrics-row">
@@ -87,8 +136,8 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
           {sessionActive
             ? `Live session active in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}.`
             : catalog?.hasUpdates
-            ? "New server changes were detected. Auto-sync runs every 30 minutes while this app is open."
-            : "All mods/resourcepacks/shaders/configs match server profile."}
+              ? "New server changes were detected. Auto-sync runs every 30 minutes while this app is open."
+              : "All mods/resourcepacks/shaders/configs match server profile."}
         </p>
         {catalog?.fancyMenuEnabled && !hasFancyMenuMod ? (
           <p className="wizard-meta" style={{ color: "#b84e4e" }}>
@@ -133,7 +182,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <div className="data-list">
               <div className="data-item">
                 <span className="data-label">Endpoint</span>
-                <div className="data-value">{catalog?.serverAddress ?? "--"}</div>
+                <div className="data-value">
+                  {catalog?.serverAddress ?? "--"}
+                </div>
               </div>
               <div className="data-item">
                 <span className="data-label">Source</span>
@@ -147,24 +198,35 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <div className="data-list">
               <div className="data-item">
                 <span className="data-label">Active Launcher</span>
-                <div className="data-value">{settings?.selectedLauncherId ?? "--"}</div>
+                <div className="data-value">
+                  {settings?.selectedLauncherId ?? "--"}
+                </div>
               </div>
 
               <details className="advanced-options">
                 <summary className="advanced-summary">Technical Paths</summary>
-                <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                <div
+                  className="advanced-content"
+                  style={{ display: "grid", gap: "var(--space-2)" }}
+                >
                   <div className="data-item">
                     <span className="data-label">Live Minecraft</span>
-                    <div className="data-value">{versionReadiness?.liveMinecraftRoot ?? "--"}</div>
+                    <div className="data-value">
+                      {versionReadiness?.liveMinecraftRoot ?? "--"}
+                    </div>
                   </div>
                   <div className="data-item">
                     <span className="data-label">Managed Sync</span>
-                    <div className="data-value">{instance?.minecraftDir ?? "--"}</div>
+                    <div className="data-value">
+                      {instance?.minecraftDir ?? "--"}
+                    </div>
                   </div>
                   {settings?.customLauncherPath && (
                     <div className="data-item">
                       <span className="data-label">Custom Bin Path</span>
-                      <div className="data-value">{settings.customLauncherPath}</div>
+                      <div className="data-value">
+                        {settings.customLauncherPath}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -176,7 +238,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <h3>Mods ({catalog?.mods.length ?? 0})</h3>
             <div className="overview-list">
               {(catalog?.mods ?? []).map((item) => (
-                <span key={item} className="overview-chip">{item}</span>
+                <span key={item} className="overview-chip">
+                  {item}
+                </span>
               ))}
             </div>
           </section>
@@ -185,7 +249,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <h3>Resourcepacks ({catalog?.resourcepacks.length ?? 0})</h3>
             <div className="overview-list">
               {(catalog?.resourcepacks ?? []).map((item) => (
-                <span key={item} className="overview-chip">{item}</span>
+                <span key={item} className="overview-chip">
+                  {item}
+                </span>
               ))}
             </div>
           </section>
@@ -194,7 +260,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <h3>Shaders ({catalog?.shaderpacks.length ?? 0})</h3>
             <div className="overview-list">
               {(catalog?.shaderpacks ?? []).map((item) => (
-                <span key={item} className="overview-chip">{item}</span>
+                <span key={item} className="overview-chip">
+                  {item}
+                </span>
               ))}
             </div>
           </section>
@@ -203,7 +271,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <h3>Configs ({catalog?.configs.length ?? 0})</h3>
             <div className="overview-list">
               {(catalog?.configs ?? []).map((item) => (
-                <span key={item} className="overview-chip">{item}</span>
+                <span key={item} className="overview-chip">
+                  {item}
+                </span>
               ))}
             </div>
           </section>
@@ -218,7 +288,8 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
         <div className="pane-head">
           <h2>Source & Paths</h2>
           <p className="pane-subtitle">
-            Configure profile source, launcher executable, and live Minecraft root.
+            Configure profile source, launcher executable, and live Minecraft
+            root.
           </p>
         </div>
 
@@ -242,12 +313,24 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                 />
               </div>
 
-              <details className="advanced-options" open={!!profileSourceDraft.profileLockUrl || undefined}>
-                <summary className="advanced-summary">Advanced: Direct Lock URL</summary>
-                <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                  <p className="pane-subtitle" style={{ margin: 0, fontSize: '0.75rem' }}>
-                    Optional. Override the API and fetch the modpack directly from a URL.
-                    Useful for static hosting or testing unreleased versions.
+              <details
+                className="advanced-options"
+                open={!!profileSourceDraft.profileLockUrl || undefined}
+              >
+                <summary className="advanced-summary">
+                  Advanced: Direct Lock URL
+                </summary>
+                <div
+                  className="advanced-content"
+                  style={{ display: "grid", gap: "var(--space-2)" }}
+                >
+                  <p
+                    className="pane-subtitle"
+                    style={{ margin: 0, fontSize: "0.75rem" }}
+                  >
+                    Optional. Override the API and fetch the modpack directly
+                    from a URL. Useful for static hosting or testing unreleased
+                    versions.
                   </p>
                   <input
                     className="input"
@@ -260,11 +343,14 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                         profileLockUrl: event.target.value,
                       }))
                     }
-                    />
+                  />
                 </div>
               </details>
 
-              <button className="btn primary" onClick={() => void saveProfileSource()}>
+              <button
+                className="btn primary"
+                onClick={() => void saveProfileSource()}
+              >
                 Save Source
               </button>
             </div>
@@ -305,7 +391,10 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                         }
                       />
                     </div>
-                    <button className="btn ghost" onClick={() => void saveProfileSource()}>
+                    <button
+                      className="btn ghost"
+                      onClick={() => void saveProfileSource()}
+                    >
                       Save Pairing Code
                     </button>
                   </div>
@@ -322,13 +411,18 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                 <select
                   className="select"
                   value={settings?.selectedLauncherId ?? ""}
-                  onChange={(event) => void updateLauncherSelection(event.target.value)}
+                  onChange={(event) =>
+                    void updateLauncherSelection(event.target.value)
+                  }
                 >
                   <option value="">No launcher selected</option>
                   {launchers
                     .filter((candidate) => candidate.id !== "custom")
                     .map((candidate) => (
-                      <option key={`${candidate.id}:${candidate.path}`} value={candidate.id}>
+                      <option
+                        key={`${candidate.id}:${candidate.path}`}
+                        value={candidate.id}
+                      >
                         {candidate.name}
                       </option>
                     ))}
@@ -339,13 +433,15 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               {settings?.selectedLauncherId === "custom" ? (
                 <div className="data-item">
                   <span className="data-label">Custom Bin Path</span>
-                  <div style={{ display: 'grid', gap: '8px' }}>
+                  <div style={{ display: "grid", gap: "8px" }}>
                     <input
                       className="input"
                       type="text"
                       value={settings.customLauncherPath ?? ""}
                       placeholder="/Applications/Minecraft.app or C:\\...\\MinecraftLauncher.exe"
-                      onChange={(event) => void updateCustomPath(event.target.value)}
+                      onChange={(event) =>
+                        void updateCustomPath(event.target.value)
+                      }
                     />
                     <button
                       className="btn ghost"
@@ -357,9 +453,13 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                 </div>
               ) : (
                 <div className="panel-info-box">
-                  <p className="small-dark" style={{ margin: 0, fontSize: '0.8rem' }}>
-                    Choosing a managed launcher (like Prism) allows the app to automatically
-                    discover your instance directories and handle icon sync.
+                  <p
+                    className="small-dark"
+                    style={{ margin: 0, fontSize: "0.8rem" }}
+                  >
+                    Choosing a managed launcher (like Prism) allows the app to
+                    automatically discover your instance directories and handle
+                    icon sync.
                   </p>
                 </div>
               )}
@@ -371,25 +471,44 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <div className="data-list">
               <div className="data-item">
                 <span className="data-label">Sync Base Root</span>
-                <div className="data-value">{instance?.instanceRoot ?? "--"}</div>
+                <div className="data-value">
+                  {instance?.instanceRoot ?? "--"}
+                </div>
               </div>
 
               <div className="data-item">
                 <span className="data-label">Managed Game Dir</span>
-                <div className="data-value">{instance?.minecraftDir ?? "--"}</div>
+                <div className="data-value">
+                  {instance?.minecraftDir ?? "--"}
+                </div>
               </div>
 
               <div className="data-item">
                 <span className="data-label">Live Game Dir</span>
-                <div className="data-value">{versionReadiness?.liveMinecraftRoot ?? "--"}</div>
+                <div className="data-value">
+                  {versionReadiness?.liveMinecraftRoot ?? "--"}
+                </div>
               </div>
 
               <details className="advanced-options">
-                <summary className="advanced-summary">Advanced: Override Live Directory</summary>
-                <div className="advanced-content" style={{ display: 'grid', gap: 'var(--space-2)' }}>
-                  <p className="pane-subtitle" style={{ fontSize: '0.75rem', marginBottom: '8px', marginTop: 0 }}>
-                    By default, the sync tool targets the standard data folder of your chosen launcher.
-                    Specify an absolute path below to force a different live directory.
+                <summary className="advanced-summary">
+                  Advanced: Override Live Directory
+                </summary>
+                <div
+                  className="advanced-content"
+                  style={{ display: "grid", gap: "var(--space-2)" }}
+                >
+                  <p
+                    className="pane-subtitle"
+                    style={{
+                      fontSize: "0.75rem",
+                      marginBottom: "8px",
+                      marginTop: 0,
+                    }}
+                  >
+                    By default, the sync tool targets the standard data folder
+                    of your chosen launcher. Specify an absolute path below to
+                    force a different live directory.
                   </p>
                   <input
                     className="input"
@@ -400,7 +519,8 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                       settings
                         ? void saveSettings({
                             ...settings,
-                            minecraftRootOverride: event.target.value.trim() || null,
+                            minecraftRootOverride:
+                              event.target.value.trim() || null,
                           })
                         : undefined
                     }
@@ -412,12 +532,20 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
                     >
                       Pick Dir
                     </button>
-                    <button className="btn ghost" onClick={() => void refreshVersionReadiness()}>
+                    <button
+                      className="btn ghost"
+                      onClick={() => void refreshVersionReadiness()}
+                    >
                       Refresh
                     </button>
                   </div>
-                  <p className="small-dark" style={{ fontSize: '0.7rem', marginTop: '4px' }}>
-                    Ready: {versionReadiness?.foundInMinecraftRootDir ? "YES" : "NO"} | Allowlisted: {versionReadiness?.allowlisted ? "YES" : "NO"}
+                  <p
+                    className="small-dark"
+                    style={{ fontSize: "0.7rem", marginTop: "4px" }}
+                  >
+                    Ready:{" "}
+                    {versionReadiness?.foundInMinecraftRootDir ? "YES" : "NO"} |
+                    Allowlisted: {versionReadiness?.allowlisted ? "YES" : "NO"}
                   </p>
                 </div>
               </details>
@@ -465,15 +593,21 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <div className="data-list">
               <div className="data-item">
                 <span className="data-label">Installed Version</span>
-                <div className="data-value">{instance?.installedVersion ?? "none"}</div>
+                <div className="data-value">
+                  {instance?.installedVersion ?? "none"}
+                </div>
               </div>
               <div className="data-item">
                 <span className="data-label">Remote Lock</span>
-                <div className="data-value">{catalog?.profileVersion ?? "--"}</div>
+                <div className="data-value">
+                  {catalog?.profileVersion ?? "--"}
+                </div>
               </div>
               <div className="data-item">
                 <span className="data-label">Local Snapshot</span>
-                <div className="data-value">{catalog?.localVersion ?? "--"}</div>
+                <div className="data-value">
+                  {catalog?.localVersion ?? "--"}
+                </div>
               </div>
             </div>
           </section>
@@ -489,12 +623,15 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               </div>
               <div className="data-item">
                 <span className="data-label">Minecraft</span>
-                <div className="data-value">{catalog?.minecraftVersion ?? "--"}</div>
+                <div className="data-value">
+                  {catalog?.minecraftVersion ?? "--"}
+                </div>
               </div>
               <div className="data-item">
                 <span className="data-label">Allowlisted Versions</span>
                 <div className="data-value">
-                  {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
+                  {versionReadiness?.allowedMinecraftVersions.join(", ") ||
+                    "--"}
                 </div>
               </div>
             </div>
@@ -509,7 +646,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
       <div className="workspace-pane">
         <div className="pane-head">
           <h2>Activity</h2>
-          <p className="pane-subtitle">Sync schedule, telemetry, and operator messages.</p>
+          <p className="pane-subtitle">
+            Sync schedule, telemetry, and operator messages.
+          </p>
         </div>
 
         <div className="pane-grid">
@@ -517,7 +656,10 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <h3>Schedule</h3>
             <div className="data-list">
               <div className="panel-info-box">
-                <p className="small-dark" style={{ margin: 0, fontSize: '0.8rem' }}>
+                <p
+                  className="small-dark"
+                  style={{ margin: 0, fontSize: "0.8rem" }}
+                >
                   Auto-apply every 30 minutes while the app is open.
                 </p>
               </div>
@@ -544,7 +686,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <div className="data-list">
               <div className="data-item">
                 <span className="data-label">Current Version</span>
-                <div className="data-value">{launcherUpdate?.currentVersion ?? "--"}</div>
+                <div className="data-value">
+                  {launcherUpdate?.currentVersion ?? "--"}
+                </div>
               </div>
               <div className="data-item">
                 <span className="data-label">Status</span>
@@ -559,17 +703,25 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               {launcherUpdate?.available && (
                 <div className="data-item">
                   <span className="data-label">Latest Release</span>
-                  <div className="data-value">{launcherUpdate.latestVersion}</div>
+                  <div className="data-value">
+                    {launcherUpdate.latestVersion}
+                  </div>
                 </div>
               )}
-              <p className="small-dark" style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-                {launcherUpdateNotice ?? "Updater checks run at startup and every 30 minutes."}
+              <p
+                className="small-dark"
+                style={{ fontSize: "0.75rem", marginTop: "4px" }}
+              >
+                {launcherUpdateNotice ??
+                  "Updater checks run at startup and every 30 minutes."}
               </p>
               <div className="actions-row">
                 <button
                   className="btn ghost"
                   onClick={() => void checkLauncherUpdate(false)}
-                  disabled={isCheckingLauncherUpdate || isInstallingLauncherUpdate}
+                  disabled={
+                    isCheckingLauncherUpdate || isInstallingLauncherUpdate
+                  }
                 >
                   {isCheckingLauncherUpdate ? "Checking..." : "Check Updates"}
                 </button>
@@ -611,12 +763,16 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               aria-valuemax={100}
               aria-valuenow={hasSyncTotal ? progressPercent : undefined}
               aria-valuetext={
-                syncHasUnknownTotal ? "Download progress total unknown" : undefined
+                syncHasUnknownTotal
+                  ? "Download progress total unknown"
+                  : undefined
               }
             >
               <div
                 className={`meter-fill${syncHasUnknownTotal ? " indeterminate" : ""}`}
-                style={{ width: syncHasUnknownTotal ? "30%" : `${progressPercent}%` }}
+                style={{
+                  width: syncHasUnknownTotal ? "30%" : `${progressPercent}%`,
+                }}
               />
             </div>
             <div className="metrics-row">
@@ -654,10 +810,20 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
 
         <nav className="nav-groups" aria-label="Workspace sections">
           <button
-            className={activeView === "overview" ? "nav-item active" : "nav-item"}
+            className={
+              activeView === "overview" ? "nav-item active" : "nav-item"
+            }
             onClick={() => setActiveView("overview")}
           >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <rect x="3" y="3" width="7" height="7"></rect>
               <rect x="14" y="3" width="7" height="7"></rect>
               <rect x="14" y="14" width="7" height="7"></rect>
@@ -666,10 +832,20 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <span>Overview</span>
           </button>
           <button
-            className={activeView === "sourcePaths" ? "nav-item active" : "nav-item"}
+            className={
+              activeView === "sourcePaths" ? "nav-item active" : "nav-item"
+            }
             onClick={() => setActiveView("sourcePaths")}
           >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               <line x1="12" y1="11" x2="12" y2="17"></line>
               <line x1="9" y1="14" x2="15" y2="14"></line>
@@ -677,10 +853,20 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <span>Source & Paths</span>
           </button>
           <button
-            className={activeView === "catalog" ? "nav-item active" : "nav-item"}
+            className={
+              activeView === "catalog" ? "nav-item active" : "nav-item"
+            }
             onClick={() => setActiveView("catalog")}
           >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M21 8V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"></path>
               <rect x="1" y="3" width="22" height="5"></rect>
               <line x1="10" y1="12" x2="14" y2="12"></line>
@@ -688,10 +874,20 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
             <span>Catalog</span>
           </button>
           <button
-            className={activeView === "activity" ? "nav-item active" : "nav-item"}
+            className={
+              activeView === "activity" ? "nav-item active" : "nav-item"
+            }
             onClick={() => setActiveView("activity")}
           >
-            <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
             </svg>
             <span>Activity</span>
@@ -703,7 +899,9 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
           <p className="small-dark">Next check: {formatTime(nextCheckAt)}</p>
           <p className="small-dark">
             Runtime:{" "}
-            {versionReadiness?.foundInMinecraftRootDir ? "configured" : "pending"}
+            {versionReadiness?.foundInMinecraftRootDir
+              ? "configured"
+              : "pending"}
           </p>
           <p className="small-dark">
             Lock drift: {catalog?.hasUpdates ? "detected" : "none"}
@@ -714,12 +912,16 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               ? `v${launcherUpdate.latestVersion ?? "new"} ready`
               : "none"}
           </p>
-          <p className="small-dark">Launcher version: v{launcherAppVersion ?? "--"}</p>
+          <p className="small-dark">
+            Launcher version: v{launcherAppVersion ?? "--"}
+          </p>
           <p className="small-dark">
             Session: {sessionStatus.phase.replaceAll("_", " ")}
           </p>
           {sessionStatus.liveMinecraftDir ? (
-            <p className="small-dark">Playing dir: {sessionStatus.liveMinecraftDir}</p>
+            <p className="small-dark">
+              Playing dir: {sessionStatus.liveMinecraftDir}
+            </p>
           ) : null}
         </section>
       </aside>
@@ -740,21 +942,26 @@ export function DesktopWorkspace({ core }: { core: ReturnType<typeof useAppCore>
               </div>
             )}
             <div>
-            <span className="eyebrow">MSS+ Client Center</span>
-            <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
-            {sessionStatus.phase === "playing" ? (
-              <p className="playing-status">
-                Playing in {sessionStatus.liveMinecraftDir ?? "Minecraft directory"}
-              </p>
-            ) : null}
+              <span className="eyebrow">MSS+ Client Center</span>
+              <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
+              {sessionStatus.phase === "playing" ? (
+                <p className="playing-status">
+                  Playing in{" "}
+                  {sessionStatus.liveMinecraftDir ?? "Minecraft directory"}
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="workspace-header-actions">
             <div className="version-pill">
-              v{launcherAppVersion ?? "--"} | {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"} | MC{" "}
+              v{launcherAppVersion ?? "--"} | {catalog?.loader ?? "fabric"}{" "}
+              {catalog?.loaderVersion ?? "--"} | MC{" "}
               {catalog?.minecraftVersion ?? "--"}
             </div>
-            <button className="btn ghost" onClick={() => void returnToMainWindow()}>
+            <button
+              className="btn ghost"
+              onClick={() => void returnToMainWindow()}
+            >
               Back to Launcher
             </button>
           </div>

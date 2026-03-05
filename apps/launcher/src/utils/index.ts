@@ -72,15 +72,16 @@ export function normalizeProfileLockUrl(input: string): string {
   return normalizeSecureUrl(input, false);
 }
 
-export function normalizeSecureUrl(input: string, trimTrailingSlash: boolean): string {
+export function normalizeSecureUrl(
+  input: string,
+  trimTrailingSlash: boolean,
+): string {
   const trimmed = input.trim();
   if (!trimmed) {
     return "";
   }
 
-  const candidate = trimTrailingSlash
-    ? trimmed.replace(/\/+$/u, "")
-    : trimmed;
+  const candidate = trimTrailingSlash ? trimmed.replace(/\/+$/u, "") : trimmed;
 
   try {
     const parsed = new URL(candidate);

@@ -130,7 +130,9 @@ export function useAppCore() {
   });
   const [probePlaying, setProbePlaying] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [brokenLogoUrls, setBrokenLogoUrls] = useState<Record<string, true>>({});
+  const [brokenLogoUrls, setBrokenLogoUrls] = useState<Record<string, true>>(
+    {},
+  );
 
   const cycleInFlight = useRef(false);
   const checkingLauncherUpdateRef = useRef(false);
@@ -191,11 +193,13 @@ export function useAppCore() {
 
   const hasFancyMenuMod = catalog?.fancyMenuPresent ?? false;
   const fancyMenuMode = catalog?.fancyMenuMode ?? "simple";
-  const hasFancyMenuCustomBundle = catalog?.fancyMenuCustomBundlePresent ?? false;
+  const hasFancyMenuCustomBundle =
+    catalog?.fancyMenuCustomBundlePresent ?? false;
   const sessionActive = sessionStatus.phase !== "idle";
   const isPlaying = sessionStatus.phase === "playing";
   const compactPlaying = isPlaying || probePlaying;
-  const serverInitial = (catalog?.serverName ?? SERVER_ID).trim().charAt(0).toUpperCase() || "S";
+  const serverInitial =
+    (catalog?.serverName ?? SERVER_ID).trim().charAt(0).toUpperCase() || "S";
 
   const markLogoAsBroken = useCallback((url?: string) => {
     if (!url) {
@@ -306,7 +310,9 @@ export function useAppCore() {
       clearUnlockTimeout();
       devtoolsUnlockActiveRef.current = true;
       devtoolsUnlockBufferRef.current = "";
-      setHint("Devtools unlock active: type secret command, then press Enter. Press Esc to cancel.");
+      setHint(
+        "Devtools unlock active: type secret command, then press Enter. Press Esc to cancel.",
+      );
       devtoolsUnlockTimeoutRef.current = window.setTimeout(() => {
         cancelUnlock("Devtools unlock timed out.");
       }, 12_000);
@@ -433,7 +439,8 @@ export function useAppCore() {
         "launcher_server_controls_get",
       );
       launcherPermissionRemovedNotifiedRef.current = false;
-      launcherServerAccessGrantedRef.current = hasLauncherServerPermission(next);
+      launcherServerAccessGrantedRef.current =
+        hasLauncherServerPermission(next);
       setLauncherServerControls(
         launcherServerAccessGrantedRef.current ? next : null,
       );
@@ -466,19 +473,20 @@ export function useAppCore() {
         return null;
       }
 
-      setLauncherServerControls((current) =>
-        current ?? {
-          enabled: false,
-          reason: message,
-          permissions: {
-            canViewStatus: false,
-            canViewOnlinePlayers: false,
-            canStartServer: false,
-            canStopServer: false,
-            canRestartServer: false,
+      setLauncherServerControls(
+        (current) =>
+          current ?? {
+            enabled: false,
+            reason: message,
+            permissions: {
+              canViewStatus: false,
+              canViewOnlinePlayers: false,
+              canStartServer: false,
+              canStopServer: false,
+              canRestartServer: false,
+            },
+            selectedServer: null,
           },
-          selectedServer: null,
-        },
       );
       return null;
     }
@@ -602,7 +610,6 @@ export function useAppCore() {
           );
         });
       }, LAUNCHER_STREAM_RETRY_DELAY_MS);
-
     },
     [clearLauncherStreamRetryTimers],
   );
@@ -691,36 +698,39 @@ export function useAppCore() {
     return snapshot;
   }, []);
 
-  const executeSyncApply = useCallback(async (options?: SyncApplyOptions) => {
-    if (sessionActive) {
-      throw new Error("Cannot sync during active play session.");
-    }
+  const executeSyncApply = useCallback(
+    async (options?: SyncApplyOptions) => {
+      if (sessionActive) {
+        throw new Error("Cannot sync during active play session.");
+      }
 
-    const showSyncScreen = options?.showSyncScreen ?? true;
-    if (showSyncScreen) {
-      setScreen("syncing");
-    }
-    setSync({
-      phase: "planning",
-      completedBytes: 0,
-      totalBytes: 0,
-      speedBps: 0,
-    });
+      const showSyncScreen = options?.showSyncScreen ?? true;
+      if (showSyncScreen) {
+        setScreen("syncing");
+      }
+      setSync({
+        phase: "planning",
+        completedBytes: 0,
+        totalBytes: 0,
+        speedBps: 0,
+      });
 
-    const response = await invoke<SyncApplyResponse>("sync_apply", {
-      serverId: SERVER_ID,
-    });
+      const response = await invoke<SyncApplyResponse>("sync_apply", {
+        serverId: SERVER_ID,
+      });
 
-    if (response.modUpdatesDownloaded > 0) {
-      setHint(
-        `${response.serverName}: ${response.modUpdatesDownloaded} mod updates downloaded.`,
-      );
-    } else {
-      setHint(`Sync applied to profile version ${response.appliedVersion}.`);
-    }
+      if (response.modUpdatesDownloaded > 0) {
+        setHint(
+          `${response.serverName}: ${response.modUpdatesDownloaded} mod updates downloaded.`,
+        );
+      } else {
+        setHint(`Sync applied to profile version ${response.appliedVersion}.`);
+      }
 
-    return response;
-  }, [sessionActive]);
+      return response;
+    },
+    [sessionActive],
+  );
 
   const installLauncherUpdate = useCallback(
     async (availableVersion?: string): Promise<boolean> => {
@@ -782,10 +792,7 @@ export function useAppCore() {
   );
 
   const checkLauncherUpdate = useCallback(
-    async (
-      autoInstall: boolean,
-      suppressErrors = false,
-    ): Promise<boolean> => {
+    async (autoInstall: boolean, suppressErrors = false): Promise<boolean> => {
       if (
         checkingLauncherUpdateRef.current ||
         installingLauncherUpdateRef.current
@@ -798,7 +805,9 @@ export function useAppCore() {
       setLauncherUpdateNotice("Checking launcher updates...");
 
       try {
-        const status = await invoke<LauncherUpdateStatus>("launcher_update_check");
+        const status = await invoke<LauncherUpdateStatus>(
+          "launcher_update_check",
+        );
         setLauncherUpdate(status);
 
         if (!status.available) {
@@ -823,14 +832,15 @@ export function useAppCore() {
       } catch (cause) {
         const raw = cause instanceof Error ? cause.message : String(cause);
         console.error("launcher_update_check failed", cause);
-        setLauncherUpdate((current) =>
-          current ?? {
-            currentVersion: launcherAppVersion ?? "unknown",
-            latestVersion: null,
-            available: false,
-            body: null,
-            pubDate: null,
-          },
+        setLauncherUpdate(
+          (current) =>
+            current ?? {
+              currentVersion: launcherAppVersion ?? "unknown",
+              latestVersion: null,
+              available: false,
+              body: null,
+              pubDate: null,
+            },
         );
         const message = /valid release json/iu.test(raw)
           ? "No updater release metadata is published yet. This does not affect server sync."
@@ -1124,7 +1134,10 @@ export function useAppCore() {
 
       await invoke("app_keep_running_in_background");
     } catch (cause) {
-      pushToast("error", cause instanceof Error ? cause.message : String(cause));
+      pushToast(
+        "error",
+        cause instanceof Error ? cause.message : String(cause),
+      );
     } finally {
       closePromptBusyRef.current = false;
     }
@@ -1574,58 +1587,134 @@ export function useAppCore() {
     "API source not configured";
 
   return {
-    screen, setScreen,
-    isChecking, setIsChecking,
-    settings, setSettings,
-    launchers, setLaunchers,
-    instance, setInstance,
-    sessionStatus, setSessionStatus,
-    versionReadiness, setVersionReadiness,
-    catalog, setCatalog,
-    plan, setPlan,
-    sync, setSync,
-    error, setError,
-    hint, setHint,
-    launcherUpdate, setLauncherUpdate,
-    launcherAppVersion, setLauncherAppVersion,
-    isCheckingLauncherUpdate, setIsCheckingLauncherUpdate,
-    isInstallingLauncherUpdate, setIsInstallingLauncherUpdate,
-    launcherUpdateNotice, setLauncherUpdateNotice,
-    launcherServerControls, setLauncherServerControls,
-    isServerActionBusy, setIsServerActionBusy,
-    launcherStreamStatus, setLauncherStreamStatus,
-    launcherStreamRetryCount, setLauncherStreamRetryCount,
-    launcherStreamRetryCountdownSec, setLauncherStreamRetryCountdownSec,
-    lastCheckAt, setLastCheckAt,
-    nextCheckAt, setNextCheckAt,
-    wizardActive, setWizardActive,
-    wizardStep, setWizardStep,
-    activeView, setActiveView,
-    wizardProgress, setWizardProgress,
-    wizardDetection, setWizardDetection,
-    wizardSelectedLauncherId, setWizardSelectedLauncherId,
-    wizardManualLauncherPath, setWizardManualLauncherPath,
-    wizardMinecraftRootPath, setWizardMinecraftRootPath,
-    wizardMinecraftRootStatus, setWizardMinecraftRootStatus,
-    wizardRuntimeStatus, setWizardRuntimeStatus,
-    wizardSyncing, setWizardSyncing,
-    profileSourceDraft, setProfileSourceDraft,
-    probePlaying, setProbePlaying,
-    toasts, setToasts,
-    brokenLogoUrls, setBrokenLogoUrls,
-    progressPercent, hasSyncTotal, syncHasUnknownTotal, syncBytesLabel,
-    hasFancyMenuMod, fancyMenuMode, hasFancyMenuCustomBundle,
-    sessionActive, isPlaying, compactPlaying, serverInitial,
-    markLogoAsBroken, canRenderLogo, pushToast,
-    saveSettings, loadSettingsAndLaunchers, refreshSessionStatus, refreshVersionReadiness, refreshDashboardState,
-    executeSyncApply, installLauncherUpdate, checkLauncherUpdate, runSyncCycle, startWizardDetection,
-    bootstrap, installFabricRuntime, continueWizardSyncStep, completeWizard,
-    cancelSession, returnToMainWindow, openSetupWindow, openLauncherFromCompact, updateLauncherSelection,
-    updateCustomPath, pickManualLauncherFromSettings, pickMinecraftRootFromSettings,
-    saveProfileSource, beginWizardPathsStep, continueWizardRuntimeStep,
-    pickWizardManualLauncherPath, pickWizardMinecraftRootPath, sourceLabel,
-    isApiSourceMode, refreshLauncherServerControls, runLauncherServerAction,
+    screen,
+    setScreen,
+    isChecking,
+    setIsChecking,
+    settings,
+    setSettings,
+    launchers,
+    setLaunchers,
+    instance,
+    setInstance,
+    sessionStatus,
+    setSessionStatus,
+    versionReadiness,
+    setVersionReadiness,
+    catalog,
+    setCatalog,
+    plan,
+    setPlan,
+    sync,
+    setSync,
+    error,
+    setError,
+    hint,
+    setHint,
+    launcherUpdate,
+    setLauncherUpdate,
+    launcherAppVersion,
+    setLauncherAppVersion,
+    isCheckingLauncherUpdate,
+    setIsCheckingLauncherUpdate,
+    isInstallingLauncherUpdate,
+    setIsInstallingLauncherUpdate,
+    launcherUpdateNotice,
+    setLauncherUpdateNotice,
+    launcherServerControls,
+    setLauncherServerControls,
+    isServerActionBusy,
+    setIsServerActionBusy,
+    launcherStreamStatus,
+    setLauncherStreamStatus,
+    launcherStreamRetryCount,
+    setLauncherStreamRetryCount,
+    launcherStreamRetryCountdownSec,
+    setLauncherStreamRetryCountdownSec,
+    lastCheckAt,
+    setLastCheckAt,
+    nextCheckAt,
+    setNextCheckAt,
+    wizardActive,
+    setWizardActive,
+    wizardStep,
+    setWizardStep,
+    activeView,
+    setActiveView,
+    wizardProgress,
+    setWizardProgress,
+    wizardDetection,
+    setWizardDetection,
+    wizardSelectedLauncherId,
+    setWizardSelectedLauncherId,
+    wizardManualLauncherPath,
+    setWizardManualLauncherPath,
+    wizardMinecraftRootPath,
+    setWizardMinecraftRootPath,
+    wizardMinecraftRootStatus,
+    setWizardMinecraftRootStatus,
+    wizardRuntimeStatus,
+    setWizardRuntimeStatus,
+    wizardSyncing,
+    setWizardSyncing,
+    profileSourceDraft,
+    setProfileSourceDraft,
+    probePlaying,
+    setProbePlaying,
+    toasts,
+    setToasts,
+    brokenLogoUrls,
+    setBrokenLogoUrls,
+    progressPercent,
+    hasSyncTotal,
+    syncHasUnknownTotal,
+    syncBytesLabel,
+    hasFancyMenuMod,
+    fancyMenuMode,
+    hasFancyMenuCustomBundle,
+    sessionActive,
+    isPlaying,
+    compactPlaying,
+    serverInitial,
+    markLogoAsBroken,
+    canRenderLogo,
+    pushToast,
+    saveSettings,
+    loadSettingsAndLaunchers,
+    refreshSessionStatus,
+    refreshVersionReadiness,
+    refreshDashboardState,
+    executeSyncApply,
+    installLauncherUpdate,
+    checkLauncherUpdate,
+    runSyncCycle,
+    startWizardDetection,
+    bootstrap,
+    installFabricRuntime,
+    continueWizardSyncStep,
+    completeWizard,
+    cancelSession,
+    returnToMainWindow,
+    openSetupWindow,
+    openLauncherFromCompact,
+    updateLauncherSelection,
+    updateCustomPath,
+    pickManualLauncherFromSettings,
+    pickMinecraftRootFromSettings,
+    saveProfileSource,
+    beginWizardPathsStep,
+    continueWizardRuntimeStep,
+    pickWizardManualLauncherPath,
+    pickWizardMinecraftRootPath,
+    sourceLabel,
+    isApiSourceMode,
+    refreshLauncherServerControls,
+    runLauncherServerAction,
     retryLauncherServerStreamNow,
-    currentWindow, isSetupWindow, isCompactWindow, APP_NAME, SERVER_ID
+    currentWindow,
+    isSetupWindow,
+    isCompactWindow,
+    APP_NAME,
+    SERVER_ID,
   };
-};
+}

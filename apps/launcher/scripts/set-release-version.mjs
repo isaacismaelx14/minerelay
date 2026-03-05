@@ -6,7 +6,9 @@ import path from "node:path";
 const version = process.argv[2]?.trim();
 
 if (!version) {
-  console.error("Usage: node apps/launcher/scripts/set-release-version.mjs <version>");
+  console.error(
+    "Usage: node apps/launcher/scripts/set-release-version.mjs <version>",
+  );
   process.exit(1);
 }
 
@@ -28,7 +30,10 @@ updateJson(path.join(launcherRoot, "src-tauri", "tauri.conf.json"), (data) => {
   return data;
 });
 
-updateCargoPackageVersion(path.join(launcherRoot, "src-tauri", "Cargo.toml"), version);
+updateCargoPackageVersion(
+  path.join(launcherRoot, "src-tauri", "Cargo.toml"),
+  version,
+);
 
 console.log(`Stamped launcher version to ${version}`);
 

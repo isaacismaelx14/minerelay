@@ -27,8 +27,15 @@ export default function App() {
       <>
         <CompactWindow core={core} />
         {showLauncherStreamBadge ? (
-          <div className="launcher-stream-indicator" role="status" aria-live="polite">
-            <span className="launcher-stream-indicator-dot" aria-hidden="true" />
+          <div
+            className="launcher-stream-indicator"
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className="launcher-stream-indicator-dot"
+              aria-hidden="true"
+            />
             <span className="launcher-stream-indicator-text">
               {launcherStreamStatus === "retrying"
                 ? `Lost connection · retrying in ${launcherStreamRetryCountdownSec}s (${launcherStreamRetryCount}/3)`
@@ -61,8 +68,15 @@ export default function App() {
         <SetupWizard core={core} />
 
         {showLauncherStreamBadge ? (
-          <div className="launcher-stream-indicator" role="status" aria-live="polite">
-            <span className="launcher-stream-indicator-dot" aria-hidden="true" />
+          <div
+            className="launcher-stream-indicator"
+            role="status"
+            aria-live="polite"
+          >
+            <span
+              className="launcher-stream-indicator-dot"
+              aria-hidden="true"
+            />
             <span className="launcher-stream-indicator-text">
               {launcherStreamStatus === "retrying"
                 ? `Lost connection · retrying in ${launcherStreamRetryCountdownSec}s (${launcherStreamRetryCount}/3)`
@@ -87,7 +101,11 @@ export default function App() {
     <>
       <DesktopWorkspace core={core} />
       {showLauncherStreamBadge ? (
-        <div className="launcher-stream-indicator" role="status" aria-live="polite">
+        <div
+          className="launcher-stream-indicator"
+          role="status"
+          aria-live="polite"
+        >
           <span className="launcher-stream-indicator-dot" aria-hidden="true" />
           <span className="launcher-stream-indicator-text">
             {launcherStreamStatus === "retrying"
