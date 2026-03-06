@@ -27,8 +27,9 @@ use crate::{
 
 #[cfg(target_os = "windows")]
 use winreg::{
+  HKEY,
   RegKey,
-  enums::{HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE},
+  enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE},
 };
 
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -129,15 +130,14 @@ fn windows_launcher_specs() -> &'static [WindowsLauncherSpec] {
 }
 
 fn detect_installed_launchers_detailed() -> Vec<DetectedLauncher> {
-  let mut candidates = Vec::new();
-
   #[cfg(target_os = "windows")]
   {
-    candidates = detect_windows_launchers();
+    return detect_windows_launchers();
   }
 
   #[cfg(target_os = "macos")]
   {
+    let mut candidates = Vec::new();
     let common = [
       ("official", "Minecraft Launcher", "/Applications/Minecraft.app"),
       ("official", "Minecraft Launcher", "/Applications/Minecraft Launcher.app"),
@@ -156,9 +156,14 @@ fn detect_installed_launchers_detailed() -> Vec<DetectedLauncher> {
         DetectionPriority::ProgramFilesExecutable,
       );
     }
+
+    return candidates;
   }
 
-  candidates
+  #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+  {
+    Vec::new()
+  }
 }
 
 pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
