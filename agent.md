@@ -90,7 +90,7 @@ Prefer user-impact wording for release-facing commits.
 - `fix(launcher): show app version in compact header`
 - `chore(shared): normalize package version to 0.1.0-beta.31`
 - `ci(platform): trigger launcher build after shared tag release`
-- `chore(release): @mss/api/v0.1.0-beta.32`
+- `chore(release): @minerelay/api/v0.1.0-beta.32`
 
 ## 8) Bad Examples (invalid)
 

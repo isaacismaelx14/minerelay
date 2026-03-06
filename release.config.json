@@ -1,6 +1,6 @@
 {
   "defaultBranch": "main",
-  "releaseNamespace": "@mss",
+  "releaseNamespace": "@minerelay",
   "targets": {
     "api": "apps/api",
     "admin": "apps/admin",

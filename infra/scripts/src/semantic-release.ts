@@ -56,7 +56,7 @@ type GitHubRepo = ReturnType<typeof getGithubRepoFromGitRemote>;
 
 const AUTO_TARGET = "auto";
 const USAGE =
-  "Usage: pnpm --filter @mss/infra-scripts release:target -- --target <api|admin|launcher|shared|auto> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--ai-scope-infer] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
+  "Usage: pnpm --filter @minerelay/infra-scripts release:target -- --target <api|admin|launcher|shared|auto> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--ai-scope-infer] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));

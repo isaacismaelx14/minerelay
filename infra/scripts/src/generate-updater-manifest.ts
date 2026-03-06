@@ -36,7 +36,7 @@ type MatchResult = {
 };
 
 const USAGE =
-  "Usage: pnpm --filter @mss/infra-scripts manifest:generate --owner <owner> --repo <repo> --tag <tag> --artifacts-dir <dir> --output <file> [--notes <notes>] [--required windows,macos]";
+  "Usage: pnpm --filter @minerelay/infra-scripts manifest:generate --owner <owner> --repo <repo> --tag <tag> --artifacts-dir <dir> --output <file> [--notes <notes>] [--required windows,macos]";
 
 function parseArgs(argv: string[]): ParsedArgs {
   const values = new Map<string, string>();
@@ -233,7 +233,7 @@ function inferMacArch(
     }
   }
 
-  // Some CI outputs use generic names (e.g., "MSS+ Client.app.tar.gz").
+  // Some CI outputs use generic names (e.g., "MineRelay.app.tar.gz").
   // Falling back to universal avoids failing the release pipeline on naming differences.
   console.warn(
     `Could not infer macOS arch from '${assetName}'. Falling back to 'universal'.`,

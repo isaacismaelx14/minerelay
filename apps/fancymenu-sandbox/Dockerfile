@@ -4,10 +4,10 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/fancymenu-sandbox/package.json apps/fancymenu-sandbox/package.json
-RUN pnpm install --filter @mss/fancymenu-sandbox... --frozen-lockfile
+RUN pnpm install --filter @minerelay/fancymenu-sandbox... --frozen-lockfile
 
 COPY . .
-RUN pnpm --filter @mss/fancymenu-sandbox build
+RUN pnpm --filter @minerelay/fancymenu-sandbox build
 
 EXPOSE 3210
 CMD ["node", "apps/fancymenu-sandbox/dist/index.js"]

@@ -3,7 +3,7 @@ name: admin-build
 on:
   push:
     tags:
-      - "@mss/admin/v*"
+      - "@minerelay/admin/v*"
 
 jobs:
   build-admin:
@@ -29,19 +29,19 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Lint admin app
-        run: pnpm --filter @mss/admin lint
+        run: pnpm --filter @minerelay/admin lint
 
       - name: Typecheck admin app
-        run: pnpm --filter @mss/admin typecheck
+        run: pnpm --filter @minerelay/admin typecheck
 
       - name: Test admin app
-        run: pnpm --filter @mss/admin test
+        run: pnpm --filter @minerelay/admin test
 
       - name: Build admin app
-        run: pnpm --filter @mss/admin build
+        run: pnpm --filter @minerelay/admin build
 
       - name: Deploy admin app
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter @mss/admin deploy -- --env production
+        run: pnpm --filter @minerelay/admin deploy -- --env production

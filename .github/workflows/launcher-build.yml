@@ -3,11 +3,11 @@ name: launcher-build
 on:
   push:
     tags:
-      - "@mss/shared/v*"
+      - "@minerelay/shared/v*"
 
 # Beta channel launcher distribution flow.
 # Stable launcher releases are handled by semantic-release + launcher-release
-# using @mss/launcher/v* tags and the semantic release notes entry as source of truth.
+# using @minerelay/launcher/v* tags and the semantic release notes entry as source of truth.
 
 jobs:
   build-launcher:
@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           BASE_VERSION=$(node -p "require('./apps/launcher/package.json').version")
-          if [[ "${GITHUB_REF}" == refs/tags/@mss/shared/v* ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/@minerelay/shared/v* ]]; then
             VERSION="${BASE_VERSION}"
             WINDOWS_BUILD_VERSION="${BASE_VERSION}"
             BETA_NUMBER=0
@@ -70,7 +70,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build shared package
-        run: pnpm --filter @mss/shared build
+        run: pnpm --filter @minerelay/shared build
 
       - name: Validate updater signing key for beta release
         if: startsWith(github.ref, 'refs/tags/')
@@ -116,7 +116,7 @@ jobs:
 
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
-          if ! pnpm --filter @mss/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
+          if ! pnpm --filter @minerelay/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
             echo "Unable to decrypt TAURI_SIGNING_PRIVATE_KEY with TAURI_SIGNING_PRIVATE_KEY_PASSWORD." >&2
             echo "Re-save both secrets in GitHub without surrounding quotes and without trailing newlines." >&2
             rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
@@ -229,7 +229,7 @@ jobs:
             apps/launcher/src-tauri/target/release/bundle/**/*.tar.gz
 
   release-launcher:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/@mss/shared/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/@minerelay/shared/v')
     needs: build-launcher
     runs-on: ubuntu-latest
     permissions:
@@ -274,9 +274,9 @@ jobs:
       - name: Generate updater latest.json
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/release-artifacts/generated"
-          pnpm --filter @mss/infra-scripts manifest:generate -- \
+          pnpm --filter @minerelay/infra-scripts manifest:generate -- \
             --owner isaacismaelx14 \
-            --repo minecraft-server-sync \
+            --repo minerelay \
             --tag "${{ steps.meta.outputs.tag }}" \
             --artifacts-dir "${GITHUB_WORKSPACE}/release-artifacts" \
             --output "${GITHUB_WORKSPACE}/release-artifacts/generated/latest.json" \
@@ -284,7 +284,7 @@ jobs:
 
       - name: Publish beta GitHub Release
         # This intentionally creates a separate beta release channel entry.
-        # It must not be used for stable @mss/launcher/v* release notes ownership.
+        # It must not be used for stable @minerelay/launcher/v* release notes ownership.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
@@ -303,8 +303,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pnpm --filter @mss/infra-scripts updater:verify -- \
+          pnpm --filter @minerelay/infra-scripts updater:verify -- \
             --owner isaacismaelx14 \
-            --repo minecraft-server-sync \
+            --repo minerelay \
             --tag "${{ steps.meta.outputs.tag }}" \
             --required windows,macos

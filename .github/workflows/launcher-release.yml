@@ -3,7 +3,7 @@ name: launcher-release
 on:
   push:
     tags:
-      - "@mss/launcher/v*"
+      - "@minerelay/launcher/v*"
   workflow_dispatch:
     inputs:
       run_from_main:
@@ -12,7 +12,7 @@ on:
         default: false
         type: boolean
       tag:
-        description: Existing @mss/launcher tag to rebuild and publish assets for
+        description: Existing @minerelay/launcher tag to rebuild and publish assets for
         required: false
         type: string
 
@@ -74,13 +74,13 @@ jobs:
         if: env.RUN_FROM_MAIN != 'true' || env.RELEASE_TAG != ''
         shell: bash
         run: |
-          VERSION="${RELEASE_TAG#@mss/launcher/v}"
+          VERSION="${RELEASE_TAG#@minerelay/launcher/v}"
           if [ -z "$VERSION" ]; then
             echo "Failed to parse version from tag ${RELEASE_TAG}" >&2
             exit 1
           fi
           if [ "$VERSION" = "$RELEASE_TAG" ]; then
-            echo "Tag must be in @mss/launcher/v<version> format. Received: ${RELEASE_TAG}" >&2
+            echo "Tag must be in @minerelay/launcher/v<version> format. Received: ${RELEASE_TAG}" >&2
             exit 1
           fi
           if [[ "$VERSION" == *-* ]]; then
@@ -112,7 +112,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build shared package
-        run: pnpm --filter @mss/shared build
+        run: pnpm --filter @minerelay/shared build
 
       - name: Validate updater signing key
         shell: bash
@@ -157,7 +157,7 @@ jobs:
 
           PRECHECK_FILE="$(mktemp)"
           printf 'updater-signing-precheck\n' > "$PRECHECK_FILE"
-          if ! pnpm --filter @mss/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
+          if ! pnpm --filter @minerelay/launcher tauri signer sign "$PRECHECK_FILE" >/dev/null 2>&1; then
             echo "Unable to decrypt TAURI_SIGNING_PRIVATE_KEY with TAURI_SIGNING_PRIVATE_KEY_PASSWORD." >&2
             echo "Re-save both secrets in GitHub without surrounding quotes and without trailing newlines." >&2
             rm -f "$PRECHECK_FILE" "$PRECHECK_FILE.sig"
@@ -323,7 +323,7 @@ jobs:
       - name: Generate updater latest.json
         run: |
           mkdir -p "${GITHUB_WORKSPACE}/release-artifacts/generated"
-          pnpm --filter @mss/infra-scripts manifest:generate -- \
+          pnpm --filter @minerelay/infra-scripts manifest:generate -- \
             --owner "${{ github.repository_owner }}" \
             --repo "${{ github.event.repository.name }}" \
             --tag "${{ env.RELEASE_TAG }}" \
@@ -378,7 +378,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pnpm --filter @mss/infra-scripts updater:verify -- \
+          pnpm --filter @minerelay/infra-scripts updater:verify -- \
             --owner "${{ github.repository_owner }}" \
             --repo "${{ github.event.repository.name }}" \
             --tag "${{ env.RELEASE_TAG }}" \

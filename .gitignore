@@ -23,7 +23,7 @@ instances/
 runtimes/
 **/.runtime-artifacts/
 infra/sample-data/artifacts/
-.mss-client/
+.minerelay/
 /artifacts/
 !apps/api/src/artifacts/
 !apps/api/src/artifacts/**

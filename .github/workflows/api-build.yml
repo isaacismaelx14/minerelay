@@ -3,8 +3,8 @@ name: api-build
 on:
   push:
     tags:
-      - "@mss/api/v*"
-      - "@mss/shared/v*"
+      - "@minerelay/api/v*"
+      - "@minerelay/shared/v*"
 jobs:
   build-api:
     runs-on: ubuntu-latest
@@ -27,10 +27,10 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build shared package
-        run: pnpm --filter @mss/shared build
+        run: pnpm --filter @minerelay/shared build
 
       - name: Generate Prisma client
-        run: pnpm --filter @mss/api prisma:generate
+        run: pnpm --filter @minerelay/api prisma:generate
 
       - name: Validate launcher security env defaults
         shell: bash
@@ -44,13 +44,13 @@ jobs:
           node -e 'const fields=["LAUNCHER_PAIRING_CLAIM_TTL_SECONDS","LAUNCHER_CHALLENGE_TTL_SECONDS","LAUNCHER_SESSION_TTL_SECONDS","LAUNCHER_NONCE_TTL_SECONDS"]; for(const key of fields){const raw=(process.env[key]||"").trim(); if(!raw) continue; const n=Number(raw); if(!Number.isFinite(n)||n<=0){console.error(`${key} must be a positive number`); process.exit(1)}} const enabled=(process.env.LAUNCHER_PAIRING_V2_ENABLED||"").trim().toLowerCase(); if(enabled && enabled!=="true" && enabled!=="false"){console.error("LAUNCHER_PAIRING_V2_ENABLED must be true/false when provided"); process.exit(1)}'
 
       - name: Run API unit tests
-        run: pnpm --filter @mss/api exec jest --passWithNoTests --runInBand
+        run: pnpm --filter @minerelay/api exec jest --passWithNoTests --runInBand
 
       - name: Build API
-        run: pnpm --filter @mss/api build
+        run: pnpm --filter @minerelay/api build
 
   deploy-api:
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/@mss/api/v') || startsWith(github.ref, 'refs/tags/@mss/shared/v'))
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/@minerelay/api/v') || startsWith(github.ref, 'refs/tags/@minerelay/shared/v'))
     needs: build-api
     runs-on: ubuntu-latest
     permissions:

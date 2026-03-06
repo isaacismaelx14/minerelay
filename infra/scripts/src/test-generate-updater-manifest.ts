@@ -10,7 +10,7 @@ function buildArgs(
 ): ParsedArgs {
   return {
     owner: "isaacismaelx14",
-    repo: "minecraft-server-sync",
+    repo: "minerelay",
     tag: "v0.1.0-beta.999",
     artifactsDir: root,
     output: join(root, "latest.json"),
@@ -25,11 +25,11 @@ function runFixtures(): void {
     const windowsDir = join(tempRoot, "windows");
     mkdirSync(windowsDir, { recursive: true });
     writeFileSync(
-      join(windowsDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"),
+      join(windowsDir, "MineRelay+.Client_0.1.0-beta.999_x64-setup.exe"),
       "bin",
     );
     writeFileSync(
-      join(windowsDir, "MSS+.Client_0.1.0-999_x64-setup.exe.sig"),
+      join(windowsDir, "MineRelay+.Client_0.1.0-999_x64-setup.exe.sig"),
       "sig-win",
     );
     const windowsOnly = generateManifest(
@@ -41,11 +41,11 @@ function runFixtures(): void {
     const macDir = join(tempRoot, "mac");
     mkdirSync(macDir, { recursive: true });
     writeFileSync(
-      join(macDir, "MSS+.Client_0.1.0-beta.999_aarch64.app.tar.gz"),
+      join(macDir, "MineRelay+.Client_0.1.0-beta.999_aarch64.app.tar.gz"),
       "bin",
     );
     writeFileSync(
-      join(macDir, "MSS+.Client_0.1.0-beta.999_aarch64.app.tar.gz.sig"),
+      join(macDir, "MineRelay+.Client_0.1.0-beta.999_aarch64.app.tar.gz.sig"),
       "sig-mac",
     );
     const macOnly = generateManifest(buildArgs(macDir, new Set(["macos"])));
@@ -55,19 +55,22 @@ function runFixtures(): void {
     const dualDir = join(tempRoot, "dual");
     mkdirSync(dualDir, { recursive: true });
     writeFileSync(
-      join(dualDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"),
+      join(dualDir, "MineRelay+.Client_0.1.0-beta.999_x64-setup.exe"),
       "bin",
     );
     writeFileSync(
-      join(dualDir, "MSS+.Client_0.1.0-999_x64-setup.exe.sig"),
+      join(dualDir, "MineRelay+.Client_0.1.0-999_x64-setup.exe.sig"),
       "sig-win-dual",
     );
     writeFileSync(
-      join(dualDir, "MSS+.Client_0.1.0-beta.999_universal.app.tar.gz"),
+      join(dualDir, "MineRelay+.Client_0.1.0-beta.999_universal.app.tar.gz"),
       "bin",
     );
     writeFileSync(
-      join(dualDir, "MSS+.Client_0.1.0-beta.999_universal.app.tar.gz.sig"),
+      join(
+        dualDir,
+        "MineRelay+.Client_0.1.0-beta.999_universal.app.tar.gz.sig",
+      ),
       "sig-mac-dual",
     );
     const dual = generateManifest(
@@ -79,13 +82,13 @@ function runFixtures(): void {
 
     const genericMacDir = join(tempRoot, "generic-mac");
     mkdirSync(genericMacDir, { recursive: true });
-    writeFileSync(join(genericMacDir, "MSS+ Client.app.tar.gz"), "bin");
+    writeFileSync(join(genericMacDir, "MineRelay.app.tar.gz"), "bin");
     writeFileSync(
-      join(genericMacDir, "MSS+ Client.app.tar.gz.sig"),
+      join(genericMacDir, "MineRelay.app.tar.gz.sig"),
       "sig-generic",
     );
     writeFileSync(
-      join(genericMacDir, "MSS+.Client_0.1.0-beta.999_aarch64.dmg"),
+      join(genericMacDir, "MineRelay+.Client_0.1.0-beta.999_aarch64.dmg"),
       "dmg",
     );
     const genericMac = generateManifest(
@@ -96,7 +99,7 @@ function runFixtures(): void {
     const incompleteDir = join(tempRoot, "incomplete");
     mkdirSync(incompleteDir, { recursive: true });
     writeFileSync(
-      join(incompleteDir, "MSS+.Client_0.1.0-beta.999_x64-setup.exe"),
+      join(incompleteDir, "MineRelay+.Client_0.1.0-beta.999_x64-setup.exe"),
       "bin",
     );
     assert.throws(

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ProfileLockSchema } from "@mss/shared";
+import { ProfileLockSchema } from "@minerelay/shared";
 
 function main() {
   const lockPath = resolve(

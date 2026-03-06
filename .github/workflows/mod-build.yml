@@ -3,7 +3,7 @@ name: mod-build
 on:
   push:
     tags:
-      - "@mss/mod/v*"
+      - "@minerelay/mod/v*"
 
 jobs:
   build-mod:

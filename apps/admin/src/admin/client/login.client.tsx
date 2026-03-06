@@ -58,7 +58,7 @@ export function AdminLoginPage(): ReactElement {
 
   return (
     <main className="login-shell">
-      <h1>MSS+ Client Control Console</h1>
+      <h1>MineRelay Control Console</h1>
       <p>Enter your admin password to unlock server publishing controls.</p>
 
       <form onSubmit={(event) => void onSubmit(event)}>

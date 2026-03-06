@@ -303,7 +303,7 @@ export function ServersPage() {
                 <h2>Successfully Connected!</h2>
                 <p>
                   Your server <b>{exaroton.selectedServer?.name}</b> is now
-                  fully integrated with the MSS+ Client Center.
+                  fully integrated with the MineRelay.
                 </p>
               </div>
               <button

@@ -12,8 +12,8 @@ describe("changelog formatter", () => {
       version: "0.2.0",
       date: "2026-03-04",
       repoWebUrl: "https://github.com/isaacismaelx14/mc-client-center",
-      newTag: "@mss/api/v0.2.0",
-      previousTag: "@mss/api/v0.1.0",
+      newTag: "@minerelay/api/v0.2.0",
+      previousTag: "@minerelay/api/v0.1.0",
       breakingNotes: ["existing authentication tokens are invalid"],
       changes: [
         {
@@ -41,7 +41,7 @@ describe("changelog formatter", () => {
     };
 
     expect(buildReleaseBody(input)).toMatchInlineSnapshot(`
-      "[Full Changelog](https://github.com/isaacismaelx14/mc-client-center/compare/%40mss%2Fapi%2Fv0.1.0...%40mss%2Fapi%2Fv0.2.0)
+      "[Full Changelog](https://github.com/isaacismaelx14/mc-client-center/compare/%40minerelay%2Fapi%2Fv0.1.0...%40minerelay%2Fapi%2Fv0.2.0)
 
       ## BREAKING CHANGES
 
@@ -59,9 +59,9 @@ describe("changelog formatter", () => {
     `);
 
     expect(buildChangelogEntry(input)).toMatchInlineSnapshot(`
-      "## [@mss/api/v0.2.0](https://github.com/isaacismaelx14/mc-client-center/releases/tag/%40mss%2Fapi%2Fv0.2.0) (2026-03-04)
+      "## [@minerelay/api/v0.2.0](https://github.com/isaacismaelx14/mc-client-center/releases/tag/%40minerelay%2Fapi%2Fv0.2.0) (2026-03-04)
 
-      [Full Changelog](https://github.com/isaacismaelx14/mc-client-center/compare/%40mss%2Fapi%2Fv0.1.0...%40mss%2Fapi%2Fv0.2.0)
+      [Full Changelog](https://github.com/isaacismaelx14/mc-client-center/compare/%40minerelay%2Fapi%2Fv0.1.0...%40minerelay%2Fapi%2Fv0.2.0)
 
       ## BREAKING CHANGES
 
@@ -81,17 +81,17 @@ describe("changelog formatter", () => {
   });
 
   it("prepends entry into existing changelog", () => {
-    const current = `# Changelog\n\n## [@mss/api/v0.1.0](https://example.com) (2026-03-01)\n\n- initial release\n`;
+    const current = `# Changelog\n\n## [@minerelay/api/v0.1.0](https://example.com) (2026-03-01)\n\n- initial release\n`;
     const updated = prependChangelog(
       current,
-      "## [@mss/api/v0.2.0](https://example.com) (2026-03-04)\n\n- new release\n",
+      "## [@minerelay/api/v0.2.0](https://example.com) (2026-03-04)\n\n- new release\n",
     );
 
     expect(updated).toContain(
-      "## [@mss/api/v0.2.0](https://example.com) (2026-03-04)",
+      "## [@minerelay/api/v0.2.0](https://example.com) (2026-03-04)",
     );
-    expect(updated.indexOf("@mss/api/v0.2.0")).toBeLessThan(
-      updated.indexOf("@mss/api/v0.1.0"),
+    expect(updated.indexOf("@minerelay/api/v0.2.0")).toBeLessThan(
+      updated.indexOf("@minerelay/api/v0.1.0"),
     );
   });
 });

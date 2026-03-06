@@ -148,13 +148,13 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - name: Build shared package
-        run: pnpm --filter @mss/shared build
+        run: pnpm --filter @minerelay/shared build
 
       - name: Generate Prisma client
-        run: pnpm --filter @mss/api prisma:generate
+        run: pnpm --filter @minerelay/api prisma:generate
 
       - name: Run API unit tests
-        run: pnpm --filter @mss/api exec jest --passWithNoTests --runInBand
+        run: pnpm --filter @minerelay/api exec jest --passWithNoTests --runInBand
 
       - name: Build API
-        run: pnpm --filter @mss/api build
+        run: pnpm --filter @minerelay/api build

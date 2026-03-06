@@ -1,8 +1,8 @@
-# Minecraft Server Syncer + Instance Bootstrapper (Java Edition)
+# MineRelay (Java Edition)
 
 Desktop sync/bootstrap app for **Minecraft Java Edition only**.
 
-This project does **not** implement Microsoft OAuth and does **not** replace a Minecraft launcher. It synchronizes a managed instance directory, ensures server-lock behavior, and opens an installed Java launcher.
+This project does **not** implement Microsoft OAuth and does **not** replace a Minecraft launcher. It synchronizes a managed Minecraft instance, manages Minecraft assets, ensures server-lock behavior, and opens an installed Java launcher.
 
 ## License and Legal
 
@@ -19,7 +19,7 @@ This repository is `source-available` and **not** OSI open source.
 ## Repository Layout
 
 - `apps/launcher`: Tauri v2 + React + TypeScript desktop app
-- `apps/api`: NestJS + Prisma + Postgres profile/version API
+- `apps/api`: NestJS + Prisma + Postgres Minecraft instance profile/version API
 - `apps/fancymenu-sandbox`: isolated FancyMenu zip validation + preview sandbox
 - `packages/shared`: shared lockfile/profile/update schemas
 - `mods/server-lock`: Fabric 1.20.1 client mod (`Play` only -> direct connect)
@@ -29,6 +29,14 @@ This repository is `source-available` and **not** OSI open source.
 ## Product Scope
 
 - Target: **Minecraft Java Edition only**
+- MineRelay manages the Minecraft environment for:
+  - mods
+  - shaders
+  - resource packs
+  - texture packs
+  - configs
+  - datapacks
+  - assets
 - Launcher support focus:
   - Official Minecraft Launcher (Java)
   - Prism Launcher
@@ -62,7 +70,7 @@ If detection finds no launcher, wizard supports:
   - optional global `.minecraft` mode with explicit warning
 - Server lock:
   - syncer writes `servers.dat`
-  - syncer writes config at `config/mvl-syncer/server-lock.json`
+  - syncer writes config at `config/minerelay/server-lock.json`
   - Fabric server-lock mod enforces Play-only title screen and direct server connect
 
 ## Instance Structure
@@ -74,7 +82,7 @@ instances/<serverId>/
     shaderpacks/
     resourcepacks/
     config/
-      mvl-syncer/
+      minerelay/
         server-lock.json
     servers.dat
   manifest.lock.json
@@ -134,15 +142,15 @@ cp apps/api/.env.example apps/api/.env
 4. Build shared package:
 
 ```bash
-pnpm --filter @mss/shared build
+pnpm --filter @minerelay/shared build
 ```
 
 5. Prepare API DB:
 
 ```bash
-pnpm --filter @mss/api prisma:generate
-pnpm --filter @mss/api prisma:migrate
-pnpm --filter @mss/api prisma:seed
+pnpm --filter @minerelay/api prisma:generate
+pnpm --filter @minerelay/api prisma:migrate
+pnpm --filter @minerelay/api prisma:seed
 ```
 
 `prisma:seed` is safe to rerun. It bootstraps a fresh database and skips writes when bootstrap data already exists. Set `SEED_OVERWRITE_EXISTING=true` only when you intentionally want to reseed and overwrite existing bootstrap records.
@@ -150,13 +158,13 @@ pnpm --filter @mss/api prisma:seed
 6. Run API:
 
 ```bash
-pnpm --filter @mss/api dev
+pnpm --filter @minerelay/api dev
 ```
 
 7. Run desktop app:
 
 ```bash
-pnpm --filter @mss/launcher tauri:dev
+pnpm --filter @minerelay/launcher tauri:dev
 ```
 
 ## Packaged App Configuration
@@ -169,8 +177,8 @@ Configure profile source from the app sidebar:
 
 Settings persist at:
 
-- macOS: `~/Library/Application Support/minecraft-server-syncer/settings.json`
-- Windows: `%LOCALAPPDATA%\minecraft-server-syncer\settings.json`
+- macOS: `~/Library/Application Support/minerelay/settings.json`
+- Windows: `%LOCALAPPDATA%\minerelay\settings.json`
 
 ## Launcher Paths
 
@@ -193,7 +201,7 @@ If automation is not feasible, app shows guidance:
 ## Build Installers
 
 ```bash
-pnpm --filter @mss/launcher tauri:build
+pnpm --filter @minerelay/launcher tauri:build
 ```
 
 Outputs:
@@ -207,7 +215,7 @@ The desktop launcher now checks GitHub release updates and can download + instal
 
 Required runtime env:
 
-- `LAUNCHER_UPDATE_ENDPOINT` (default: `https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json`)
+- `LAUNCHER_UPDATE_ENDPOINT` (default: `https://github.com/isaacismaelx14/minerelay/releases/latest/download/latest.json`)
 - `LAUNCHER_UPDATE_PUBKEY` (public key generated with `tauri signer generate`)
 
 Required GitHub secrets for signed release builds:
@@ -219,7 +227,7 @@ Required GitHub secrets for signed release builds:
 Tag-based release flow:
 
 1. Bump launcher versions (`apps/launcher/package.json`, `apps/launcher/src-tauri/Cargo.toml`, `apps/launcher/src-tauri/tauri.conf.json`).
-2. Push a tag like `v0.2.0`.
+2. Push a tag like `@minerelay/launcher/v0.2.0`.
 3. GitHub Actions workflow `launcher-release` builds Windows + macOS bundles, generates updater artifacts + `latest.json`, and publishes them to the tagged release.
 
 ## Build Fabric Mod
@@ -238,9 +246,9 @@ mods/server-lock/build/devlibs/server-lock-0.1.0.jar
 ## Profile Publishing
 
 ```bash
-pnpm --filter @mss/infra-scripts publish-profile
-pnpm --filter @mss/infra-scripts sha256 <file-path>
-pnpm --filter @mss/infra-scripts release-notes
+pnpm --filter @minerelay/infra-scripts publish-profile
+pnpm --filter @minerelay/infra-scripts sha256 <file-path>
+pnpm --filter @minerelay/infra-scripts release-notes
 ```
 
 ## Troubleshooting

@@ -125,7 +125,7 @@ export const Sidebar = memo(function Sidebar() {
   return (
     <aside className="nav">
       <div className="brand">
-        <h1>MSS+ Client Admin</h1>
+        <h1>MineRelay Admin</h1>
         <span className="tag">Control Room</span>
       </div>
 

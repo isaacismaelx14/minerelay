@@ -17,7 +17,7 @@ async function main() {
   const fileArg = process.argv[2];
   if (!fileArg) {
     throw new Error(
-      "Usage: pnpm --filter @mss/infra-scripts sha256 <file-path>",
+      "Usage: pnpm --filter @minerelay/infra-scripts sha256 <file-path>",
     );
   }
 

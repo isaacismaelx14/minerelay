@@ -14,16 +14,16 @@ describe("release github payloads", () => {
     expect(
       buildCreateGithubReleasePayload({
         owner: "isaacismaelx14",
-        repo: "minecraft-server-sync",
-        tagName: "@mss/launcher/v0.2.2",
-        name: "@mss/launcher v0.2.2",
+        repo: "minerelay",
+        tagName: "@minerelay/launcher/v0.2.2",
+        name: "@minerelay/launcher v0.2.2",
         body: "release notes",
         token: "token",
         draft: true,
         prerelease: false,
       }),
     ).toMatchObject({
-      tag_name: "@mss/launcher/v0.2.2",
+      tag_name: "@minerelay/launcher/v0.2.2",
       draft: true,
       prerelease: false,
     });

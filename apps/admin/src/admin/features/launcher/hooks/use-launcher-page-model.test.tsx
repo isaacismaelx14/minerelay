@@ -23,7 +23,7 @@ describe("useLauncherPageModel", () => {
         claimId: "claim-1",
         pairingToken: "pairing-token",
         pairingCode: "ABC123",
-        deepLink: "mss://pair",
+        deepLink: "minerelay://pair",
         expiresAt: "2099-03-06T16:00:00.000Z",
       })
       .mockResolvedValueOnce([

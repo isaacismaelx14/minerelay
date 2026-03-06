@@ -41,22 +41,22 @@ cp apps/api/.env.example apps/api/.env
 4. Prepare API database:
 
 ```bash
-pnpm --filter @mss/api prisma:generate
-pnpm --filter @mss/api prisma:migrate
-pnpm --filter @mss/api prisma:seed
+pnpm --filter @minerelay/api prisma:generate
+pnpm --filter @minerelay/api prisma:migrate
+pnpm --filter @minerelay/api prisma:seed
 ```
 
 5. Run apps:
 
 ```bash
-pnpm --filter @mss/api dev
-pnpm --filter @mss/launcher tauri:dev
+pnpm --filter @minerelay/api dev
+pnpm --filter @minerelay/launcher tauri:dev
 ```
 
 ## Pull request checklist
 
-- `pnpm --filter @mss/api build`
-- `pnpm --filter @mss/launcher typecheck`
+- `pnpm --filter @minerelay/api build`
+- `pnpm --filter @minerelay/launcher typecheck`
 - Add tests for behavioral changes when feasible.
 - Update docs when behavior, env vars, or workflows change.
 
