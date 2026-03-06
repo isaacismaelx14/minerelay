@@ -39,6 +39,7 @@ Use only one of:
 Use only one of:
 
 - `api`
+- `admin`
 - `launcher`
 - `platform`
 - `desktop`

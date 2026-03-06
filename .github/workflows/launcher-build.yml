@@ -25,7 +25,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -242,7 +242,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -296,7 +296,6 @@ jobs:
             release-artifacts/launcher-windows-msi/*.msi
             release-artifacts/launcher-macos-dmg/*.dmg
             release-artifacts/launcher-updater-*/**/*.sig
-            release-artifacts/launcher-updater-*/**/*.zip
             release-artifacts/launcher-updater-*/**/*.tar.gz
             release-artifacts/generated/latest.json
 

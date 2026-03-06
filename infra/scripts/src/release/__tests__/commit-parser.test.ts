@@ -8,6 +8,7 @@ import {
 const config = {
   scopeMap: {
     api: "api",
+    admin: "admin",
     launcher: "launcher",
     platform: "launcher",
     shared: "shared",

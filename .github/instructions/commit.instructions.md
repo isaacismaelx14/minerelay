@@ -43,6 +43,7 @@ Only these are allowed:
 Only these are allowed:
 
 - `api`
+- `admin`
 - `launcher`
 - `platform`
 - `desktop`
