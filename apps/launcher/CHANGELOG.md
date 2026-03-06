@@ -1,5 +1,29 @@
 # Changelog
 
+## [@mss/launcher/v0.3.0](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.3.0) (2026-03-06)
+
+[Full Changelog](https://github.com/isaacismaelx14/minecraft-server-sync/compare/%40mss%2Flauncher%2Fv0.2.1...%40mss%2Flauncher%2Fv0.3.0)
+
+## CI
+
+- **launcher:** republish launcher assets to existing tag release ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** add workflow_dispatch tag input for rebuilding assets on an existing launcher tag release ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** add macOS signed-to-unsigned fallback so asset publishing is not blocked by Apple cert import failures ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** publish and verify updater artifacts against the resolved release tag ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+
+## Features
+
+- **launcher:** improve Windows launcher detection and launch targets ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** detect launchers from registry, filesystem fallbacks, and Windows Start app IDs ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** support launching Microsoft Store launcher targets and add detection-focused tests ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+
+## Bug Fixes
+
+- **launcher:** keep launcher selection aligned with detected options ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** resolve preferred launcher id from detected candidates, saved selection, and custom path ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** update setup wizard guidance for Microsoft Store launcher detection and manual fallback ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **launcher:** trace updater failures with error codes ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+
 ## [@mss/launcher/v0.2.1](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Flauncher%2Fv0.2.1) (2026-03-05)
 
 [Full Changelog](https://github.com/isaacismaelx14/minecraft-server-sync/compare/%40mss%2Flauncher%2Fv0.2.0...%40mss%2Flauncher%2Fv0.2.1)
