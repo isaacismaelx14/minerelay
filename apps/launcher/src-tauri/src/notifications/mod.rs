@@ -10,7 +10,7 @@ pub fn notify_mod_updates(app: &AppHandle, server_name: &str, mod_count: usize) 
   let _ = app
     .notification()
     .builder()
-    .title("MSS+ Client")
+    .title("MineRelay")
     .body(&body)
     .show();
 }

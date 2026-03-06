@@ -34,9 +34,9 @@ use crate::{
 };
 
 const DEFAULT_UPDATER_ENDPOINT: &str =
-  "https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json";
+  "https://github.com/isaacismaelx14/minerelay/releases/latest/download/latest.json";
 const GITHUB_RELEASES_API: &str =
-  "https://api.github.com/repos/isaacismaelx14/minecraft-server-sync/releases?per_page=20";
+  "https://api.github.com/repos/isaacismaelx14/minerelay/releases?per_page=20";
 
 #[derive(Debug, Clone, Deserialize)]
 struct GithubReleaseAsset {
@@ -1064,7 +1064,7 @@ fn release_matches_channel(
 
   match channel {
     LauncherReleaseChannel::Stable => {
-      !release.prerelease && release.tag_name.starts_with("@mss/launcher/v")
+      !release.prerelease && release.tag_name.starts_with("@minerelay/launcher/v")
     }
     LauncherReleaseChannel::Prerelease => release.prerelease,
   }
@@ -1257,14 +1257,14 @@ mod tests {
   fn stable_release_selection_ignores_non_launcher_and_missing_manifest() {
     let releases = vec![
       release(
-        "@mss/shared/v0.2.0",
+        "@minerelay/shared/v0.2.0",
         false,
         false,
         &[("latest.json", "https://example.com/shared/latest.json")],
       ),
-      release("@mss/launcher/v0.2.1", false, false, &[]),
+      release("@minerelay/launcher/v0.2.1", false, false, &[]),
       release(
-        "@mss/launcher/v0.2.0",
+        "@minerelay/launcher/v0.2.0",
         false,
         false,
         &[("latest.json", "https://example.com/launcher/latest.json")],
@@ -1274,7 +1274,7 @@ mod tests {
     let selected = select_release_updater_asset(&releases, LauncherReleaseChannel::Stable)
       .expect("expected stable launcher release");
 
-    assert_eq!(selected.release_tag, "@mss/launcher/v0.2.0");
+    assert_eq!(selected.release_tag, "@minerelay/launcher/v0.2.0");
     assert_eq!(
       selected.download_url,
       "https://example.com/launcher/latest.json"

@@ -51,7 +51,7 @@ pub fn record_exception_event(source: &str, message: &str, details: Option<&str>
   let path = LOG_FILE_PATH
     .get()
     .cloned()
-    .unwrap_or_else(|| std::env::temp_dir().join("mss-client-exceptions.log"));
+    .unwrap_or_else(|| std::env::temp_dir().join("minerelay-exceptions.log"));
   append_line(&path, source, message, details, false);
 }
 
@@ -59,7 +59,7 @@ pub fn record_structured_event(source: &str, message: &str, details_json: Option
   let path = LOG_FILE_PATH
     .get()
     .cloned()
-    .unwrap_or_else(|| std::env::temp_dir().join("mss-client-exceptions.log"));
+    .unwrap_or_else(|| std::env::temp_dir().join("minerelay-exceptions.log"));
   append_line(&path, source, message, details_json, true);
 }
 

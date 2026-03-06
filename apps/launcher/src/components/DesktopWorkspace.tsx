@@ -937,12 +937,14 @@ export function DesktopWorkspace({
                 onError={() => markLogoAsBroken(catalog?.logoUrl)}
               />
             ) : (
-              <div className="server-logo logo-fallback" aria-hidden="true">
-                {serverInitial}
-              </div>
+              <img
+                className="server-logo"
+                src="/minerelay-logo.svg"
+                alt={`${APP_NAME} logo`}
+              />
             )}
             <div>
-              <span className="eyebrow">MSS+ Client Center</span>
+              <span className="eyebrow">MineRelay</span>
               <h2>{catalog?.serverName ?? `Server ${SERVER_ID}`}</h2>
               {sessionStatus.phase === "playing" ? (
                 <p className="playing-status">

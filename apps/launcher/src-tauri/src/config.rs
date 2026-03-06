@@ -75,8 +75,12 @@ impl LauncherConfig {
       .or_else(dirs::data_dir)
       .unwrap_or_else(|| PathBuf::from("."));
     let data_root = base.join(data_dir_name());
+    let legacy_data_root = base.join(legacy_data_dir_name());
 
-    let runtime = load_runtime_config(&runtime_config_path(&data_root));
+    let runtime = load_runtime_config(
+      &runtime_config_path(&data_root),
+      &runtime_config_path(&legacy_data_root),
+    );
 
     let mut resolution_report = Vec::new();
 
@@ -187,7 +191,7 @@ impl LauncherConfig {
       option_env!("LAUNCHER_UPDATE_ENDPOINT"),
     );
     let updater_endpoint = raw_updater_endpoint.unwrap_or_else(|| {
-      "https://github.com/isaacismaelx14/minecraft-server-sync/releases/latest/download/latest.json"
+      "https://github.com/isaacismaelx14/minerelay/releases/latest/download/latest.json"
         .to_string()
     });
     resolution_report.push(ConfigResolution {
@@ -236,6 +240,17 @@ impl LauncherConfig {
     self.data_root.join("settings.json")
   }
 
+  pub fn legacy_settings_path(&self) -> PathBuf {
+    self.legacy_data_root().join("settings.json")
+  }
+
+  pub fn legacy_data_root(&self) -> PathBuf {
+    self.data_root
+      .parent()
+      .map(|base| base.join(legacy_data_dir_name()))
+      .unwrap_or_else(|| PathBuf::from(legacy_data_dir_name()))
+  }
+
   pub fn log_resolution_report(&self) {
     for entry in &self.resolution_report {
       let details = if entry.sensitive {
@@ -275,8 +290,11 @@ fn runtime_config_path(data_root: &Path) -> PathBuf {
   data_root.join("launcher.runtime.json")
 }
 
-fn load_runtime_config(path: &Path) -> RuntimeConfigFile {
-  let Ok(content) = fs::read_to_string(path) else {
+fn load_runtime_config(primary_path: &Path, legacy_path: &Path) -> RuntimeConfigFile {
+  let content = fs::read_to_string(primary_path)
+    .ok()
+    .or_else(|| fs::read_to_string(legacy_path).ok());
+  let Some(content) = content else {
     return RuntimeConfigFile::default();
   };
 
@@ -308,6 +326,14 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
 }
 
 fn data_dir_name() -> &'static str {
+  if cfg!(debug_assertions) {
+    "minerelay-dev"
+  } else {
+    "minerelay"
+  }
+}
+
+fn legacy_data_dir_name() -> &'static str {
   if cfg!(debug_assertions) {
     "minecraft-server-syncer-dev"
   } else {

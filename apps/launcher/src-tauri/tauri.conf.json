@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MSS+ Client",
+  "productName": "MineRelay Client",
   "version": "0.3.1",
-  "identifier": "com.mvl.syncer",
+  "identifier": "com.minerelay.launcher",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "MSS+ Client",
+        "title": "MineRelay",
         "width": 420,
         "height": 720,
         "decorations": true,
@@ -24,7 +24,7 @@
       },
       {
         "label": "setup",
-        "title": "MSS+ Client Setup",
+        "title": "MineRelay Setup",
         "width": 1160,
         "height": 760,
         "resizable": true,
@@ -59,7 +59,7 @@
     "deep-link": {
       "desktop": {
         "schemes": [
-          "mssclient"
+          "minerelay"
         ]
       }
     },

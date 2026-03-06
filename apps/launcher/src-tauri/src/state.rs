@@ -39,7 +39,9 @@ pub struct AppState {
 impl AppState {
   pub fn new(config: LauncherConfig) -> Self {
     let settings_path = config.settings_path();
-    let mut loaded = settings::load(&settings_path).unwrap_or_default();
+    let legacy_settings_path = config.legacy_settings_path();
+    let mut loaded = settings::load_with_fallback(&settings_path, &legacy_settings_path)
+      .unwrap_or_default();
 
     if loaded.install_mode != InstallMode::Global {
       loaded.install_mode = InstallMode::Global;
@@ -49,7 +51,7 @@ impl AppState {
     Self {
       config,
       http: reqwest::Client::builder()
-        .user_agent("minecraft-server-syncer/0.1.0")
+        .user_agent("minerelay/0.1.0")
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(60))
         .redirect(reqwest::redirect::Policy::none())

@@ -3,10 +3,10 @@ import { getVersion as getAppVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SyncPlan, UpdateSummary } from "@mss/shared";
+import type { SyncPlan, UpdateSummary } from "@minerelay/shared";
 
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
-const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MSS+ Client";
+const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MineRelay";
 const BUNDLED_APP_VERSION = __APP_VERSION__;
 const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const LAUNCHER_STREAM_RETRY_DELAY_MS = 30_000;
@@ -1141,7 +1141,7 @@ export function useAppCore() {
       }
 
       const shouldClose = window.confirm(
-        "Close MSS+ Client?\n\nSelect OK to quit the app. Select Cancel to keep it running in the background.",
+        "Close MineRelay?\n\nSelect OK to quit the app. Select Cancel to keep it running in the background.",
       );
 
       if (shouldClose) {

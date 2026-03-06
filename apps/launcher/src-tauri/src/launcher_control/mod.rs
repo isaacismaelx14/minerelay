@@ -613,7 +613,7 @@ fn launcher_installation_id_path(state: &AppState) -> PathBuf {
 
 pub fn ingest_pairing_link(state: &AppState, raw_url: &str) -> Result<bool, String> {
   let parsed = Url::parse(raw_url.trim()).map_err(|error| format!("Invalid pairing link: {error}"))?;
-  if parsed.scheme() != "mssclient" {
+  if parsed.scheme() != "minerelay" {
     return Ok(false);
   }
 

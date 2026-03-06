@@ -67,12 +67,11 @@ export function CompactWindow({
                 onError={() => markLogoAsBroken(catalog?.logoUrl)}
               />
             ) : (
-              <div
-                className="compact-server-logo logo-fallback"
-                aria-hidden="true"
-              >
-                {serverInitial}
-              </div>
+              <img
+                className="compact-server-logo"
+                src="/minerelay-logo.svg"
+                alt={`${APP_NAME} logo`}
+              />
             )}
             <div className="compact-server-meta">
               <div className="compact-app-row">

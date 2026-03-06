@@ -414,19 +414,17 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
                 onError={() => markLogoAsBroken(catalog?.logoUrl)}
               />
             ) : (
-              <div
-                className="wizard-logo logo-fallback"
+              <img
+                className="wizard-logo"
+                src="/minerelay-logo.svg"
                 style={{
                   width: "48px",
                   height: "48px",
                   borderRadius: "12px",
-                  fontSize: "1.2rem",
                   margin: 0,
                 }}
-                aria-hidden="true"
-              >
-                {serverInitial}
-              </div>
+                alt={`${APP_NAME} logo`}
+              />
             )}
             <div>
               <h2 style={{ fontSize: "1.1rem", marginBottom: "2px" }}>

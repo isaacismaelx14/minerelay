@@ -25,7 +25,11 @@ use std::{
 };
 
 #[cfg(target_os = "macos")]
-use objc2_app_kit::{NSWindow, NSWindowTitleVisibility};
+use objc2::AllocAnyThread;
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{NSApplication, NSImage, NSWindow, NSWindowTitleVisibility};
+#[cfg(target_os = "macos")]
+use objc2_foundation::{MainThreadMarker, NSData};
 use rfd::{MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
 
 use tauri::{
@@ -54,7 +58,7 @@ pub fn run() {
     .setup(|app| {
       #[cfg(any(target_os = "windows", target_os = "linux"))]
       app.deep_link()
-        .register("mssclient")
+        .register("minerelay")
         .map_err(|error| anyhow::anyhow!("failed to register deep link: {error}"))?;
 
       let app_state = app.state::<Arc<state::AppState>>().inner().clone();
@@ -120,9 +124,14 @@ pub fn run() {
       commands::game_running_probe,
     ])
     .build(tauri::generate_context!())
-    .expect("error while building MSS+ Client application");
+    .expect("error while building MineRelay application");
 
   app.run(|app_handle, event| {
+    #[cfg(target_os = "macos")]
+    if matches!(event, tauri::RunEvent::Ready) {
+      apply_macos_app_icon();
+    }
+
     if let tauri::RunEvent::ExitRequested { api, .. } = event {
       let app_state = app_handle.state::<Arc<state::AppState>>().inner().clone();
 
@@ -147,6 +156,24 @@ fn apply_macos_transparent_titlebar(window: &tauri::WebviewWindow) {
       ns_window.setMovableByWindowBackground(false);
     }
   });
+}
+
+#[cfg(target_os = "macos")]
+fn apply_macos_app_icon() {
+  let mtm = unsafe { MainThreadMarker::new_unchecked() };
+  let app = NSApplication::sharedApplication(mtm);
+  let data = NSData::with_bytes(include_bytes!("../icons/icon.png"));
+  let Some(app_icon) = NSImage::initWithData(NSImage::alloc(), &data) else {
+    return;
+  };
+  unsafe {
+    app.setApplicationIconImage(Some(&app_icon));
+  }
+}
+
+#[cfg(target_os = "macos")]
+fn minerelay_tray_icon() -> Option<tauri::image::Image<'static>> {
+  tauri::image::Image::from_bytes(include_bytes!("../icons/tray-icon.png")).ok()
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
@@ -177,6 +204,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
       }
     });
 
+  #[cfg(target_os = "macos")]
+  if let Some(icon) = minerelay_tray_icon() {
+    tray = tray.icon(icon).icon_as_template(true);
+  } else if let Some(icon) = app.default_window_icon() {
+    tray = tray.icon(icon.clone());
+  }
+
+  #[cfg(not(target_os = "macos"))]
   if let Some(icon) = app.default_window_icon() {
     tray = tray.icon(icon.clone());
   }
@@ -233,7 +268,7 @@ fn handle_quit_request(app: &tauri::AppHandle, app_state: Arc<state::AppState>) 
 
   let result = MessageDialog::new()
     .set_level(MessageLevel::Info)
-    .set_title("Quit MSS+ Client?")
+    .set_title("Quit MineRelay?")
     .set_description(
       "Select Yes to quit the app. Select No to keep it running in the background.",
     )

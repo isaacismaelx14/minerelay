@@ -17,6 +17,18 @@ pub fn load(path: &Path) -> LauncherResult<AppSettings> {
   Ok(settings)
 }
 
+pub fn load_with_fallback(path: &Path, legacy_path: &Path) -> LauncherResult<AppSettings> {
+  if path.exists() {
+    return load(path);
+  }
+
+  if legacy_path.exists() {
+    return load(legacy_path);
+  }
+
+  Ok(AppSettings::default())
+}
+
 pub fn save(path: &Path, settings: &AppSettings) -> LauncherResult<()> {
   if let Some(parent) = path.parent() {
     fs::create_dir_all(parent)?;

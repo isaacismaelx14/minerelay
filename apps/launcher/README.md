@@ -21,8 +21,8 @@ The launcher now resolves config in this order:
 
 Path:
 
-- Development build: `${dataDir}/minecraft-server-syncer-dev/launcher.runtime.json`
-- Release build: `${dataDir}/minecraft-server-syncer/launcher.runtime.json`
+- Development build: `${dataDir}/minerelay-dev/launcher.runtime.json`
+- Release build: `${dataDir}/minerelay/launcher.runtime.json`
 
 Use [launcher.runtime.example.json](launcher.runtime.example.json) as a template.
 

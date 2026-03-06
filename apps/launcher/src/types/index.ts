@@ -1,4 +1,4 @@
-import type { UpdateSummary } from "@mss/shared";
+import type { UpdateSummary } from "@minerelay/shared";
 
 export type ScreenState = "booting" | "syncing" | "ready";
 export type InstallMode = "dedicated" | "global";
