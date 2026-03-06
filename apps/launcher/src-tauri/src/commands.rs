@@ -1,13 +1,15 @@
 use crate::{launcher_control, utils::*, launcher_apps::selected_launcher_id};
 use std::sync::{
-  atomic::Ordering,
+  atomic::{AtomicBool, Ordering},
   Arc,
 };
 
 use serde::Deserialize;
+use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
 use url::Url;
+use uuid::Uuid;
 
 use crate::{
   instance::{
@@ -23,7 +25,8 @@ use crate::{
   types::{
     AppCloseResponse, AppSettings, CatalogSnapshot, FabricRuntimeStatus, GameRunningProbe,
     GameSessionPhase, GameSessionStatus, InstanceState,
-    LauncherServerControlsState,
+    LauncherServerControlsState, LauncherUpdateAction, LauncherUpdateCommandError,
+    LauncherUpdateErrorCode,
     LauncherCandidate, LauncherDetectionResult, LauncherUpdateInstallResponse,
     LauncherUpdateStatus, MinecraftRootStatus, OpenLauncherResponse,
     SyncApplyResponse, SyncPlan, UpdatesResponse, VersionReadiness,
@@ -35,17 +38,44 @@ const DEFAULT_UPDATER_ENDPOINT: &str =
 const GITHUB_RELEASES_API: &str =
   "https://api.github.com/repos/isaacismaelx14/minecraft-server-sync/releases?per_page=20";
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GithubReleaseAsset {
   name: String,
   browser_download_url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct GithubRelease {
+  tag_name: String,
   draft: bool,
   prerelease: bool,
   assets: Vec<GithubReleaseAsset>,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedUpdaterEndpoint {
+  url: Url,
+  source: &'static str,
+  release_tag: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct SelectedGithubReleaseAsset {
+  release_tag: String,
+  download_url: String,
+  source: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LauncherReleaseChannel {
+  Stable,
+  Prerelease,
+}
+
+#[derive(Debug)]
+enum UpdaterEndpointResolveError {
+  EndpointInvalid(String),
+  ManifestUnavailable(String),
 }
 
 #[tauri::command]
@@ -306,27 +336,118 @@ pub fn game_running_probe(state: State<'_, Arc<AppState>>) -> Result<GameRunning
 pub async fn launcher_update_check(
   app: AppHandle,
   state: State<'_, Arc<AppState>>,
-) -> Result<LauncherUpdateStatus, String> {
+) -> Result<LauncherUpdateStatus, LauncherUpdateCommandError> {
+  let action = LauncherUpdateAction::Check;
+  let op_id = Uuid::new_v4().to_string();
   let current_version = app.package_info().version.to_string();
+  let configured_endpoint = state.config.updater_endpoint.trim().to_string();
+  log_updater_event(
+    &op_id,
+    action,
+    "started",
+    &current_version,
+    &configured_endpoint,
+    None,
+    None,
+    None,
+    None,
+    None,
+  );
+
   let updater_endpoint = resolve_updater_endpoint(state.inner(), &current_version)
-    .await?;
+    .await
+    .map_err(|error| {
+      updater_resolution_error(
+        &op_id,
+        action,
+        "resolve_endpoint_failed",
+        &current_version,
+        &configured_endpoint,
+        &error,
+      )
+    })?;
+  log_updater_event(
+    &op_id,
+    action,
+    "endpoint_resolved",
+    &current_version,
+    &configured_endpoint,
+    Some(updater_endpoint.url.as_str()),
+    updater_endpoint.release_tag.as_deref(),
+    None,
+    None,
+    Some(json!({ "source": updater_endpoint.source })),
+  );
+
   let mut updater_builder = app.updater_builder();
   if let Some(pubkey) = state.config.updater_pubkey.clone() {
     updater_builder = updater_builder.pubkey(pubkey);
   }
   let updater = updater_builder
     .endpoints(vec![
-      updater_endpoint,
+      updater_endpoint.url.clone(),
     ])
-    .map_err(|error| format!("Failed to configure launcher updater endpoint: {error}"))?
+    .map_err(|error| {
+      updater_command_error(
+        &op_id,
+        action,
+        LauncherUpdateErrorCode::UpdaterInit,
+        "configure_updater_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(updater_endpoint.url.as_str()),
+        updater_endpoint.release_tag.as_deref(),
+        None,
+        error.to_string(),
+      )
+    })?
     .build()
-    .map_err(|error| format!("Failed to initialize launcher updater: {error}"))?;
+    .map_err(|error| {
+      updater_command_error(
+        &op_id,
+        action,
+        LauncherUpdateErrorCode::UpdaterInit,
+        "initialize_updater_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(updater_endpoint.url.as_str()),
+        updater_endpoint.release_tag.as_deref(),
+        None,
+        error.to_string(),
+      )
+    })?;
   let update = updater
     .check()
     .await
-    .map_err(|error| format!("Failed to check launcher updates: {error}"))?;
+    .map_err(|error| {
+      let raw = error.to_string();
+      updater_command_error(
+        &op_id,
+        action,
+        classify_check_error_code(&raw),
+        "check_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(updater_endpoint.url.as_str()),
+        updater_endpoint.release_tag.as_deref(),
+        None,
+        raw,
+      )
+    })?;
 
   let Some(update) = update else {
+    log_updater_event(
+      &op_id,
+      action,
+      "no_update",
+      &current_version,
+      &configured_endpoint,
+      Some(updater_endpoint.url.as_str()),
+      updater_endpoint.release_tag.as_deref(),
+      None,
+      None,
+      None,
+    );
     return Ok(LauncherUpdateStatus {
       current_version,
       latest_version: None,
@@ -337,6 +458,18 @@ pub async fn launcher_update_check(
   };
 
   if should_ignore_prerelease_update(&current_version, &update.version) {
+    log_updater_event(
+      &op_id,
+      action,
+      "ignored_prerelease",
+      &current_version,
+      &configured_endpoint,
+      Some(updater_endpoint.url.as_str()),
+      updater_endpoint.release_tag.as_deref(),
+      Some(update.version.as_str()),
+      None,
+      None,
+    );
     return Ok(LauncherUpdateStatus {
       current_version,
       latest_version: None,
@@ -345,6 +478,19 @@ pub async fn launcher_update_check(
       pub_date: None,
     });
   }
+
+  log_updater_event(
+    &op_id,
+    action,
+    "update_available",
+    &current_version,
+    &configured_endpoint,
+    Some(updater_endpoint.url.as_str()),
+    updater_endpoint.release_tag.as_deref(),
+    Some(update.version.as_str()),
+    None,
+    None,
+  );
 
   Ok(LauncherUpdateStatus {
     current_version,
@@ -359,27 +505,118 @@ pub async fn launcher_update_check(
 pub async fn launcher_update_install(
   app: AppHandle,
   state: State<'_, Arc<AppState>>,
-) -> Result<LauncherUpdateInstallResponse, String> {
+) -> Result<LauncherUpdateInstallResponse, LauncherUpdateCommandError> {
+  let action = LauncherUpdateAction::Install;
+  let op_id = Uuid::new_v4().to_string();
   let current_version = app.package_info().version.to_string();
+  let configured_endpoint = state.config.updater_endpoint.trim().to_string();
+  log_updater_event(
+    &op_id,
+    action,
+    "started",
+    &current_version,
+    &configured_endpoint,
+    None,
+    None,
+    None,
+    None,
+    None,
+  );
+
   let updater_endpoint = resolve_updater_endpoint(state.inner(), &current_version)
-    .await?;
+    .await
+    .map_err(|error| {
+      updater_resolution_error(
+        &op_id,
+        action,
+        "resolve_endpoint_failed",
+        &current_version,
+        &configured_endpoint,
+        &error,
+      )
+    })?;
+  log_updater_event(
+    &op_id,
+    action,
+    "endpoint_resolved",
+    &current_version,
+    &configured_endpoint,
+    Some(updater_endpoint.url.as_str()),
+    updater_endpoint.release_tag.as_deref(),
+    None,
+    None,
+    Some(json!({ "source": updater_endpoint.source })),
+  );
+
   let mut updater_builder = app.updater_builder();
   if let Some(pubkey) = state.config.updater_pubkey.clone() {
     updater_builder = updater_builder.pubkey(pubkey);
   }
   let updater = updater_builder
     .endpoints(vec![
-      updater_endpoint,
+      updater_endpoint.url.clone(),
     ])
-    .map_err(|error| format!("Failed to configure launcher updater endpoint: {error}"))?
+    .map_err(|error| {
+      updater_command_error(
+        &op_id,
+        action,
+        LauncherUpdateErrorCode::UpdaterInit,
+        "configure_updater_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(updater_endpoint.url.as_str()),
+        updater_endpoint.release_tag.as_deref(),
+        None,
+        error.to_string(),
+      )
+    })?
     .build()
-    .map_err(|error| format!("Failed to initialize launcher updater: {error}"))?;
+    .map_err(|error| {
+      updater_command_error(
+        &op_id,
+        action,
+        LauncherUpdateErrorCode::UpdaterInit,
+        "initialize_updater_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(updater_endpoint.url.as_str()),
+        updater_endpoint.release_tag.as_deref(),
+        None,
+        error.to_string(),
+      )
+    })?;
   let update = updater
     .check()
     .await
-    .map_err(|error| format!("Failed to check launcher updates: {error}"))?;
+    .map_err(|error| {
+      let raw = error.to_string();
+      updater_command_error(
+        &op_id,
+        action,
+        classify_check_error_code(&raw),
+        "check_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(updater_endpoint.url.as_str()),
+        updater_endpoint.release_tag.as_deref(),
+        None,
+        raw,
+      )
+    })?;
 
   let Some(update) = update else {
+    log_updater_event(
+      &op_id,
+      action,
+      "no_update",
+      &current_version,
+      &configured_endpoint,
+      Some(updater_endpoint.url.as_str()),
+      updater_endpoint.release_tag.as_deref(),
+      None,
+      None,
+      None,
+    );
     return Ok(LauncherUpdateInstallResponse {
       updated: false,
       version: None,
@@ -388,6 +625,18 @@ pub async fn launcher_update_install(
   };
 
   if should_ignore_prerelease_update(&current_version, &update.version) {
+    log_updater_event(
+      &op_id,
+      action,
+      "ignored_prerelease",
+      &current_version,
+      &configured_endpoint,
+      Some(updater_endpoint.url.as_str()),
+      updater_endpoint.release_tag.as_deref(),
+      Some(update.version.as_str()),
+      None,
+      None,
+    );
     return Ok(LauncherUpdateInstallResponse {
       updated: false,
       version: None,
@@ -398,13 +647,101 @@ pub async fn launcher_update_install(
   }
 
   let target_version = update.version.clone();
+  let selected_endpoint = updater_endpoint.url.to_string();
+  let release_tag = updater_endpoint.release_tag.clone();
+  log_updater_event(
+    &op_id,
+    action,
+    "download_prepared",
+    &current_version,
+    &configured_endpoint,
+    Some(selected_endpoint.as_str()),
+    release_tag.as_deref(),
+    Some(target_version.as_str()),
+    None,
+    None,
+  );
+
+  let download_started = Arc::new(AtomicBool::new(false));
+  let install_started = Arc::new(AtomicBool::new(false));
+  let download_started_ref = Arc::clone(&download_started);
+  let install_started_ref = Arc::clone(&install_started);
+  let progress_op_id = op_id.clone();
+  let progress_current_version = current_version.clone();
+  let progress_configured_endpoint = configured_endpoint.clone();
+  let progress_selected_endpoint = selected_endpoint.clone();
+  let progress_release_tag = release_tag.clone();
+  let progress_target_version = target_version.clone();
+  let install_op_id = op_id.clone();
+  let install_current_version = current_version.clone();
+  let install_configured_endpoint = configured_endpoint.clone();
+  let install_selected_endpoint = selected_endpoint.clone();
+  let install_release_tag = release_tag.clone();
+  let install_target_version = target_version.clone();
+
   update
     .download_and_install(
-      |_chunk_length, _content_length| {},
-      || {},
+      move |_chunk_length, content_length| {
+        if !download_started_ref.swap(true, Ordering::SeqCst) {
+          log_updater_event(
+            &progress_op_id,
+            action,
+            "download_started",
+            &progress_current_version,
+            &progress_configured_endpoint,
+            Some(progress_selected_endpoint.as_str()),
+            progress_release_tag.as_deref(),
+            Some(progress_target_version.as_str()),
+            None,
+            Some(json!({ "contentLength": content_length })),
+          );
+        }
+      },
+      move || {
+        install_started_ref.store(true, Ordering::SeqCst);
+        log_updater_event(
+          &install_op_id,
+          action,
+          "install_started",
+          &install_current_version,
+          &install_configured_endpoint,
+          Some(install_selected_endpoint.as_str()),
+          install_release_tag.as_deref(),
+          Some(install_target_version.as_str()),
+          None,
+          None,
+        );
+      },
     )
     .await
-    .map_err(|error| format!("Failed to install launcher update: {error}"))?;
+    .map_err(|error| {
+      let raw = error.to_string();
+      updater_command_error(
+        &op_id,
+        action,
+        classify_install_error_code(install_started.load(Ordering::SeqCst)),
+        "install_failed",
+        &current_version,
+        &configured_endpoint,
+        Some(selected_endpoint.as_str()),
+        release_tag.as_deref(),
+        Some(target_version.as_str()),
+        raw,
+      )
+    })?;
+
+  log_updater_event(
+    &op_id,
+    action,
+    "completed",
+    &current_version,
+    &configured_endpoint,
+    Some(selected_endpoint.as_str()),
+    release_tag.as_deref(),
+    Some(target_version.as_str()),
+    None,
+    None,
+  );
 
   app.request_restart();
 
@@ -592,21 +929,46 @@ pub fn launcher_pairing_apply_link(
 async fn resolve_updater_endpoint(
   state: &AppState,
   current_version: &str,
-) -> Result<Url, String> {
+) -> Result<ResolvedUpdaterEndpoint, UpdaterEndpointResolveError> {
   let configured = state.config.updater_endpoint.trim();
   if configured.is_empty() {
-    return Err("Updater endpoint is not configured.".to_string());
+    return Err(UpdaterEndpointResolveError::EndpointInvalid(
+      "Updater endpoint is not configured.".to_string(),
+    ));
   }
 
-  let maybe_beta_endpoint =
-    if configured == DEFAULT_UPDATER_ENDPOINT && is_prerelease_version(current_version) {
-      fetch_latest_beta_updater_endpoint(state).await
-    } else {
-      None
-    };
+  if configured != DEFAULT_UPDATER_ENDPOINT {
+    return Url::parse(configured)
+      .map(|url| ResolvedUpdaterEndpoint {
+        url,
+        source: "configured",
+        release_tag: None,
+      })
+      .map_err(|error| {
+        UpdaterEndpointResolveError::EndpointInvalid(format!(
+          "Invalid updater endpoint URL: {error}"
+        ))
+      });
+  }
 
-  let chosen = maybe_beta_endpoint.as_deref().unwrap_or(configured);
-  Url::parse(chosen).map_err(|error| format!("Invalid updater endpoint URL: {error}"))
+  let channel = if is_prerelease_version(current_version) {
+    LauncherReleaseChannel::Prerelease
+  } else {
+    LauncherReleaseChannel::Stable
+  };
+
+  let selected = fetch_latest_release_updater_asset(state, channel).await?;
+  let url = Url::parse(&selected.download_url).map_err(|error| {
+    UpdaterEndpointResolveError::EndpointInvalid(format!(
+      "Invalid updater asset URL: {error}"
+    ))
+  })?;
+
+  Ok(ResolvedUpdaterEndpoint {
+    url,
+    source: selected.source,
+    release_tag: Some(selected.release_tag),
+  })
 }
 
 fn is_prerelease_version(version: &str) -> bool {
@@ -617,28 +979,348 @@ fn should_ignore_prerelease_update(current_version: &str, candidate_version: &st
   !is_prerelease_version(current_version) && is_prerelease_version(candidate_version)
 }
 
-async fn fetch_latest_beta_updater_endpoint(state: &AppState) -> Option<String> {
-  let response = state.http.get(GITHUB_RELEASES_API).send().await.ok()?;
+async fn fetch_latest_release_updater_asset(
+  state: &AppState,
+  channel: LauncherReleaseChannel,
+) -> Result<SelectedGithubReleaseAsset, UpdaterEndpointResolveError> {
+  let response = state
+    .http
+    .get(GITHUB_RELEASES_API)
+    .header("Accept", "application/vnd.github+json")
+    .send()
+    .await
+    .map_err(|error| {
+      UpdaterEndpointResolveError::ManifestUnavailable(format!(
+        "Failed to fetch GitHub releases: {error}"
+      ))
+    })?;
+
   if !response.status().is_success() {
-    return None;
+    return Err(UpdaterEndpointResolveError::ManifestUnavailable(format!(
+      "GitHub releases API returned status {}",
+      response.status()
+    )));
   }
 
-  let releases = response.json::<Vec<GithubRelease>>().await.ok()?;
-  releases
-    .into_iter()
-    .find(|release| release.prerelease && !release.draft)
-    .and_then(|release| {
-      release
-        .assets
-        .into_iter()
-        .find(|asset| asset.name == "latest.json")
-    })
-    .map(|asset| asset.browser_download_url)
+  let releases = response.json::<Vec<GithubRelease>>().await.map_err(|error| {
+    UpdaterEndpointResolveError::ManifestUnavailable(format!(
+      "Failed to decode GitHub releases response: {error}"
+    ))
+  })?;
+
+  select_release_updater_asset(&releases, channel).ok_or_else(|| {
+    let reason = match channel {
+      LauncherReleaseChannel::Stable => {
+        "No stable launcher release with latest.json is currently published."
+      }
+      LauncherReleaseChannel::Prerelease => {
+        "No prerelease launcher build with latest.json is currently published."
+      }
+    };
+    UpdaterEndpointResolveError::ManifestUnavailable(reason.to_string())
+  })
+}
+
+fn select_release_updater_asset(
+  releases: &[GithubRelease],
+  channel: LauncherReleaseChannel,
+) -> Option<SelectedGithubReleaseAsset> {
+  releases.iter().find_map(|release| {
+    if !release_matches_channel(release, channel) {
+      return None;
+    }
+
+    release
+      .assets
+      .iter()
+      .find(|asset| asset.name == "latest.json")
+      .map(|asset| SelectedGithubReleaseAsset {
+        release_tag: release.tag_name.clone(),
+        download_url: asset.browser_download_url.clone(),
+        source: match channel {
+          LauncherReleaseChannel::Stable => "github-stable",
+          LauncherReleaseChannel::Prerelease => "github-prerelease",
+        },
+      })
+  })
+}
+
+fn release_matches_channel(
+  release: &GithubRelease,
+  channel: LauncherReleaseChannel,
+) -> bool {
+  if release.draft {
+    return false;
+  }
+
+  match channel {
+    LauncherReleaseChannel::Stable => {
+      !release.prerelease && release.tag_name.starts_with("@mss/launcher/v")
+    }
+    LauncherReleaseChannel::Prerelease => release.prerelease,
+  }
+}
+
+fn classify_check_error_code(raw: &str) -> LauncherUpdateErrorCode {
+  let normalized = raw.to_ascii_lowercase();
+  if normalized.contains("valid release json")
+    || normalized.contains("latest.json")
+    || normalized.contains("404")
+    || normalized.contains("not found")
+  {
+    LauncherUpdateErrorCode::ManifestUnavailable
+  } else {
+    LauncherUpdateErrorCode::CheckFailed
+  }
+}
+
+fn classify_install_error_code(install_started: bool) -> LauncherUpdateErrorCode {
+  if install_started {
+    LauncherUpdateErrorCode::InstallFailed
+  } else {
+    LauncherUpdateErrorCode::DownloadFailed
+  }
+}
+
+fn updater_resolution_error(
+  op_id: &str,
+  action: LauncherUpdateAction,
+  stage: &str,
+  current_version: &str,
+  configured_endpoint: &str,
+  error: &UpdaterEndpointResolveError,
+) -> LauncherUpdateCommandError {
+  let (code, raw_error) = match error {
+    UpdaterEndpointResolveError::EndpointInvalid(raw) => {
+      (LauncherUpdateErrorCode::EndpointInvalid, raw.as_str())
+    }
+    UpdaterEndpointResolveError::ManifestUnavailable(raw) => {
+      (LauncherUpdateErrorCode::ManifestUnavailable, raw.as_str())
+    }
+  };
+
+  updater_command_error(
+    op_id,
+    action,
+    code,
+    stage,
+    current_version,
+    configured_endpoint,
+    None,
+    None,
+    None,
+    raw_error.to_string(),
+  )
+}
+
+fn updater_command_error(
+  op_id: &str,
+  action: LauncherUpdateAction,
+  code: LauncherUpdateErrorCode,
+  stage: &str,
+  current_version: &str,
+  configured_endpoint: &str,
+  selected_endpoint: Option<&str>,
+  release_tag: Option<&str>,
+  target_version: Option<&str>,
+  raw_error: String,
+) -> LauncherUpdateCommandError {
+  log_updater_event(
+    op_id,
+    action,
+    stage,
+    current_version,
+    configured_endpoint,
+    selected_endpoint,
+    release_tag,
+    target_version,
+    Some(code),
+    Some(json!({ "rawError": raw_error })),
+  );
+
+  LauncherUpdateCommandError {
+    code,
+    action,
+    user_message: updater_user_message(action, code),
+  }
+}
+
+fn updater_user_message(
+  action: LauncherUpdateAction,
+  code: LauncherUpdateErrorCode,
+) -> String {
+  format!(
+    "Cannot perform {}. Code: {}.",
+    updater_action_label(action),
+    code.as_str()
+  )
+}
+
+fn updater_action_name(action: LauncherUpdateAction) -> &'static str {
+  match action {
+    LauncherUpdateAction::Check => "check",
+    LauncherUpdateAction::Install => "install",
+  }
+}
+
+fn updater_action_label(action: LauncherUpdateAction) -> &'static str {
+  match action {
+    LauncherUpdateAction::Check => "update check",
+    LauncherUpdateAction::Install => "update installation",
+  }
+}
+
+fn log_updater_event(
+  op_id: &str,
+  action: LauncherUpdateAction,
+  stage: &str,
+  current_version: &str,
+  configured_endpoint: &str,
+  selected_endpoint: Option<&str>,
+  release_tag: Option<&str>,
+  target_version: Option<&str>,
+  code: Option<LauncherUpdateErrorCode>,
+  extra: Option<serde_json::Value>,
+) {
+  let mut details = json!({
+    "opId": op_id,
+    "action": updater_action_name(action),
+    "stage": stage,
+    "currentVersion": current_version,
+    "configuredEndpoint": configured_endpoint,
+    "customEndpoint": configured_endpoint != DEFAULT_UPDATER_ENDPOINT,
+  });
+
+  if let Some(selected) = selected_endpoint {
+    details["selectedEndpoint"] = json!(selected);
+  }
+  if let Some(tag) = release_tag {
+    details["releaseTag"] = json!(tag);
+  }
+  if let Some(version) = target_version {
+    details["targetVersion"] = json!(version);
+  }
+  if let Some(error_code) = code {
+    details["code"] = json!(error_code.as_str());
+  }
+  if let Some(extra_value) = extra {
+    details["extra"] = extra_value;
+  }
+
+  let message = format!("launcher update {} {}", updater_action_name(action), stage);
+  let details_payload = details.to_string();
+  crate::telemetry::record_structured_event(
+    "launcher.update",
+    &message,
+    Some(details_payload.as_str()),
+  );
 }
 
 
 
 
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn release(
+    tag_name: &str,
+    prerelease: bool,
+    draft: bool,
+    assets: &[(&str, &str)],
+  ) -> GithubRelease {
+    GithubRelease {
+      tag_name: tag_name.to_string(),
+      prerelease,
+      draft,
+      assets: assets
+        .iter()
+        .map(|(name, url)| GithubReleaseAsset {
+          name: (*name).to_string(),
+          browser_download_url: (*url).to_string(),
+        })
+        .collect(),
+    }
+  }
+
+  #[test]
+  fn stable_release_selection_ignores_non_launcher_and_missing_manifest() {
+    let releases = vec![
+      release(
+        "@mss/shared/v0.2.0",
+        false,
+        false,
+        &[("latest.json", "https://example.com/shared/latest.json")],
+      ),
+      release("@mss/launcher/v0.2.1", false, false, &[]),
+      release(
+        "@mss/launcher/v0.2.0",
+        false,
+        false,
+        &[("latest.json", "https://example.com/launcher/latest.json")],
+      ),
+    ];
+
+    let selected = select_release_updater_asset(&releases, LauncherReleaseChannel::Stable)
+      .expect("expected stable launcher release");
+
+    assert_eq!(selected.release_tag, "@mss/launcher/v0.2.0");
+    assert_eq!(
+      selected.download_url,
+      "https://example.com/launcher/latest.json"
+    );
+  }
+
+  #[test]
+  fn prerelease_selection_requires_latest_json() {
+    let releases = vec![
+      release(
+        "v0.2.0-beta.36",
+        true,
+        false,
+        &[("notes.txt", "https://example.com/notes.txt")],
+      ),
+      release(
+        "v0.2.0-beta.35",
+        true,
+        false,
+        &[("latest.json", "https://example.com/beta/latest.json")],
+      ),
+    ];
+
+    let selected =
+      select_release_updater_asset(&releases, LauncherReleaseChannel::Prerelease)
+        .expect("expected prerelease launcher build");
+
+    assert_eq!(selected.release_tag, "v0.2.0-beta.35");
+    assert_eq!(
+      selected.download_url,
+      "https://example.com/beta/latest.json"
+    );
+  }
+
+  #[test]
+  fn check_error_classification_marks_missing_manifest() {
+    let code = classify_check_error_code(
+      "Failed to load updater response as a valid release json: HTTP status 404 Not Found",
+    );
+
+    assert_eq!(code, LauncherUpdateErrorCode::ManifestUnavailable);
+  }
+
+  #[test]
+  fn install_error_classification_distinguishes_download_and_install() {
+    assert_eq!(
+      classify_install_error_code(false),
+      LauncherUpdateErrorCode::DownloadFailed
+    );
+    assert_eq!(
+      classify_install_error_code(true),
+      LauncherUpdateErrorCode::InstallFailed
+    );
+  }
+}
 
 fn sanitize_settings_payload(mut payload: AppSettings) -> Result<AppSettings, String> {
   payload.api_base_url = normalize_optional_service_url(payload.api_base_url, true)?;

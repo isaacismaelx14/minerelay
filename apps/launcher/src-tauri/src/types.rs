@@ -392,6 +392,50 @@ pub struct LauncherUpdateInstallResponse {
   pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LauncherUpdateAction {
+  Check,
+  Install,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LauncherUpdateErrorCode {
+  #[serde(rename = "LUPD-ENDPOINT-INVALID")]
+  EndpointInvalid,
+  #[serde(rename = "LUPD-MANIFEST-UNAVAILABLE")]
+  ManifestUnavailable,
+  #[serde(rename = "LUPD-UPDATER-INIT")]
+  UpdaterInit,
+  #[serde(rename = "LUPD-CHECK-FAILED")]
+  CheckFailed,
+  #[serde(rename = "LUPD-DOWNLOAD-FAILED")]
+  DownloadFailed,
+  #[serde(rename = "LUPD-INSTALL-FAILED")]
+  InstallFailed,
+}
+
+impl LauncherUpdateErrorCode {
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::EndpointInvalid => "LUPD-ENDPOINT-INVALID",
+      Self::ManifestUnavailable => "LUPD-MANIFEST-UNAVAILABLE",
+      Self::UpdaterInit => "LUPD-UPDATER-INIT",
+      Self::CheckFailed => "LUPD-CHECK-FAILED",
+      Self::DownloadFailed => "LUPD-DOWNLOAD-FAILED",
+      Self::InstallFailed => "LUPD-INSTALL-FAILED",
+    }
+  }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherUpdateCommandError {
+  pub code: LauncherUpdateErrorCode,
+  pub action: LauncherUpdateAction,
+  pub user_message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameRunningProbe {

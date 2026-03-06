@@ -1,5 +1,7 @@
 import type { AppSettings } from "../types";
 
+export * from "./updater";
+
 export const ONBOARDING_VERSION = 2;
 
 export function bytesToHuman(bytes: number): string {

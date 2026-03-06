@@ -20,6 +20,7 @@ pub fn init(data_root: &Path) {
     "backend",
     "telemetry initialized",
     Some("{}"),
+    true,
   );
 
   std::panic::set_hook(Box::new(move |panic_info| {
@@ -41,6 +42,7 @@ pub fn init(data_root: &Path) {
       "panic",
       &payload,
       Some(&format!("{{\"location\":\"{}\"}}", escape_json_string(&location))),
+      true,
     );
   }));
 }
@@ -50,23 +52,41 @@ pub fn record_exception_event(source: &str, message: &str, details: Option<&str>
     .get()
     .cloned()
     .unwrap_or_else(|| std::env::temp_dir().join("mss-client-exceptions.log"));
-  append_line(&path, source, message, details);
+  append_line(&path, source, message, details, false);
 }
 
-fn append_line(path: &Path, source: &str, message: &str, details: Option<&str>) {
+pub fn record_structured_event(source: &str, message: &str, details_json: Option<&str>) {
+  let path = LOG_FILE_PATH
+    .get()
+    .cloned()
+    .unwrap_or_else(|| std::env::temp_dir().join("mss-client-exceptions.log"));
+  append_line(&path, source, message, details_json, true);
+}
+
+fn append_line(
+  path: &Path,
+  source: &str,
+  message: &str,
+  details: Option<&str>,
+  details_is_json: bool,
+) {
   let timestamp_ms = SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .map(|value| value.as_millis())
     .unwrap_or(0);
+
+  let serialized_details = match details {
+    Some(value) if details_is_json => value.to_string(),
+    Some(value) => format!("\"{}\"", escape_json_string(value)),
+    None => "null".to_string(),
+  };
 
   let payload = format!(
     "{{\"ts\":{},\"source\":\"{}\",\"message\":\"{}\",\"details\":{}}}\n",
     timestamp_ms,
     escape_json_string(source),
     escape_json_string(message),
-    details
-      .map(|value| format!("\"{}\"", escape_json_string(value)))
-      .unwrap_or_else(|| "null".to_string())
+    serialized_details
   );
 
   if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {

@@ -152,6 +152,22 @@ export interface LauncherUpdateInstallResponse {
   message: string;
 }
 
+export type LauncherUpdateAction = "check" | "install";
+
+export type LauncherUpdateErrorCode =
+  | "LUPD-ENDPOINT-INVALID"
+  | "LUPD-MANIFEST-UNAVAILABLE"
+  | "LUPD-UPDATER-INIT"
+  | "LUPD-CHECK-FAILED"
+  | "LUPD-DOWNLOAD-FAILED"
+  | "LUPD-INSTALL-FAILED";
+
+export interface LauncherUpdateCommandError {
+  code: LauncherUpdateErrorCode;
+  action: LauncherUpdateAction;
+  userMessage: string;
+}
+
 export interface LauncherServerPermissions {
   canViewStatus: boolean;
   canViewOnlinePlayers: boolean;

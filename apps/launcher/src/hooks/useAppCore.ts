@@ -51,6 +51,7 @@ import {
   normalizeProfileLockUrl,
   normalizeSecureUrl,
   ONBOARDING_VERSION,
+  formatLauncherUpdateCommandError,
 } from "../utils";
 
 function resolvePreferredLauncherId(
@@ -809,10 +810,7 @@ export function useAppCore() {
         );
         return result.updated;
       } catch (cause) {
-        const raw = cause instanceof Error ? cause.message : String(cause);
-        const message = /valid release json/iu.test(raw)
-          ? "No updater release metadata is published yet. This does not affect server sync."
-          : "Could not install launcher update right now. Please try again later.";
+        const message = formatLauncherUpdateCommandError(cause, "install");
         setLauncherUpdateNotice(message);
         setHint(message);
         return false;
@@ -863,7 +861,6 @@ export function useAppCore() {
 
         return installLauncherUpdate(status.latestVersion ?? undefined);
       } catch (cause) {
-        const raw = cause instanceof Error ? cause.message : String(cause);
         console.error("launcher_update_check failed", cause);
         setLauncherUpdate(
           (current) =>
@@ -875,9 +872,7 @@ export function useAppCore() {
               pubDate: null,
             },
         );
-        const message = /valid release json/iu.test(raw)
-          ? "No updater release metadata is published yet. This does not affect server sync."
-          : "Launcher updates are temporarily unavailable. This does not affect server sync.";
+        const message = formatLauncherUpdateCommandError(cause, "check");
         setLauncherUpdateNotice(message);
         if (!suppressErrors) {
           setHint(message);
