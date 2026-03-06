@@ -45,8 +45,7 @@ import {
 import { AdminAuthService } from './auth/admin-auth.service';
 import {
   AdminSessionService,
-  ACCESS_COOKIE,
-  REFRESH_COOKIE,
+  type AdminSessionResult,
 } from './auth/admin-session.service';
 
 const ADMIN_CREDENTIAL_ID = 'global';
@@ -188,6 +187,16 @@ interface FancyMenuBundleValidation {
   totalUncompressedBytes: number;
 }
 
+function toAdminAuthPayload(session: AdminSessionResult) {
+  return {
+    success: true as const,
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+    expiresAt: session.expiresAt.toISOString(),
+    refreshExpiresAt: session.refreshExpiresAt.toISOString(),
+  };
+}
+
 @Injectable()
 export class AdminService implements OnModuleInit {
   private readonly modrinthApiBase = 'https://api.modrinth.com/v2';
@@ -238,29 +247,23 @@ export class AdminService implements OnModuleInit {
     const session = await this.sessionService.createSession(request);
     this.sessionService.setSessionCookies(response, session);
 
-    return { success: true };
+    return toAdminAuthPayload(session);
   }
 
   async refresh(request: Request, response: Response) {
-    const refreshToken = this.sessionService.readCookie(
-      request,
-      REFRESH_COOKIE,
-    );
+    const refreshToken = this.sessionService.readRefreshToken(request);
     if (!refreshToken) {
       throw new UnauthorizedException('Missing refresh token');
     }
 
     const refreshed = await this.sessionService.rotateSession(refreshToken);
     this.sessionService.setSessionCookies(response, refreshed);
-    return { success: true };
+    return toAdminAuthPayload(refreshed);
   }
 
   async logout(request: Request, response: Response) {
-    const accessToken = this.sessionService.readCookie(request, ACCESS_COOKIE);
-    const refreshToken = this.sessionService.readCookie(
-      request,
-      REFRESH_COOKIE,
-    );
+    const accessToken = this.sessionService.readAccessToken(request);
+    const refreshToken = this.sessionService.readRefreshToken(request);
 
     await this.sessionService.revokeSession(accessToken, refreshToken);
     this.sessionService.clearSessionCookies(response);
@@ -268,7 +271,7 @@ export class AdminService implements OnModuleInit {
   }
 
   async authenticateRequest(request: Request): Promise<boolean> {
-    const accessToken = this.sessionService.readCookie(request, ACCESS_COOKIE);
+    const accessToken = this.sessionService.readAccessToken(request);
     if (!accessToken) {
       return false;
     }

@@ -30,8 +30,6 @@ import {
   SaveDraftDto,
   UpdateSettingsDto,
 } from './admin.dto';
-import { readAdminScript, readLoginScript } from './admin.assets';
-import { renderAdminPage, renderAdminLoginPage } from './admin.page';
 import { AdminPublic } from './admin-auth.decorator';
 import { AdminSessionGuard } from './admin.guard';
 import { AdminCsrfGuard } from './auth/admin-csrf.guard';
@@ -43,26 +41,6 @@ import { AdminService } from './admin.service';
 @Controller()
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
-
-  @Get('/admin/login')
-  @AdminPublic()
-  async getLoginPage(@Req() request: Request, @Res() response: Response) {
-    const isAuthenticated =
-      await this.adminService.authenticateRequest(request);
-    if (isAuthenticated) {
-      response.redirect('/admin');
-      return;
-    }
-
-    response.type('html').send(renderAdminLoginPage());
-  }
-
-  @Get('/admin/login/app.js')
-  @AdminPublic()
-  getLoginScript(@Res() response: Response) {
-    response.setHeader('Cache-Control', 'no-store, max-age=0');
-    response.type('application/javascript').send(readLoginScript());
-  }
 
   @Post('/v1/admin/auth/login')
   @AdminPublic()
@@ -92,25 +70,6 @@ export class AdminController {
     @Res({ passthrough: true }) response: Response,
   ) {
     return this.adminService.logout(request, response);
-  }
-
-  @Get('/admin')
-  @AdminPublic()
-  async getAdminPage(@Req() request: Request, @Res() response: Response) {
-    const isAuthenticated =
-      await this.adminService.authenticateRequest(request);
-    if (!isAuthenticated) {
-      response.redirect('/admin/login');
-      return;
-    }
-
-    response.type('html').send(renderAdminPage());
-  }
-
-  @Get('/admin/app.js')
-  getAdminScript(@Res() response: Response) {
-    response.setHeader('Cache-Control', 'no-store, max-age=0');
-    response.type('application/javascript').send(readAdminScript());
   }
 
   @Get('/v1/admin/bootstrap')

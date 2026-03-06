@@ -7,7 +7,7 @@ build/
 coverage/
 *.tsbuildinfo
 .turbo/
-apps/api/src/admin/public/*.js
+.wrangler/
 
 # Rust/Tauri
 **/target/
@@ -50,4 +50,3 @@ output/playwright
 
 launcher-trust-store.json
 launcher.runtime.json
-

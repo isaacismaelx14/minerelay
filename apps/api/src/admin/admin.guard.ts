@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import {
-  AdminSessionService,
-  ACCESS_COOKIE,
-} from './auth/admin-session.service';
+import { AdminSessionService } from './auth/admin-session.service';
 import { ADMIN_PUBLIC_KEY } from './admin-auth.decorator';
 
 @Injectable()
@@ -31,7 +28,7 @@ export class AdminSessionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request>();
 
-    const accessToken = this.sessionService.readCookie(request, ACCESS_COOKIE);
+    const accessToken = this.sessionService.readAccessToken(request);
     if (!accessToken) {
       throw new UnauthorizedException('Admin authentication required');
     }

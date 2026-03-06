@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mss-admin",
+  "compatibility_date": "2026-03-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./worker/index.ts",
+  "assets": {
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+  },
+  "images": {
+    "binding": "IMAGES",
+  },
+  "vars": {
+    "NEXT_PUBLIC_ADMIN_API_ORIGIN": "http://localhost:3000",
+  },
+  "env": {
+    "preview": {
+      "vars": {
+        "NEXT_PUBLIC_ADMIN_API_ORIGIN": "https://api-preview.example.com",
+      },
+    },
+    "production": {
+      "vars": {
+        "NEXT_PUBLIC_ADMIN_API_ORIGIN": "https://api.example.com",
+      },
+    },
+  },
+}

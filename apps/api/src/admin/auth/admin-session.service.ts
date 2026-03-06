@@ -13,6 +13,8 @@ import { AdminAuthService } from './admin-auth.service';
 export const ACCESS_COOKIE = 'mvl_admin_access';
 export const REFRESH_COOKIE = 'mvl_admin_refresh';
 export const CSRF_COOKIE = 'mvl_admin_csrf';
+export const ADMIN_REFRESH_HEADER = 'x-admin-refresh-token';
+export const ADMIN_ACCESS_QUERY = 'accessToken';
 
 export interface AdminSessionResult {
   sessionId: string;
@@ -59,6 +61,48 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
       new RegExp(`(^| )${name}=([^;]+)`),
     );
     return match ? decodeURIComponent(match[2] || '') : null;
+  }
+
+  public readAuthorizationBearer(request: Request): string | null {
+    const raw = request.header('authorization')?.trim();
+    if (!raw || !raw.startsWith('Bearer ')) {
+      return null;
+    }
+
+    const token = raw.slice('Bearer '.length).trim();
+    return token || null;
+  }
+
+  public readQueryParam(request: Request, name: string): string | null {
+    const value = request.query[name];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed || null;
+    }
+    if (Array.isArray(value)) {
+      const first = value[0];
+      if (typeof first === 'string') {
+        const trimmed = first.trim();
+        return trimmed || null;
+      }
+    }
+    return null;
+  }
+
+  public readAccessToken(request: Request): string | null {
+    return (
+      this.readAuthorizationBearer(request) ??
+      this.readQueryParam(request, ADMIN_ACCESS_QUERY) ??
+      this.readCookie(request, ACCESS_COOKIE)
+    );
+  }
+
+  public readRefreshToken(request: Request): string | null {
+    const header = request.header(ADMIN_REFRESH_HEADER)?.trim();
+    if (header) {
+      return header;
+    }
+    return this.readCookie(request, REFRESH_COOKIE);
   }
 
   public async getActiveSession(accessTokenHash: string) {

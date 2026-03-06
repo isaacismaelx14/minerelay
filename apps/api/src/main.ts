@@ -48,21 +48,32 @@ async function bootstrap() {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+  const allowAnyOrigin = configuredOrigins.includes('*');
 
   if (isProd && configuredOrigins.length === 0) {
     throw new Error('CORS_ORIGIN must be configured in production');
   }
 
   app.enableCors({
-    origin:
-      configuredOrigins.length > 0
+    origin: allowAnyOrigin
+      ? true
+      : configuredOrigins.length > 0
         ? configuredOrigins
         : [
             'http://localhost:1420',
+            'http://localhost:3001',
             'http://localhost:5173',
             'tauri://localhost',
           ],
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Admin-Refresh-Token',
+      'X-CSRF-Token',
+      'X-Correlation-Id',
+    ],
+    exposedHeaders: ['X-Correlation-Id'],
     credentials: true,
   });
 

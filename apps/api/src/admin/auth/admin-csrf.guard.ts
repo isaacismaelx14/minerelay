@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { CSRF_COOKIE } from './admin-session.service';
+import { ADMIN_ACCESS_QUERY, CSRF_COOKIE } from './admin-session.service';
 import { ADMIN_PUBLIC_KEY } from '../admin-auth.decorator';
 
 export const CSRF_HEADER = 'x-csrf-token';
@@ -29,6 +29,21 @@ export class AdminCsrfGuard implements CanActivate {
 
     // Only protect state-changing methods
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+      return true;
+    }
+
+    const authorization = request.header('authorization')?.trim();
+    if (authorization?.startsWith('Bearer ')) {
+      return true;
+    }
+
+    const accessTokenQuery = request.query[ADMIN_ACCESS_QUERY];
+    if (
+      (typeof accessTokenQuery === 'string' && accessTokenQuery.trim()) ||
+      (Array.isArray(accessTokenQuery) &&
+        typeof accessTokenQuery[0] === 'string' &&
+        accessTokenQuery[0].trim())
+    ) {
       return true;
     }
 
