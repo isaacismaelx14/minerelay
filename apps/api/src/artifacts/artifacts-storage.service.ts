@@ -9,7 +9,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, extname, relative, resolve } from 'node:path';
 
@@ -159,7 +159,7 @@ export class ArtifactsStorageService {
       return this.getS3Artifact(safeKey);
     }
 
-    const absolutePath = this.resolveLocalPath(safeKey);
+    const absolutePath = await this.resolveReadableLocalPath(safeKey);
     const body = await readFile(absolutePath).catch(() => null);
     if (!body) {
       throw new NotFoundException('Artifact not found');
@@ -206,7 +206,7 @@ export class ArtifactsStorageService {
       return resolve(configured);
     }
 
-    return resolve(homedir(), '.mss-client', 'artifacts');
+    return resolve(homedir(), '.minerelay', 'artifacts');
   }
 
   private resolveLocalPath(key: string): string {
@@ -217,6 +217,19 @@ export class ArtifactsStorageService {
       throw new NotFoundException('Artifact not found');
     }
     return absolutePath;
+  }
+
+  private async resolveReadableLocalPath(key: string): Promise<string> {
+    const primaryPath = this.resolveLocalPath(key);
+    const legacyRoot = resolve(homedir(), '.mss-client', 'artifacts');
+    const legacyPath = resolve(legacyRoot, key);
+
+    try {
+      await stat(primaryPath);
+      return primaryPath;
+    } catch {
+      return legacyPath;
+    }
   }
 
   private normalizeKey(rawKey: string): string {

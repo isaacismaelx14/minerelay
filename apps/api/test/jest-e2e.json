@@ -4,7 +4,7 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "moduleNameMapper": {
-    "^@mss/shared$": "<rootDir>/../../../packages/shared/src/index.ts"
+    "^@minerelay/shared$": "<rootDir>/../../../packages/shared/src/index.ts"
   },
   "transform": {
     "^.+\\.ts$": "ts-jest"

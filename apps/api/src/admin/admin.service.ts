@@ -17,7 +17,7 @@ import {
   LockBundleItem,
   ProfileLock,
   ProfileLockSchema,
-} from '@mss/shared';
+} from '@minerelay/shared';
 import type { Request, Response } from 'express';
 import { PrismaService } from '../db/prisma.service';
 import { SigningService } from '../security/signing.service';
@@ -51,7 +51,7 @@ import {
 const ADMIN_CREDENTIAL_ID = 'global';
 const APP_SETTING_ID = 'global';
 const EXAROTON_INTEGRATION_ID = 'global';
-const EXAROTON_MODS_SYNC_STATE_PATH = 'mods/.mss-sync.json';
+const EXAROTON_MODS_SYNC_STATE_PATH = 'mods/.minerelay-sync.json';
 const SUPPORTED_MVP_PLATFORMS = new Set(['fabric']);
 const FANCY_MENU_BUNDLE_CONFIG_NAME = 'FancyMenu Custom Bundle';
 const MAX_FANCY_BUNDLE_UPLOAD_BYTES = 10 * 1024 * 1024;

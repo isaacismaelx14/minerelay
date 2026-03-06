@@ -20,7 +20,7 @@ export function getApiMetadata(): AppMetadata {
   };
 
   cachedMetadata = {
-    name: parsed.name ?? '@mss/api',
+    name: parsed.name ?? '@minerelay/api',
     version: parsed.version ?? '0.0.0',
   };
 

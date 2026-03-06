@@ -1,4 +1,4 @@
-import type { ProfileLock } from '@mss/shared';
+import type { ProfileLock } from '@minerelay/shared';
 
 const APP_SETTING_ID = 'global';
 

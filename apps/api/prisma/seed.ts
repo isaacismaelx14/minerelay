@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { ProfileLockSchema } from '@mss/shared';
+import { ProfileLockSchema } from '@minerelay/shared';
 import {
   runBootstrapSeed,
   shouldOverwriteExistingSeedData,

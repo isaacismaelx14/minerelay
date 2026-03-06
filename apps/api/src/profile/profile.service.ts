@@ -6,7 +6,7 @@ import {
   FancyMenuSettingsSchema,
   ProfileMetadataResponse,
   ProfileMetadataResponseSchema,
-} from '@mss/shared';
+} from '@minerelay/shared';
 
 @Injectable()
 export class ProfileService {

@@ -8,7 +8,7 @@ import {
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH_BYTES = 12;
 const KEY_LENGTH_BYTES = 32;
-const KEY_SALT = 'mss-exaroton-encryption-v1';
+const LEGACY_EXAROTON_KEY_SALT = 'mss-exaroton-encryption-v1';
 
 export type EncryptedExarotonApiKey = {
   ciphertext: string;
@@ -22,7 +22,7 @@ function deriveKey(secret: string): Buffer {
     throw new Error('EXAROTON_ENCRYPTION_KEY is not configured');
   }
 
-  return scryptSync(normalized, KEY_SALT, KEY_LENGTH_BYTES);
+  return scryptSync(normalized, LEGACY_EXAROTON_KEY_SALT, KEY_LENGTH_BYTES);
 }
 
 export function encryptExarotonApiKey(

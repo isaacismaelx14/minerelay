@@ -90,7 +90,7 @@ export class LauncherSecurityUseCases implements OnModuleInit {
 
     const api = (input.apiBaseUrl ?? '').trim();
     const deepLinkApi = api ? `&api=${encodeURIComponent(api)}` : '';
-    const deepLink = `mssclient://pair?token=${encodeURIComponent(pairingToken)}${deepLinkApi}`;
+    const deepLink = `minerelay://pair?token=${encodeURIComponent(pairingToken)}${deepLinkApi}`;
 
     this.audit('claim_issued', {
       claimId,

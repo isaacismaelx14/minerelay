@@ -1,13 +1,13 @@
 {
-  "name": "@mss/api",
+  "name": "@minerelay/api",
   "version": "0.1.1",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "pnpm run prisma:generate && nest build",
-    "dev": "pnpm run prisma:generate && nest start --watch",
+    "build": "pnpm --filter @minerelay/shared build && pnpm run prisma:generate && rm -rf dist tsconfig.build.tsbuildinfo && pnpm exec tsc -p tsconfig.build.json",
+    "dev": "pnpm run build && node -r tsconfig-paths/register dist/main.js",
     "start": "nest start",
-    "start:prod": "node dist/main",
+    "start:prod": "node -r tsconfig-paths/register dist/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1001.0",
-    "@mss/shared": "workspace:*",
+    "@minerelay/shared": "workspace:*",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",

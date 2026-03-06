@@ -1,4 +1,4 @@
-import type { ProfileLock } from '@mss/shared';
+import type { ProfileLock } from '@minerelay/shared';
 import {
   runBootstrapSeed,
   SEED_OVERWRITE_EXISTING_ENV,

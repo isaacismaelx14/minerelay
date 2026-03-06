@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
@@ -34,8 +35,8 @@ async function bootstrap() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"], // Needed for some React hydration and basic UI interactions, can be tightened later
-          styleSrc: ["'self'", "'unsafe-inline'"], // Allows inline styles injected by React
+          scriptSrc: ["'self'", "'unsafe-inline'"], // Swagger UI injects inline bootstrapping scripts
+          styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI uses inline styles
           imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
@@ -93,10 +94,8 @@ async function bootstrap() {
   if (!isProd || isSwaggerEnabled) {
     const metadata = getApiMetadata();
     const swagger = new DocumentBuilder()
-      .setTitle('Minecraft Server Syncer API')
-      .setDescription(
-        'Profile metadata and lockfile API for the Minecraft Server Syncer',
-      )
+      .setTitle('MineRelay API')
+      .setDescription('Profile metadata and lockfile API for MineRelay')
       .setVersion(metadata.version)
       .build();
 

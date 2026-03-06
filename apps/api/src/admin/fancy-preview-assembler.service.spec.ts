@@ -9,7 +9,7 @@ describe('FancyPreviewAssemblerService', () => {
 
   it('builds simple preview with default play button', () => {
     const preview = service.buildSimplePreview({
-      serverName: 'MSS Test',
+      serverName: 'MineRelay Test',
       fancyMenu: {
         enabled: true,
         mode: 'simple',
@@ -35,7 +35,7 @@ describe('FancyPreviewAssemblerService', () => {
 
   it('merges custom preview data over baseline', () => {
     const baseline = service.buildSimplePreview({
-      serverName: 'MSS Test',
+      serverName: 'MineRelay Test',
       fancyMenu: { enabled: true, mode: 'custom' },
       branding: {},
     });

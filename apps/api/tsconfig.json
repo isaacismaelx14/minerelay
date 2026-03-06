@@ -11,8 +11,10 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "paths": {
+      "@minerelay/shared": ["../../packages/shared/dist/index"]
+    },
     "incremental": true,
-    "strictNullChecks": true,
-    "jsx": "react-jsx"
+    "strictNullChecks": true
   }
 }
