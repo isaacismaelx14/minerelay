@@ -6,15 +6,21 @@ on:
       - "@mss/launcher/v*"
   workflow_dispatch:
     inputs:
+      run_from_main:
+        description: Build the current main branch for workflow/YAML validation only
+        required: false
+        default: false
+        type: boolean
       tag:
         description: Existing @mss/launcher tag to rebuild and publish assets for
-        required: true
+        required: false
         type: string
 
 jobs:
   build-launcher:
     env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      RUN_FROM_MAIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && '' || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +38,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && 'main' || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Validate manual dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.run_from_main }}" != "true" ] && [ -z "${{ github.event.inputs.tag }}" ]; then
+            echo "Provide a launcher tag or enable 'run_from_main'." >&2
+            exit 1
+          fi
+
+      - name: Warn for main validation runs
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true'
+        shell: bash
+        run: |
+          echo "::warning::This 'run from main' mode is for launcher-release workflow/YAML validation only. It skips publish/verify jobs and should not be used to diagnose launcher code issues."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -49,6 +70,7 @@ jobs:
 
       - name: Compute release version from tag
         id: version
+        if: env.RUN_FROM_MAIN != 'true'
         shell: bash
         run: |
           VERSION="${RELEASE_TAG#@mss/launcher/v}"
@@ -68,9 +90,22 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
 
+      - name: Compute release version from main
+        id: version_main
+        if: env.RUN_FROM_MAIN == 'true'
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./apps/launcher/package.json').version")"
+          if [ -z "$VERSION" ]; then
+            echo "Failed to read launcher version from apps/launcher/package.json" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+
       - name: Stamp launcher version for this release
         shell: bash
-        run: node apps/launcher/scripts/set-release-version.mjs "${{ steps.version.outputs.version }}"
+        run: node apps/launcher/scripts/set-release-version.mjs "${{ steps.version.outputs.version || steps.version_main.outputs.version }}"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
@@ -228,6 +263,7 @@ jobs:
             apps/launcher/src-tauri/target/release/bundle/**/*.tar.gz
 
   publish-launcher-assets:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true'
     needs: build-launcher
     runs-on: ubuntu-latest
     permissions:
@@ -292,6 +328,7 @@ jobs:
             release-artifacts/generated/latest.json
 
   verify-release-updater:
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_from_main != 'true'
     needs: publish-launcher-assets
     runs-on: ubuntu-latest
     permissions:
