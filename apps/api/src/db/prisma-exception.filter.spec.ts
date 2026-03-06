@@ -20,19 +20,20 @@ const createKnownRequestError = (
   return error;
 };
 
-const createInitializationError = (): Prisma.PrismaClientInitializationError => {
-  const error = Object.create(
-    Prisma.PrismaClientInitializationError.prototype,
-  ) as Prisma.PrismaClientInitializationError;
+const createInitializationError =
+  (): Prisma.PrismaClientInitializationError => {
+    const error = Object.create(
+      Prisma.PrismaClientInitializationError.prototype,
+    ) as Prisma.PrismaClientInitializationError;
 
-  Object.assign(error, {
-    name: 'PrismaClientInitializationError',
-    message: 'Prisma failed to initialize',
-    clientVersion: '6.19.2',
-  });
+    Object.assign(error, {
+      name: 'PrismaClientInitializationError',
+      message: 'Prisma failed to initialize',
+      clientVersion: '6.19.2',
+    });
 
-  return error;
-};
+    return error;
+  };
 
 describe('PrismaExceptionFilter', () => {
   beforeEach(() => {
