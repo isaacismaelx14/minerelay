@@ -1,5 +1,18 @@
 # Changelog
 
+## [@mss/api/v0.1.1](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Fapi%2Fv0.1.1) (2026-03-06)
+
+[Full Changelog](https://github.com/isaacismaelx14/minecraft-server-sync/compare/%40mss%2Fapi%2Fv0.1.0-beta.32...%40mss%2Fapi%2Fv0.1.1)
+
+## Bug Fixes
+
+- **api:** handle database connectivity failures ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+- **api:** preserve bootstrap data on redeploy ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+
+## Styles
+
+- **api:** format prisma exception filter spec ([3f8649d](https://github.com/isaacismaelx14/minecraft-server-sync/commit/3f8649d0db7f068b210f7dcd5c294e677f2a60eb))
+
 ## [@mss/api/v0.1.0-beta.32](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Fapi%2Fv0.1.0-beta.32) (2026-03-05)
 
 [Release Tag](https://github.com/isaacismaelx14/minecraft-server-sync/releases/tag/%40mss%2Fapi%2Fv0.1.0-beta.32)
