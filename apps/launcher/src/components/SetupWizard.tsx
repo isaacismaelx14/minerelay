@@ -157,8 +157,9 @@ export function SetupWizard({ core }: { core: ReturnType<typeof useAppCore> }) {
         <div className="wizard-panel">
           <h2>Step 2: Launcher and Minecraft Directory</h2>
           <p>
-            Auto-detect launchers and launcher directory. If missing, choose
-            paths manually.
+            Auto-detect launchers and your default Minecraft directory.
+            Microsoft Store installs may appear without a file path. If a
+            launcher is missing, choose it manually.
           </p>
 
           <div
