@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { ProfileLockSchema } from '@mss/shared';
+import {
+  runBootstrapSeed,
+  shouldOverwriteExistingSeedData,
+  type SeedPrisma,
+} from '../src/db/bootstrap-seed';
 
 const prisma = new PrismaClient();
 
@@ -26,89 +31,12 @@ async function main() {
   const derivedLockUrl = `${baseUrl}/v1/locks/${profileId}/${lock.version}`;
   const lockUrl = process.env.LOCK_URL?.trim() || derivedLockUrl;
 
-  await prisma.server.upsert({
-    where: { id: serverId },
-    create: {
-      id: serverId,
-      name: lock.branding.serverName,
-      address: lock.defaultServer.address,
-      allowedMinecraftVersions: [lock.minecraftVersion],
-      fancyMenuEnabled: lock.fancyMenu.enabled,
-      fancyMenuSettings: lock.fancyMenu as unknown as object,
-      profileId,
-    },
-    update: {
-      name: lock.branding.serverName,
-      address: lock.defaultServer.address,
-      allowedMinecraftVersions: [lock.minecraftVersion],
-      fancyMenuEnabled: lock.fancyMenu.enabled,
-      fancyMenuSettings: lock.fancyMenu as unknown as object,
-      profileId,
-    },
-  });
-
-  await prisma.profileVersion.upsert({
-    where: {
-      serverId_version: {
-        serverId,
-        version: lock.version,
-      },
-    },
-    create: {
-      serverId,
-      profileId,
-      version: lock.version,
-      releaseVersion: '1.0.0',
-      minecraftVersion: lock.minecraftVersion,
-      loader: lock.loader,
-      loaderVersion: lock.loaderVersion,
-      defaultServerName: lock.defaultServer.name,
-      defaultServerAddress: lock.defaultServer.address,
-      fancyMenuEnabled: lock.fancyMenu.enabled,
-      fancyMenuSettings: lock.fancyMenu as unknown as object,
-      lockUrl,
-      summaryAdd:
-        lock.items.length +
-        lock.resources.length +
-        lock.shaders.length +
-        lock.configs.length,
-      summaryRemove: 0,
-      summaryUpdate: 0,
-      summaryKeep: 0,
-      lockJson: lock,
-    },
-    update: {
-      profileId,
-      releaseVersion: '1.0.0',
-      minecraftVersion: lock.minecraftVersion,
-      loader: lock.loader,
-      loaderVersion: lock.loaderVersion,
-      defaultServerName: lock.defaultServer.name,
-      defaultServerAddress: lock.defaultServer.address,
-      fancyMenuEnabled: lock.fancyMenu.enabled,
-      fancyMenuSettings: lock.fancyMenu as unknown as object,
-      lockUrl,
-      lockJson: lock,
-    },
-  });
-
-  await prisma.appSetting.upsert({
-    where: { id: 'global' },
-    create: {
-      id: 'global',
-      supportedMinecraftVersions: [lock.minecraftVersion],
-      supportedPlatforms: ['fabric'],
-      releaseMajor: 1,
-      releaseMinor: 0,
-      releasePatch: 0,
-    },
-    update: {
-      supportedMinecraftVersions: [lock.minecraftVersion],
-      supportedPlatforms: ['fabric'],
-      releaseMajor: 1,
-      releaseMinor: 0,
-      releasePatch: 0,
-    },
+  await runBootstrapSeed({
+    prisma: prisma as unknown as SeedPrisma,
+    serverId,
+    lock,
+    lockUrl,
+    overwriteExisting: shouldOverwriteExistingSeedData(process.env),
   });
 }
 

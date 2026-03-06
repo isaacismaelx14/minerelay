@@ -1,4 +1,7 @@
-use crate::{instance::{InstancePaths, ensure_layout, load_local_lock, resolve_launcher_minecraft_root}, utils::*};
+use crate::{
+  instance::{InstancePaths, ensure_layout, load_local_lock, resolve_launcher_minecraft_root},
+  utils::*,
+};
 use std::sync::Arc;
 use std::{
   fs,
@@ -7,103 +10,130 @@ use std::{
   time::Instant,
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+use serde::Deserialize;
 use serde_json::json;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 use crate::{
   error::{LauncherError, LauncherResult},
   types::{
-    AppSettings, LauncherBootstrapResult, LauncherCandidate, LauncherDetectionResult, OpenLauncherResponse,
-    ProfileLock,
+    AppSettings, LauncherBootstrapResult, LauncherCandidate, LauncherDetectionResult,
+    OpenLauncherResponse, ProfileLock,
   },
 };
 
-pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
+#[cfg(target_os = "windows")]
+use winreg::{
+  RegKey,
+  enums::{HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE},
+};
+
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LaunchTarget {
+  Executable(PathBuf),
+  AppUserModelId(String),
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+#[derive(Debug, Clone)]
+struct DetectedLauncher {
+  id: String,
+  name: String,
+  display_path: String,
+  target: LaunchTarget,
+  priority: DetectionPriority,
+}
+
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum DetectionPriority {
+  StoreAppUserModelId,
+  ProgramFilesExecutable,
+  UserLocalExecutable,
+  RegistryExecutable,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, Copy)]
+struct WindowsLauncherSpec {
+  id: &'static str,
+  name: &'static str,
+  executable_names: &'static [&'static str],
+  match_terms: &'static [&'static str],
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StartAppEntry {
+  name: String,
+  app_id: String,
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum StartAppsPayload {
+  One(RawStartAppEntry),
+  Many(Vec<RawStartAppEntry>),
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+#[derive(Debug, Deserialize)]
+struct RawStartAppEntry {
+  #[serde(rename = "Name")]
+  name: Option<String>,
+  #[serde(rename = "AppID")]
+  app_id: Option<String>,
+}
+
+#[cfg(target_os = "windows")]
+fn windows_launcher_specs() -> &'static [WindowsLauncherSpec] {
+  const SPECS: &[WindowsLauncherSpec] = &[
+    WindowsLauncherSpec {
+      id: "official",
+      name: "Minecraft Launcher",
+      executable_names: &["MinecraftLauncher.exe"],
+      match_terms: &["minecraft launcher", "minecraftlauncher"],
+    },
+    WindowsLauncherSpec {
+      id: "prism",
+      name: "Prism Launcher",
+      executable_names: &["prismlauncher.exe"],
+      match_terms: &["prism launcher", "prismlauncher"],
+    },
+    WindowsLauncherSpec {
+      id: "tlauncher",
+      name: "TLauncher",
+      executable_names: &["TLauncher.exe"],
+      match_terms: &["tlauncher"],
+    },
+    WindowsLauncherSpec {
+      id: "lunar",
+      name: "Lunar Client",
+      executable_names: &["Lunar Client.exe"],
+      match_terms: &["lunar client", "lunarclient"],
+    },
+    WindowsLauncherSpec {
+      id: "multimc",
+      name: "MultiMC",
+      executable_names: &["MultiMC.exe"],
+      match_terms: &["multimc"],
+    },
+  ];
+
+  SPECS
+}
+
+fn detect_installed_launchers_detailed() -> Vec<DetectedLauncher> {
   let mut candidates = Vec::new();
 
   #[cfg(target_os = "windows")]
   {
-    let common = [
-      (
-        "official",
-        "Minecraft Launcher",
-        [
-          r"C:\\Program Files (x86)\\Minecraft Launcher\\MinecraftLauncher.exe",
-          r"C:\\Program Files\\Minecraft Launcher\\MinecraftLauncher.exe",
-        ],
-      ),
-      (
-        "prism",
-        "Prism Launcher",
-        [
-          r"C:\\Program Files\\PrismLauncher\\prismlauncher.exe",
-          r"C:\\Program Files (x86)\\PrismLauncher\\prismlauncher.exe",
-        ],
-      ),
-      (
-        "tlauncher",
-        "TLauncher",
-        [
-          r"C:\\Program Files\\TLauncher\\TLauncher.exe",
-          r"C:\\Program Files (x86)\\TLauncher\\TLauncher.exe",
-        ],
-      ),
-      (
-        "lunar",
-        "Lunar Client",
-        [
-          r"C:\\Program Files\\Lunar Client\\Lunar Client.exe",
-          r"C:\\Program Files (x86)\\Lunar Client\\Lunar Client.exe",
-        ],
-      ),
-      (
-        "multimc",
-        "MultiMC",
-        [
-          r"C:\\Program Files\\MultiMC\\MultiMC.exe",
-          r"C:\\Program Files (x86)\\MultiMC\\MultiMC.exe",
-        ],
-      ),
-    ];
-
-    for (id, name, paths) in common {
-      for path in paths {
-        push_candidate_if_exists(&mut candidates, id, name, Path::new(path));
-      }
-    }
-
-    if let Some(local_data) = dirs::data_local_dir() {
-      push_candidate_if_exists(
-        &mut candidates,
-        "tlauncher",
-        "TLauncher",
-        &local_data.join("Programs").join("TLauncher").join("TLauncher.exe"),
-      );
-      push_candidate_if_exists(
-        &mut candidates,
-        "lunar",
-        "Lunar Client",
-        &local_data
-          .join("Programs")
-          .join("lunarclient")
-          .join("Lunar Client.exe"),
-      );
-      push_candidate_if_exists(
-        &mut candidates,
-        "lunar",
-        "Lunar Client",
-        &local_data.join("LunarClient").join("Lunar Client.exe"),
-      );
-    }
-
-    if let Some(roaming_data) = dirs::data_dir() {
-      push_candidate_if_exists(
-        &mut candidates,
-        "tlauncher",
-        "TLauncher",
-        &roaming_data.join(".minecraft").join("TLauncher.exe"),
-      );
-    }
+    candidates = detect_windows_launchers();
   }
 
   #[cfg(target_os = "macos")]
@@ -118,11 +148,22 @@ pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
     ];
 
     for (id, name, path) in common {
-      push_candidate_if_exists(&mut candidates, id, name, Path::new(path));
+      push_detected_executable_if_exists(
+        &mut candidates,
+        id,
+        name,
+        Path::new(path),
+        DetectionPriority::ProgramFilesExecutable,
+      );
     }
   }
 
   candidates
+}
+
+pub fn detect_installed_launchers() -> Vec<LauncherCandidate> {
+  let candidates = detect_installed_launchers_detailed();
+  to_public_candidates(&candidates)
 }
 
 pub async fn detect_with_timeout(timeout_ms: u64) -> LauncherResult<LauncherDetectionResult> {
@@ -135,9 +176,8 @@ pub async fn detect_with_timeout(timeout_ms: u64) -> LauncherResult<LauncherDete
 
   let (candidates, timed_out) = match result {
     Ok(joined) => {
-      let candidates = joined.map_err(|error| {
-        LauncherError::Fs(format!("launcher detection task failed to join: {error}"))
-      })?;
+      let candidates = joined
+        .map_err(|error| LauncherError::Fs(format!("launcher detection task failed to join: {error}")))?;
       (candidates, false)
     }
     Err(_) => (Vec::new(), true),
@@ -184,10 +224,12 @@ pub fn pick_manual_launcher_path() -> Option<String> {
   }
 }
 
-pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]) -> LauncherResult<OpenLauncherResponse> {
-  let selected = resolve_selected_path(settings, detected);
-
-  let Some(path) = selected else {
+fn open_from_settings(
+  settings: &AppSettings,
+  detected: &[DetectedLauncher],
+) -> LauncherResult<OpenLauncherResponse> {
+  let public_detected = to_public_candidates(detected);
+  let Some(selected_id) = selected_launcher_id(settings, &public_detected) else {
     return Ok(OpenLauncherResponse {
       opened: false,
       path: None,
@@ -196,17 +238,50 @@ pub fn open_from_settings(settings: &AppSettings, detected: &[LauncherCandidate]
     });
   };
 
-  spawn_launcher(&path)?;
+  if selected_id == "custom" {
+    let custom = settings
+      .custom_launcher_path
+      .as_deref()
+      .ok_or_else(|| LauncherError::Config("launcher path is empty".to_string()))?;
+    let launcher_path = validate_launcher_path(custom)?;
+    spawn_launcher(&LaunchTarget::Executable(launcher_path.clone()))?;
+
+    return Ok(OpenLauncherResponse {
+      opened: true,
+      path: Some(launcher_path.to_string_lossy().to_string()),
+      bootstrap: None,
+      session: None,
+    });
+  }
+
+  let Some(launcher) = detected.iter().find(|item| item.id == selected_id) else {
+    return Ok(OpenLauncherResponse {
+      opened: false,
+      path: None,
+      bootstrap: None,
+      session: None,
+    });
+  };
+
+  spawn_launcher(&launcher.target)?;
+
+  let path = match &launcher.target {
+    LaunchTarget::Executable(path) => Some(path.to_string_lossy().to_string()),
+    LaunchTarget::AppUserModelId(_) => None,
+  };
 
   Ok(OpenLauncherResponse {
     opened: true,
-    path: Some(path),
+    path,
     bootstrap: None,
     session: None,
   })
 }
 
-pub async fn bootstrap_prism_instance(state: &crate::state::AppState, lock: &ProfileLock) -> LauncherResult<LauncherBootstrapResult> {
+pub async fn bootstrap_prism_instance(
+  state: &crate::state::AppState,
+  lock: &ProfileLock,
+) -> LauncherResult<LauncherBootstrapResult> {
   let prism_root = prism_root_dir()?;
   let instances_root = prism_root.join("instances");
   fs::create_dir_all(&instances_root)?;
@@ -237,16 +312,15 @@ pub async fn bootstrap_prism_instance(state: &crate::state::AppState, lock: &Pro
       .map_err(|error| LauncherError::InvalidData(format!("failed to serialize mmc-pack.json: {error}")))?,
   )?;
 
-  let cfg = format!(
-    "InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n"
-  );
+  let cfg =
+    format!("InstanceType=OneSix\nManagedPack=false\niconKey=default\nname={instance_name}\n");
   fs::write(instance_dir.join("instance.cfg"), cfg)?;
 
   #[cfg(target_os = "macos")]
   let minecraft_folder = "minecraft";
   #[cfg(not(target_os = "macos"))]
   let minecraft_folder = ".minecraft";
-  
+
   let minecraft_dir = instance_dir.join(minecraft_folder);
   let icon_path = minecraft_dir.join("icon.png");
 
@@ -323,57 +397,113 @@ pub fn bootstrap_official_version(
   })
 }
 
-fn push_candidate_if_exists(candidates: &mut Vec<LauncherCandidate>, id: &str, name: &str, path: &Path) {
+fn push_detected_executable_if_exists(
+  candidates: &mut Vec<DetectedLauncher>,
+  id: &str,
+  name: &str,
+  path: &Path,
+  priority: DetectionPriority,
+) {
   if !path.exists() {
     return;
   }
 
-  let text = path.to_string_lossy().to_string();
-  if candidates.iter().any(|candidate| candidate.path == text) {
+  upsert_detected_launcher(
+    candidates,
+    DetectedLauncher {
+      id: id.to_string(),
+      name: name.to_string(),
+      display_path: path.to_string_lossy().to_string(),
+      target: LaunchTarget::Executable(path.to_path_buf()),
+      priority,
+    },
+  );
+}
+
+fn upsert_detected_launcher(candidates: &mut Vec<DetectedLauncher>, candidate: DetectedLauncher) {
+  if let Some(existing) = candidates.iter_mut().find(|item| item.id == candidate.id) {
+    if candidate.priority > existing.priority {
+      *existing = candidate;
+    }
     return;
   }
 
-  candidates.push(LauncherCandidate {
-    id: id.to_string(),
-    name: name.to_string(),
-    path: text,
-  });
+  candidates.push(candidate);
 }
 
-pub fn resolve_selected_path(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
+fn to_public_candidates(candidates: &[DetectedLauncher]) -> Vec<LauncherCandidate> {
+  candidates
+    .iter()
+    .map(|candidate| LauncherCandidate {
+      id: candidate.id.clone(),
+      name: candidate.name.clone(),
+      path: candidate.display_path.clone(),
+    })
+    .collect()
+}
+
+pub fn preferred_detected_launcher_id(candidates: &[LauncherCandidate]) -> Option<String> {
+  preferred_detected_launcher_id_with_strategy(candidates, cfg!(target_os = "windows"))
+}
+
+fn preferred_detected_launcher_id_with_strategy(
+  candidates: &[LauncherCandidate],
+  prefer_prism: bool,
+) -> Option<String> {
+  let detected: Vec<&LauncherCandidate> = candidates
+    .iter()
+    .filter(|candidate| candidate.id != "custom")
+    .collect();
+
+  if prefer_prism && detected.iter().any(|candidate| candidate.id == "prism") {
+    return Some("prism".to_string());
+  }
+
+  if detected.iter().any(|candidate| candidate.id == "official") {
+    return Some("official".to_string());
+  }
+
+  detected.first().map(|candidate| candidate.id.clone())
+}
+
+pub fn selected_launcher_id(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
+  selected_launcher_id_with_strategy(settings, detected, cfg!(target_os = "windows"))
+}
+
+fn selected_launcher_id_with_strategy(
+  settings: &AppSettings,
+  detected: &[LauncherCandidate],
+  prefer_prism: bool,
+) -> Option<String> {
+  if settings
+    .selected_launcher_id
+    .as_deref()
+    .is_some_and(|id| id == "custom")
+  {
+    let custom = settings.custom_launcher_path.as_deref()?.trim();
+    if !custom.is_empty() {
+      return Some("custom".to_string());
+    }
+  }
+
   if let Some(id) = settings.selected_launcher_id.as_deref() {
-    if id == "custom" {
-      let custom = settings.custom_launcher_path.as_deref()?.trim();
-      if !custom.is_empty() {
-        return Some(custom.to_string());
-      }
-    }
-
-    if let Some(candidate) = detected.iter().find(|item| item.id == id) {
-      return Some(candidate.path.clone());
+    if detected.iter().any(|candidate| candidate.id == id) {
+      return Some(id.to_string());
     }
   }
 
-  if let Some(official) = detected.iter().find(|item| item.id == "official") {
-    return Some(official.path.clone());
-  }
-
-  if let Some(first) = detected.first() {
-    return Some(first.path.clone());
-  }
-
-  if let Some(custom) = settings.custom_launcher_path.as_deref() {
-    let trimmed = custom.trim();
-    if !trimmed.is_empty() {
-      return Some(trimmed.to_string());
-    }
-  }
-
-  None
+  preferred_detected_launcher_id_with_strategy(detected, prefer_prism)
 }
 
-fn spawn_launcher(path: &str) -> LauncherResult<()> {
-  let launcher_path = validate_launcher_path(path)?;
+fn spawn_launcher(target: &LaunchTarget) -> LauncherResult<()> {
+  match target {
+    LaunchTarget::Executable(path) => spawn_executable_launcher(path),
+    LaunchTarget::AppUserModelId(app_id) => spawn_store_app_launcher(app_id),
+  }
+}
+
+fn spawn_executable_launcher(path: &Path) -> LauncherResult<()> {
+  let launcher_path = validate_launcher_path_buf(path)?;
 
   #[cfg(target_os = "macos")]
   {
@@ -388,30 +518,31 @@ fn spawn_launcher(path: &str) -> LauncherResult<()> {
         .map_err(|error| LauncherError::Fs(format!("failed to open launcher app: {error}")))?;
       return Ok(());
     }
-
-    Command::new(&launcher_path)
-      .spawn()
-      .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
-
-    return Ok(());
   }
 
+  Command::new(&launcher_path)
+    .spawn()
+    .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
+
+  Ok(())
+}
+
+fn spawn_store_app_launcher(app_id: &str) -> LauncherResult<()> {
   #[cfg(target_os = "windows")]
   {
-    Command::new(&launcher_path)
+    Command::new("explorer.exe")
+      .arg(format!(r"shell:AppsFolder\{app_id}"))
       .spawn()
-      .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
-
+      .map_err(|error| LauncherError::Fs(format!("failed to open Microsoft Store launcher: {error}")))?;
     return Ok(());
   }
 
-  #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+  #[cfg(not(target_os = "windows"))]
   {
-    Command::new(&launcher_path)
-      .spawn()
-      .map_err(|error| LauncherError::Fs(format!("failed to open launcher executable: {error}")))?;
-
-    Ok(())
+    let _ = app_id;
+    Err(LauncherError::Config(
+      "Microsoft Store launcher targets are only supported on Windows".to_string(),
+    ))
   }
 }
 
@@ -421,7 +552,11 @@ fn validate_launcher_path(path: &str) -> LauncherResult<PathBuf> {
     return Err(LauncherError::Config("launcher path is empty".to_string()));
   }
 
-  let candidate = PathBuf::from(trimmed);
+  validate_launcher_path_buf(Path::new(trimmed))
+}
+
+fn validate_launcher_path_buf(path: &Path) -> LauncherResult<PathBuf> {
+  let candidate = path.to_path_buf();
   if !candidate.is_absolute() {
     return Err(LauncherError::Config(
       "launcher path must be an absolute path".to_string(),
@@ -435,6 +570,412 @@ fn validate_launcher_path(path: &str) -> LauncherResult<PathBuf> {
   }
 
   Ok(candidate)
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn normalize_windows_executable_candidate(raw: &str) -> Option<PathBuf> {
+  let trimmed = raw.trim().trim_matches('"');
+  if trimmed.is_empty() {
+    return None;
+  }
+
+  let lower = trimmed.to_ascii_lowercase();
+  let index = lower.find(".exe")?;
+  Some(PathBuf::from(trimmed[..index + 4].trim_matches('"').trim()))
+}
+
+#[cfg(target_os = "windows")]
+fn detect_windows_launchers() -> Vec<DetectedLauncher> {
+  let mut candidates = Vec::new();
+
+  probe_registry_app_paths(&mut candidates);
+  probe_registry_uninstall_entries(&mut candidates);
+  probe_windows_filesystem_fallbacks(&mut candidates);
+
+  if !candidates.iter().any(|candidate| candidate.id == "official") {
+    if let Some(app_id) = resolve_official_store_app_id() {
+      upsert_detected_launcher(
+        &mut candidates,
+        DetectedLauncher {
+          id: "official".to_string(),
+          name: "Minecraft Launcher".to_string(),
+          display_path: "Microsoft Store app".to_string(),
+          target: LaunchTarget::AppUserModelId(app_id),
+          priority: DetectionPriority::StoreAppUserModelId,
+        },
+      );
+    }
+  }
+
+  candidates.sort_by_key(|candidate| windows_launcher_sort_key(&candidate.id));
+  candidates
+}
+
+#[cfg(target_os = "windows")]
+fn windows_launcher_sort_key(id: &str) -> usize {
+  match id {
+    "official" => 0,
+    "prism" => 1,
+    "multimc" => 2,
+    "lunar" => 3,
+    "tlauncher" => 4,
+    _ => 10,
+  }
+}
+
+#[cfg(target_os = "windows")]
+fn probe_registry_app_paths(candidates: &mut Vec<DetectedLauncher>) {
+  const APP_PATHS_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\App Paths";
+
+  for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+    let root = RegKey::predef(hive);
+    let Ok(app_paths) = root.open_subkey(APP_PATHS_KEY) else {
+      continue;
+    };
+
+    for spec in windows_launcher_specs() {
+      for exe_name in spec.executable_names {
+        let Ok(subkey) = app_paths.open_subkey(exe_name) else {
+          continue;
+        };
+
+        let Ok(raw_path) = subkey.get_value::<String, _>("") else {
+          continue;
+        };
+
+        let Some(path) = normalize_windows_executable_candidate(&raw_path) else {
+          continue;
+        };
+
+        if !path.exists() {
+          continue;
+        }
+
+        upsert_detected_launcher(
+          candidates,
+          DetectedLauncher {
+            id: spec.id.to_string(),
+            name: spec.name.to_string(),
+            display_path: path.to_string_lossy().to_string(),
+            target: LaunchTarget::Executable(path),
+            priority: DetectionPriority::RegistryExecutable,
+          },
+        );
+      }
+    }
+  }
+}
+
+#[cfg(target_os = "windows")]
+fn probe_registry_uninstall_entries(candidates: &mut Vec<DetectedLauncher>) {
+  const UNINSTALL_KEYS: &[(HKEY, &str)] = &[
+    (HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
+    (HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
+    (
+      HKEY_LOCAL_MACHINE,
+      r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ),
+  ];
+
+  for (hive, key_path) in UNINSTALL_KEYS {
+    let root = RegKey::predef(*hive);
+    let Ok(uninstall_root) = root.open_subkey(key_path) else {
+      continue;
+    };
+
+    for subkey_name in uninstall_root.enum_keys().flatten() {
+      let Ok(subkey) = uninstall_root.open_subkey(&subkey_name) else {
+        continue;
+      };
+
+      let display_name = subkey.get_value::<String, _>("DisplayName").ok();
+      let display_icon = subkey.get_value::<String, _>("DisplayIcon").ok();
+      let install_location = subkey.get_value::<String, _>("InstallLocation").ok();
+
+      let Some(spec) = match_windows_launcher_spec(
+        display_name.as_deref(),
+        display_icon.as_deref(),
+        install_location.as_deref(),
+      ) else {
+        continue;
+      };
+
+      let Some(path) = resolve_uninstall_candidate_path(
+        spec,
+        display_icon.as_deref(),
+        install_location.as_deref(),
+      ) else {
+        continue;
+      };
+
+      if !path.exists() {
+        continue;
+      }
+
+      upsert_detected_launcher(
+        candidates,
+        DetectedLauncher {
+          id: spec.id.to_string(),
+          name: spec.name.to_string(),
+          display_path: path.to_string_lossy().to_string(),
+          target: LaunchTarget::Executable(path),
+          priority: DetectionPriority::RegistryExecutable,
+        },
+      );
+    }
+  }
+}
+
+#[cfg(target_os = "windows")]
+fn match_windows_launcher_spec(
+  display_name: Option<&str>,
+  display_icon: Option<&str>,
+  install_location: Option<&str>,
+) -> Option<&'static WindowsLauncherSpec> {
+  let haystack = [
+    display_name.unwrap_or_default(),
+    display_icon.unwrap_or_default(),
+    install_location.unwrap_or_default(),
+  ]
+  .join(" ")
+  .to_ascii_lowercase();
+
+  windows_launcher_specs()
+    .iter()
+    .find(|spec| spec.match_terms.iter().any(|term| haystack.contains(term)))
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_uninstall_candidate_path(
+  spec: &WindowsLauncherSpec,
+  display_icon: Option<&str>,
+  install_location: Option<&str>,
+) -> Option<PathBuf> {
+  if let Some(path) = display_icon
+    .and_then(normalize_windows_executable_candidate)
+    .filter(|path| path_matches_spec(path, spec))
+  {
+    return Some(path);
+  }
+
+  let install_location = install_location
+    .map(|value| value.trim().trim_matches('"'))
+    .filter(|value| !value.is_empty())?;
+  let base = PathBuf::from(install_location);
+
+  if base.is_file() && path_matches_spec(&base, spec) {
+    return Some(base);
+  }
+
+  spec
+    .executable_names
+    .iter()
+    .map(|exe| base.join(exe))
+    .find(|candidate| candidate.exists())
+}
+
+#[cfg(target_os = "windows")]
+fn path_matches_spec(path: &Path, spec: &WindowsLauncherSpec) -> bool {
+  let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
+    return false;
+  };
+
+  spec
+    .executable_names
+    .iter()
+    .any(|exe| file_name.eq_ignore_ascii_case(exe))
+}
+
+#[cfg(target_os = "windows")]
+fn probe_windows_filesystem_fallbacks(candidates: &mut Vec<DetectedLauncher>) {
+  let program_files = [
+    (
+      "official",
+      "Minecraft Launcher",
+      r"C:\\Program Files (x86)\\Minecraft Launcher\\MinecraftLauncher.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "official",
+      "Minecraft Launcher",
+      r"C:\\Program Files\\Minecraft Launcher\\MinecraftLauncher.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "prism",
+      "Prism Launcher",
+      r"C:\\Program Files\\PrismLauncher\\prismlauncher.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "prism",
+      "Prism Launcher",
+      r"C:\\Program Files (x86)\\PrismLauncher\\prismlauncher.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "tlauncher",
+      "TLauncher",
+      r"C:\\Program Files\\TLauncher\\TLauncher.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "tlauncher",
+      "TLauncher",
+      r"C:\\Program Files (x86)\\TLauncher\\TLauncher.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "lunar",
+      "Lunar Client",
+      r"C:\\Program Files\\Lunar Client\\Lunar Client.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "lunar",
+      "Lunar Client",
+      r"C:\\Program Files (x86)\\Lunar Client\\Lunar Client.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "multimc",
+      "MultiMC",
+      r"C:\\Program Files\\MultiMC\\MultiMC.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+    (
+      "multimc",
+      "MultiMC",
+      r"C:\\Program Files (x86)\\MultiMC\\MultiMC.exe",
+      DetectionPriority::ProgramFilesExecutable,
+    ),
+  ];
+
+  for (id, name, path, priority) in program_files {
+    push_detected_executable_if_exists(candidates, id, name, Path::new(path), priority);
+  }
+
+  if let Some(local_data) = dirs::data_local_dir() {
+    push_detected_executable_if_exists(
+      candidates,
+      "official",
+      "Minecraft Launcher",
+      &local_data
+        .join("Microsoft")
+        .join("WindowsApps")
+        .join("MinecraftLauncher.exe"),
+      DetectionPriority::UserLocalExecutable,
+    );
+    push_detected_executable_if_exists(
+      candidates,
+      "prism",
+      "Prism Launcher",
+      &local_data
+        .join("Programs")
+        .join("PrismLauncher")
+        .join("prismlauncher.exe"),
+      DetectionPriority::UserLocalExecutable,
+    );
+    push_detected_executable_if_exists(
+      candidates,
+      "tlauncher",
+      "TLauncher",
+      &local_data.join("Programs").join("TLauncher").join("TLauncher.exe"),
+      DetectionPriority::UserLocalExecutable,
+    );
+    push_detected_executable_if_exists(
+      candidates,
+      "lunar",
+      "Lunar Client",
+      &local_data
+        .join("Programs")
+        .join("lunarclient")
+        .join("Lunar Client.exe"),
+      DetectionPriority::UserLocalExecutable,
+    );
+    push_detected_executable_if_exists(
+      candidates,
+      "lunar",
+      "Lunar Client",
+      &local_data.join("LunarClient").join("Lunar Client.exe"),
+      DetectionPriority::UserLocalExecutable,
+    );
+  }
+
+  if let Some(roaming_data) = dirs::data_dir() {
+    push_detected_executable_if_exists(
+      candidates,
+      "tlauncher",
+      "TLauncher",
+      &roaming_data.join(".minecraft").join("TLauncher.exe"),
+      DetectionPriority::UserLocalExecutable,
+    );
+  }
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_official_store_app_id() -> Option<String> {
+  const CREATE_NO_WINDOW: u32 = 0x08000000;
+  let command = "Get-StartApps | Where-Object { $_.Name -match 'Minecraft' -or $_.AppID -match 'Minecraft' } | Select-Object Name, AppID | ConvertTo-Json -Compress";
+
+  let output = Command::new("powershell")
+    .creation_flags(CREATE_NO_WINDOW)
+    .args(["-NoProfile", "-Command", command])
+    .output()
+    .ok()?;
+
+  if !output.status.success() {
+    return None;
+  }
+
+  let payload = String::from_utf8_lossy(&output.stdout);
+  official_store_app_id_from_json(&payload)
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn official_store_app_id_from_json(payload: &str) -> Option<String> {
+  parse_start_apps_json(payload)
+    .into_iter()
+    .find(|entry| is_official_store_app(entry))
+    .map(|entry| entry.app_id)
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn parse_start_apps_json(payload: &str) -> Vec<StartAppEntry> {
+  let trimmed = payload.trim();
+  if trimmed.is_empty() {
+    return Vec::new();
+  }
+
+  let Ok(parsed) = serde_json::from_str::<StartAppsPayload>(trimmed) else {
+    return Vec::new();
+  };
+
+  match parsed {
+    StartAppsPayload::One(entry) => start_app_from_raw(entry).into_iter().collect(),
+    StartAppsPayload::Many(entries) => entries.into_iter().filter_map(start_app_from_raw).collect(),
+  }
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn start_app_from_raw(entry: RawStartAppEntry) -> Option<StartAppEntry> {
+  let name = entry.name?.trim().to_string();
+  let app_id = entry.app_id?.trim().to_string();
+  if name.is_empty() || app_id.is_empty() {
+    return None;
+  }
+
+  Some(StartAppEntry { name, app_id })
+}
+
+#[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
+fn is_official_store_app(entry: &StartAppEntry) -> bool {
+  let name = entry.name.to_ascii_lowercase();
+  let app_id = entry.app_id.to_ascii_lowercase();
+  name.contains("minecraft launcher")
+    || name == "minecraft"
+    || app_id.contains("minecraftlauncher")
+    || app_id.contains("minecraft")
 }
 
 pub fn prism_root_dir() -> LauncherResult<PathBuf> {
@@ -509,8 +1050,9 @@ fn upsert_official_launcher_profile(
 
   let mut root = if profiles_path.exists() {
     let content = fs::read_to_string(&profiles_path)?;
-    serde_json::from_str::<serde_json::Value>(&content)
-      .map_err(|error| LauncherError::InvalidData(format!("failed to parse launcher_profiles.json: {error}")))?
+    serde_json::from_str::<serde_json::Value>(&content).map_err(|error| {
+      LauncherError::InvalidData(format!("failed to parse launcher_profiles.json: {error}"))
+    })?
   } else {
     json!({})
   };
@@ -549,8 +1091,9 @@ fn upsert_official_launcher_profile(
   fs::create_dir_all(minecraft_root)?;
   fs::write(
     profiles_path,
-    serde_json::to_string_pretty(&root)
-      .map_err(|error| LauncherError::InvalidData(format!("failed to serialize launcher_profiles.json: {error}")))?,
+    serde_json::to_string_pretty(&root).map_err(|error| {
+      LauncherError::InvalidData(format!("failed to serialize launcher_profiles.json: {error}"))
+    })?,
   )?;
 
   Ok(())
@@ -572,16 +1115,21 @@ pub fn slugify(input: &str) -> String {
   out.trim_matches('-').to_string()
 }
 
-pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::state::AppState>, server_id: &str) -> Result<crate::types::OpenLauncherResponse, String> {
-
+pub async fn open_game(
+  app: &tauri::AppHandle,
+  state: std::sync::Arc<crate::state::AppState>,
+  server_id: &str,
+) -> Result<crate::types::OpenLauncherResponse, String> {
   let settings = state.settings.lock().clone();
-  let detected = crate::launcher_apps::detect_installed_launchers();
-  let selected_id = selected_launcher_id(&settings, &detected);
+  let detected = detect_installed_launchers_detailed();
+  let public_detected = to_public_candidates(&detected);
+  let selected_id = selected_launcher_id(&settings, &public_detected);
   let selected_launcher = selected_id
     .clone()
     .unwrap_or_else(|| "unknown".to_string());
   let effective_server = effective_server_id(state.as_ref(), server_id);
-  let (minecraft_root, _) = resolve_launcher_minecraft_root(&settings).map_err(|e| format!("{e}"))?;
+  let (minecraft_root, _) =
+    resolve_launcher_minecraft_root(&settings).map_err(|e| format!("{e}"))?;
 
   let mut pending_bootstrap: Option<LauncherBootstrapResult> = None;
 
@@ -620,9 +1168,9 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
     }
 
     pending_bootstrap = Some(match (selected_id.as_deref(), lock) {
-      (Some("prism"), Some(lock)) => {
-        crate::launcher_apps::bootstrap_prism_instance(&state, &lock).await.map_err(|e| format!("{e}"))?
-      }
+      (Some("prism"), Some(lock)) => crate::launcher_apps::bootstrap_prism_instance(&state, &lock)
+        .await
+        .map_err(|e| format!("{e}"))?,
       (Some("official"), Some(lock)) => crate::launcher_apps::bootstrap_official_version(
         &lock,
         &minecraft_root,
@@ -651,13 +1199,13 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
     settings.minecraft_root_override.as_deref(),
   )
   .map_err(|e| format!("{e}"))?;
-  
+
   let live_mc_dir = if selected_id.as_deref() == Some("prism") {
     let mut modified_paths = paths.clone();
     let lock = load_local_lock(&paths)
       .map_err(|e| format!("{e}"))?
       .or(crate::profile::fetch_remote_lock(state.as_ref(), &effective_server).await.ok());
-    
+
     if let Some(ref l) = lock {
       let _ = modified_paths.apply_prism(l);
     }
@@ -676,7 +1224,7 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
   .await
   .map_err(|e| format!("{e}"))?;
 
-  let mut response = match crate::launcher_apps::open_from_settings(&settings, &detected) {
+  let mut response = match open_from_settings(&settings, &detected) {
     Ok(value) => value,
     Err(error) => {
       let _ = crate::session::restore_active_session(app, Arc::clone(&state)).await;
@@ -692,19 +1240,6 @@ pub async fn open_game(app: &tauri::AppHandle, state: std::sync::Arc<crate::stat
   }
 
   Ok(response)
-
-}
-
-pub fn selected_launcher_id(settings: &AppSettings, detected: &[LauncherCandidate]) -> Option<String> {
-  if let Some(id) = settings.selected_launcher_id.as_deref() {
-    return Some(id.to_string());
-  }
-
-  if detected.iter().any(|candidate| candidate.id == "official") {
-    return Some("official".to_string());
-  }
-
-  detected.first().map(|candidate| candidate.id.clone())
 }
 
 pub fn managed_version_exists(minecraft_root: &Path, version_id: &str) -> bool {
@@ -713,4 +1248,100 @@ pub fn managed_version_exists(minecraft_root: &Path, version_id: &str) -> bool {
     .join(version_id)
     .join(format!("{version_id}.json"))
     .exists()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn candidate(id: &str) -> LauncherCandidate {
+    LauncherCandidate {
+      id: id.to_string(),
+      name: id.to_string(),
+      path: format!("{id}-path"),
+    }
+  }
+
+  #[test]
+  fn normalizes_windows_executable_from_uninstall_icon() {
+    let normalized = normalize_windows_executable_candidate(
+      r#""C:\Users\isaac\AppData\Local\Programs\PrismLauncher\prismlauncher.exe",0"#,
+    );
+
+    assert_eq!(
+      normalized,
+      Some(PathBuf::from(
+        r"C:\Users\isaac\AppData\Local\Programs\PrismLauncher\prismlauncher.exe"
+      ))
+    );
+  }
+
+  #[test]
+  fn keeps_highest_priority_candidate_per_launcher_id() {
+    let mut candidates = Vec::new();
+    upsert_detected_launcher(
+      &mut candidates,
+      DetectedLauncher {
+        id: "official".to_string(),
+        name: "Minecraft Launcher".to_string(),
+        display_path: "program-files".to_string(),
+        target: LaunchTarget::Executable(PathBuf::from(r"C:\Program Files\Minecraft Launcher\MinecraftLauncher.exe")),
+        priority: DetectionPriority::ProgramFilesExecutable,
+      },
+    );
+    upsert_detected_launcher(
+      &mut candidates,
+      DetectedLauncher {
+        id: "official".to_string(),
+        name: "Minecraft Launcher".to_string(),
+        display_path: "registry".to_string(),
+        target: LaunchTarget::Executable(PathBuf::from(r"C:\Users\isaac\AppData\Local\Microsoft\WindowsApps\MinecraftLauncher.exe")),
+        priority: DetectionPriority::RegistryExecutable,
+      },
+    );
+
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].display_path, "registry");
+    assert_eq!(candidates[0].priority, DetectionPriority::RegistryExecutable);
+  }
+
+  #[test]
+  fn prefers_prism_on_windows_when_saved_selection_is_invalid() {
+    let settings = AppSettings {
+      selected_launcher_id: Some("lunar".to_string()),
+      ..AppSettings::default()
+    };
+    let detected = vec![candidate("official"), candidate("prism")];
+
+    let selected = selected_launcher_id_with_strategy(&settings, &detected, true);
+
+    assert_eq!(selected.as_deref(), Some("prism"));
+  }
+
+  #[test]
+  fn keeps_valid_saved_selection_even_when_prism_is_available() {
+    let settings = AppSettings {
+      selected_launcher_id: Some("official".to_string()),
+      ..AppSettings::default()
+    };
+    let detected = vec![candidate("official"), candidate("prism")];
+
+    let selected = selected_launcher_id_with_strategy(&settings, &detected, true);
+
+    assert_eq!(selected.as_deref(), Some("official"));
+  }
+
+  #[test]
+  fn parses_start_apps_json_and_extracts_official_app_id() {
+    let payload = r#"[{"Name":"Minecraft Launcher","AppID":"Microsoft.4297127D64EC6_8wekyb3d8bbwe!Minecraft"},{"Name":"Notepad","AppID":"Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"}]"#;
+
+    let parsed = parse_start_apps_json(payload);
+    let official = official_store_app_id_from_json(payload);
+
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(
+      official.as_deref(),
+      Some("Microsoft.4297127D64EC6_8wekyb3d8bbwe!Minecraft")
+    );
+  }
 }

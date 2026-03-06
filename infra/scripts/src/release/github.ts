@@ -14,7 +14,20 @@ type CreateGithubReleaseInput = {
   body: string;
   token: string;
   prerelease?: boolean;
+  draft?: boolean;
 };
+
+export function buildCreateGithubReleasePayload(
+  input: CreateGithubReleaseInput,
+) {
+  return {
+    tag_name: input.tagName,
+    name: input.name,
+    body: input.body,
+    draft: Boolean(input.draft),
+    prerelease: Boolean(input.prerelease),
+  };
+}
 
 export function getGithubRepoFromGitRemote(): RepoIdentity {
   const remote = execSync("git remote get-url origin", {
@@ -43,13 +56,7 @@ export async function createGithubRelease(
         "User-Agent": "mvl-semantic-release",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        tag_name: input.tagName,
-        name: input.name,
-        body: input.body,
-        draft: false,
-        prerelease: Boolean(input.prerelease),
-      }),
+      body: JSON.stringify(buildCreateGithubReleasePayload(input)),
     },
   );
 

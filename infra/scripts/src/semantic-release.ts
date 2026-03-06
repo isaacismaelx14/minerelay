@@ -1,6 +1,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   dedupeEntries,
   determineReleaseLevel,
@@ -362,6 +363,7 @@ async function releaseTarget(params: {
       body: releaseBody,
       token,
       prerelease: false,
+      draft: shouldDraftGithubRelease(target, args.channel),
     });
 
     console.log(`GitHub release created: ${result.htmlUrl}`);
@@ -369,6 +371,13 @@ async function releaseTarget(params: {
 
   console.log(`Release completed: ${newTag}`);
   return true;
+}
+
+export function shouldDraftGithubRelease(
+  target: string,
+  channel: ReleaseChannel,
+): boolean {
+  return target === "launcher" && channel === "release";
 }
 
 async function buildAiBodyWithFallback(params: {
@@ -887,8 +896,13 @@ function gitPushTag(tagName: string): void {
   execFileSync("git", ["push", "origin", tagName], { stdio: "inherit" });
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exit(1);
-});
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exit(1);
+  });
+}

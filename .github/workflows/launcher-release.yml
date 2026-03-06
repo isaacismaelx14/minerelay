@@ -4,9 +4,17 @@ on:
   push:
     tags:
       - "@mss/launcher/v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing @mss/launcher tag to rebuild and publish assets for
+        required: true
+        type: string
 
 jobs:
   build-launcher:
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -41,9 +51,13 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#@mss/launcher/v}"
+          VERSION="${RELEASE_TAG#@mss/launcher/v}"
           if [ -z "$VERSION" ]; then
-            echo "Failed to parse version from tag ${GITHUB_REF_NAME}" >&2
+            echo "Failed to parse version from tag ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+          if [ "$VERSION" = "$RELEASE_TAG" ]; then
+            echo "Tag must be in @mss/launcher/v<version> format. Received: ${RELEASE_TAG}" >&2
             exit 1
           fi
           if [[ "$VERSION" == *-* ]]; then
@@ -146,7 +160,41 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm tauri build ${{ matrix.args }}
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            pnpm tauri build ${{ matrix.args }}
+          else
+            APPLE_VARS=(
+              APPLE_CERTIFICATE
+              APPLE_CERTIFICATE_PASSWORD
+              APPLE_SIGNING_IDENTITY
+              APPLE_ID
+              APPLE_PASSWORD
+              APPLE_TEAM_ID
+            )
+
+            missing_secret=0
+            for secret_name in "${APPLE_VARS[@]}"; do
+              if [ -z "${!secret_name}" ]; then
+                missing_secret=1
+                break
+              fi
+            done
+
+            if [ "$missing_secret" -eq 1 ]; then
+              # Force unsigned build when secrets are absent/partial.
+              echo "::warning::Building unsigned macOS APP+DMG (Apple signing/notarization secrets missing)."
+              unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+              pnpm tauri build ${{ matrix.args }}
+            else
+              # Try signed build first, then fallback to unsigned to avoid release failures.
+              if ! pnpm tauri build ${{ matrix.args }}; then
+                echo "::warning::Signed macOS build failed; retrying unsigned APP+DMG."
+                unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+                pnpm tauri build ${{ matrix.args }}
+              fi
+            fi
+          fi
 
       - name: Upload Windows NSIS artifact
         if: matrix.runner_os == 'Windows'
@@ -184,10 +232,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -205,7 +257,7 @@ jobs:
       - name: Ensure release already exists for this tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api "repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" >/dev/null
+        run: gh api "repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }}" >/dev/null
 
       - name: Download all launcher artifacts
         uses: actions/download-artifact@v4
@@ -218,7 +270,7 @@ jobs:
           pnpm --filter @mss/infra-scripts manifest:generate -- \
             --owner "${{ github.repository_owner }}" \
             --repo "${{ github.event.repository.name }}" \
-            --tag "${{ github.ref_name }}" \
+            --tag "${{ env.RELEASE_TAG }}" \
             --artifacts-dir "${GITHUB_WORKSPACE}/release-artifacts" \
             --output "${GITHUB_WORKSPACE}/release-artifacts/generated/latest.json" \
             --required windows,macos
@@ -226,7 +278,9 @@ jobs:
       - name: Upload launcher assets to existing release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
           fail_on_unmatched_files: true
           files: |
             release-artifacts/launcher-windows-nsis/*.exe
@@ -242,10 +296,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -267,5 +325,5 @@ jobs:
           pnpm --filter @mss/infra-scripts updater:verify -- \
             --owner "${{ github.repository_owner }}" \
             --repo "${{ github.event.repository.name }}" \
-            --tag "${{ github.ref_name }}" \
+            --tag "${{ env.RELEASE_TAG }}" \
             --required windows,macos

@@ -145,6 +145,8 @@ pnpm --filter @mss/api prisma:migrate
 pnpm --filter @mss/api prisma:seed
 ```
 
+`prisma:seed` is safe to rerun. It bootstraps a fresh database and skips writes when bootstrap data already exists. Set `SEED_OVERWRITE_EXISTING=true` only when you intentionally want to reseed and overwrite existing bootstrap records.
+
 6. Run API:
 
 ```bash

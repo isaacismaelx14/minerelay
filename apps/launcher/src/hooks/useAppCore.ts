@@ -51,7 +51,39 @@ import {
   normalizeProfileLockUrl,
   normalizeSecureUrl,
   ONBOARDING_VERSION,
+  formatLauncherUpdateCommandError,
 } from "../utils";
+
+function resolvePreferredLauncherId(
+  detected: LauncherCandidate[],
+  selectedLauncherId: string | null,
+  customLauncherPath: string | null,
+): string | null {
+  if (selectedLauncherId === "custom" && customLauncherPath?.trim()) {
+    return "custom";
+  }
+
+  if (
+    selectedLauncherId &&
+    detected.some((candidate) => candidate.id === selectedLauncherId)
+  ) {
+    return selectedLauncherId;
+  }
+
+  const detectedLaunchers = detected.filter(
+    (candidate) => candidate.id !== "custom",
+  );
+
+  if (detectedLaunchers.some((candidate) => candidate.id === "prism")) {
+    return "prism";
+  }
+
+  if (detectedLaunchers.some((candidate) => candidate.id === "official")) {
+    return "official";
+  }
+
+  return detectedLaunchers[0]?.id ?? null;
+}
 
 export function useAppCore() {
   const currentWindow = getCurrentWindow();
@@ -396,18 +428,20 @@ export function useAppCore() {
     const current = await invoke<AppSettings>("settings_get");
     const detected = await invoke<LauncherCandidate[]>("launcher_detect");
 
-    let merged = current;
-    if (!merged.selectedLauncherId && detected.length > 0) {
-      const official = detected.find(
-        (candidate) => candidate.id === "official",
-      );
-      merged = {
-        ...merged,
-        selectedLauncherId: official?.id ?? detected[0]?.id ?? null,
-      };
-    }
+    const resolvedLauncherId = resolvePreferredLauncherId(
+      detected,
+      current.selectedLauncherId,
+      current.customLauncherPath,
+    );
+    const merged =
+      resolvedLauncherId === current.selectedLauncherId
+        ? current
+        : {
+            ...current,
+            selectedLauncherId: resolvedLauncherId,
+          };
 
-    if (merged !== current) {
+    if (resolvedLauncherId !== current.selectedLauncherId) {
       await saveSettings(merged);
     } else {
       setSettings(merged);
@@ -776,10 +810,7 @@ export function useAppCore() {
         );
         return result.updated;
       } catch (cause) {
-        const raw = cause instanceof Error ? cause.message : String(cause);
-        const message = /valid release json/iu.test(raw)
-          ? "No updater release metadata is published yet. This does not affect server sync."
-          : "Could not install launcher update right now. Please try again later.";
+        const message = formatLauncherUpdateCommandError(cause, "install");
         setLauncherUpdateNotice(message);
         setHint(message);
         return false;
@@ -830,7 +861,6 @@ export function useAppCore() {
 
         return installLauncherUpdate(status.latestVersion ?? undefined);
       } catch (cause) {
-        const raw = cause instanceof Error ? cause.message : String(cause);
         console.error("launcher_update_check failed", cause);
         setLauncherUpdate(
           (current) =>
@@ -842,9 +872,7 @@ export function useAppCore() {
               pubDate: null,
             },
         );
-        const message = /valid release json/iu.test(raw)
-          ? "No updater release metadata is published yet. This does not affect server sync."
-          : "Launcher updates are temporarily unavailable. This does not affect server sync.";
+        const message = formatLauncherUpdateCommandError(cause, "check");
         setLauncherUpdateNotice(message);
         if (!suppressErrors) {
           setHint(message);
@@ -922,23 +950,18 @@ export function useAppCore() {
       setWizardMinecraftRootPath(rootStatus.path);
       setWizardProgress(100);
 
-      if (settings?.selectedLauncherId) {
-        setWizardSelectedLauncherId(settings.selectedLauncherId);
-      } else if (detected.candidates.length > 0) {
-        const official = detected.candidates.find(
-          (entry) => entry.id === "official",
-        );
-        const first = detected.candidates[0];
-        setWizardSelectedLauncherId(official?.id ?? first?.id ?? "");
-      } else {
-        setWizardSelectedLauncherId("custom");
-      }
+      const resolvedLauncherId = resolvePreferredLauncherId(
+        detected.candidates,
+        settings?.selectedLauncherId ?? null,
+        settings?.customLauncherPath ?? null,
+      );
+      setWizardSelectedLauncherId(resolvedLauncherId ?? "custom");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       window.clearInterval(timer);
     }
-  }, []);
+  }, [settings?.customLauncherPath, settings?.selectedLauncherId]);
 
   const bootstrap = useCallback(async () => {
     try {

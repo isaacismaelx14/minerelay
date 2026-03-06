@@ -1,16 +1,20 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as express from 'express';
 import { randomUUID } from 'crypto';
 import { AppModule } from './app.module';
 import { getApiMetadata } from './app-metadata';
+import { PrismaExceptionFilter } from './db/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  const httpAdapterHost = app.get(HttpAdapterHost);
+
+  app.useGlobalFilters(new PrismaExceptionFilter(httpAdapterHost));
 
   // Correlation ID and structured logging support
   app.use(

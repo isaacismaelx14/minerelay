@@ -274,12 +274,7 @@ export class AdminService implements OnModuleInit {
     }
 
     const tokenHash = this.sessionService.hashToken(accessToken);
-    const session = await this.prisma.adminSession.findFirst({
-      where: {
-        accessTokenHash: tokenHash,
-        revokedAt: null,
-      },
-    });
+    const session = await this.sessionService.getActiveSession(tokenHash);
 
     if (!session) {
       return false;
