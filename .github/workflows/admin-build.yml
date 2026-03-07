@@ -40,8 +40,80 @@ jobs:
       - name: Build admin app
         run: pnpm --filter @minerelay/admin build
 
-      - name: Deploy admin app
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter @minerelay/admin deploy -- --env production
+  deploy-admin:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/@minerelay/admin/v')
+    needs: build-admin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy admin app to Railway
+        run: |
+          set -euo pipefail
+
+          PROJECT_ID="${RAILWAY_PROJECT_ID:-2e1199e7-8617-445e-a258-0e17212cadfc}"
+          BEFORE_DEPLOY_ID="$(railway service status -s admin --json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{const j=JSON.parse(s);process.stdout.write(j.deploymentId||'')}catch{process.stdout.write('')}})")"
+          echo "Previous deployment ID: ${BEFORE_DEPLOY_ID:-<none>}"
+
+          DEPLOY_OUTPUT="$(railway up apps/admin \
+            --path-as-root \
+            --service admin \
+            --environment production \
+            --project "$PROJECT_ID" \
+            --detach 2>&1)"
+          echo "$DEPLOY_OUTPUT"
+
+          DEPLOY_ID="$(printf '%s\n' "$DEPLOY_OUTPUT" | sed -n 's/.*id=\([0-9a-f-]\{36\}\).*/\1/p' | head -n 1)"
+          if [ -z "${DEPLOY_ID:-}" ]; then
+            echo "Could not parse deployment ID from railway up output."
+            DEPLOY_ID="$BEFORE_DEPLOY_ID"
+          fi
+          echo "Triggered deployment ID: ${DEPLOY_ID:-<unknown>}"
+
+          for i in $(seq 1 90); do
+            STATUS_JSON="$(railway service status -s admin --json)"
+            CURRENT_ID="$(printf '%s' "$STATUS_JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.deploymentId||'')})")"
+            CURRENT_STATUS="$(printf '%s' "$STATUS_JSON" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.status||'')})")"
+
+            echo "Poll $i: deployment=$CURRENT_ID status=$CURRENT_STATUS"
+
+            if [ -n "${DEPLOY_ID:-}" ] && [ "$CURRENT_ID" != "$DEPLOY_ID" ]; then
+              sleep 5
+              continue
+            fi
+
+            case "$CURRENT_STATUS" in
+              SUCCESS|SLEEPING)
+                echo "Railway deployment succeeded."
+                exit 0
+                ;;
+              FAILED|CRASHED|REMOVED|CANCELED)
+                echo "Railway deployment failed with status=$CURRENT_STATUS"
+                echo "Build logs:"
+                railway service logs -s admin --build -n 200 "$CURRENT_ID" || true
+                echo "Runtime logs:"
+                railway service logs -s admin --deployment -n 120 "$CURRENT_ID" || true
+                exit 1
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for Railway deployment to reach a terminal state."
+          exit 1

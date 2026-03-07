@@ -3,6 +3,8 @@ import vinext from "vinext";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 
+const useCloudflareRuntime = process.env.ADMIN_RUNTIME === "cloudflare";
+
 export default defineConfig({
   server: {
     hmr: {
@@ -14,11 +16,15 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     vinext(),
-    cloudflare({
-      viteEnvironment: {
-        name: "rsc",
-        childEnvironments: ["ssr"],
-      },
-    }),
+    ...(useCloudflareRuntime
+      ? [
+          cloudflare({
+            viteEnvironment: {
+              name: "rsc",
+              childEnvironments: ["ssr"],
+            },
+          }),
+        ]
+      : []),
   ],
 });
