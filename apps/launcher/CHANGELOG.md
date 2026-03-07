@@ -1,5 +1,19 @@
 # Changelog
 
+## [@minerelay/launcher/v0.3.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.3.2) (2026-03-07)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.3.1...%40minerelay%2Flauncher%2Fv0.3.2)
+
+## Bug Fixes
+
+- **launcher:** prevent background-only state by enforcing single instance ([795681c](https://github.com/isaacismaelx14/minerelay/commit/795681cccc0f83d6057727d8df67c67ff1f904ac))
+
+## CI
+
+- **launcher:** use main scripts for manual publish and verify ([6edd9e3](https://github.com/isaacismaelx14/minerelay/commit/6edd9e3f901670d272f4da1f08694c528093e2cc))
+- **launcher:** resolve release tag in updater verification ([36fe415](https://github.com/isaacismaelx14/minerelay/commit/36fe41591dc560c6f38a653d2fd6c2162e76555b))
+- **launcher:** resolve legacy tag lookup for asset publish ([1f86e64](https://github.com/isaacismaelx14/minerelay/commit/1f86e645ccb5b39bd20d20f568659dc400e8afaa))
+
 ## [@minerelay/launcher/v0.3.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40mss%2Flauncher%2Fv0.3.1) (2026-03-06)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40mss%2Flauncher%2Fv0.3.0...%40mss%2Flauncher%2Fv0.3.1)

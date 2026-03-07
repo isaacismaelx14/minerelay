@@ -1,6 +1,6 @@
 [package]
 name = "minerelay-launcher"
-version = "0.3.1"
+version = "0.3.2"
 description = "MineRelay"
 authors = ["MineRelay Team"]
 edition = "2021"
