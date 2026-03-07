@@ -35,8 +35,12 @@ use crate::{
 
 const DEFAULT_UPDATER_ENDPOINT: &str =
   "https://github.com/isaacismaelx14/minerelay/releases/latest/download/latest.json";
+const LEGACY_DEFAULT_UPDATER_ENDPOINT: &str =
+  "https://github.com/isaacismaelx14/mc-client-center/releases/latest/download/latest.json";
 const GITHUB_RELEASES_API: &str =
   "https://api.github.com/repos/isaacismaelx14/minerelay/releases?per_page=20";
+const LAUNCHER_TAG_PREFIX: &str = "@minerelay/launcher/v";
+const LEGACY_LAUNCHER_TAG_PREFIX: &str = "@mss/launcher/v";
 
 #[derive(Debug, Clone, Deserialize)]
 struct GithubReleaseAsset {
@@ -946,7 +950,7 @@ async fn resolve_updater_endpoint(
     ));
   }
 
-  if configured != DEFAULT_UPDATER_ENDPOINT {
+  if !is_managed_updater_endpoint(configured) {
     return Url::parse(configured)
       .map(|url| ResolvedUpdaterEndpoint {
         url,
@@ -978,6 +982,10 @@ async fn resolve_updater_endpoint(
     source: selected.source,
     release_tag: Some(selected.release_tag),
   })
+}
+
+fn is_managed_updater_endpoint(endpoint: &str) -> bool {
+  endpoint == DEFAULT_UPDATER_ENDPOINT || endpoint == LEGACY_DEFAULT_UPDATER_ENDPOINT
 }
 
 fn is_prerelease_version(version: &str) -> bool {
@@ -1034,7 +1042,7 @@ fn select_release_updater_asset(
   releases: &[GithubRelease],
   channel: LauncherReleaseChannel,
 ) -> Option<SelectedGithubReleaseAsset> {
-  releases.iter().find_map(|release| {
+  let selected = releases.iter().find_map(|release| {
     if !release_matches_channel(release, channel) {
       return None;
     }
@@ -1051,7 +1059,30 @@ fn select_release_updater_asset(
           LauncherReleaseChannel::Prerelease => "github-prerelease",
         },
       })
-  })
+  });
+  if selected.is_some() {
+    return selected;
+  }
+
+  if channel == LauncherReleaseChannel::Stable {
+    return releases.iter().find_map(|release| {
+      if release.draft || !release_looks_like_launcher_prerelease(release) {
+        return None;
+      }
+
+      release
+        .assets
+        .iter()
+        .find(|asset| asset.name == "latest.json")
+        .map(|asset| SelectedGithubReleaseAsset {
+          release_tag: release.tag_name.clone(),
+          download_url: asset.browser_download_url.clone(),
+          source: "github-stable-fallback",
+        })
+    });
+  }
+
+  None
 }
 
 fn release_matches_channel(
@@ -1064,10 +1095,23 @@ fn release_matches_channel(
 
   match channel {
     LauncherReleaseChannel::Stable => {
-      !release.prerelease && release.tag_name.starts_with("@minerelay/launcher/v")
+      !release.prerelease && is_namespaced_launcher_release_tag(&release.tag_name)
     }
-    LauncherReleaseChannel::Prerelease => release.prerelease,
+    LauncherReleaseChannel::Prerelease => {
+      release_looks_like_launcher_prerelease(release)
+    }
   }
+}
+
+fn is_namespaced_launcher_release_tag(tag_name: &str) -> bool {
+  tag_name.starts_with(LAUNCHER_TAG_PREFIX)
+    || tag_name.starts_with(LEGACY_LAUNCHER_TAG_PREFIX)
+}
+
+fn release_looks_like_launcher_prerelease(release: &GithubRelease) -> bool {
+  release.prerelease
+    && (is_namespaced_launcher_release_tag(&release.tag_name)
+      || release.tag_name.starts_with('v'))
 }
 
 fn classify_check_error_code(raw: &str) -> LauncherUpdateErrorCode {
@@ -1197,7 +1241,7 @@ fn log_updater_event(
     "stage": stage,
     "currentVersion": current_version,
     "configuredEndpoint": configured_endpoint,
-    "customEndpoint": configured_endpoint != DEFAULT_UPDATER_ENDPOINT,
+    "customEndpoint": !is_managed_updater_endpoint(configured_endpoint),
   });
 
   if let Some(selected) = selected_endpoint {
@@ -1307,6 +1351,83 @@ mod tests {
       selected.download_url,
       "https://example.com/beta/latest.json"
     );
+  }
+
+  #[test]
+  fn stable_selection_supports_legacy_launcher_tag_prefix() {
+    let releases = vec![release(
+      "@mss/launcher/v0.2.1",
+      false,
+      false,
+      &[("latest.json", "https://example.com/legacy/latest.json")],
+    )];
+
+    let selected = select_release_updater_asset(&releases, LauncherReleaseChannel::Stable)
+      .expect("expected stable launcher release");
+
+    assert_eq!(selected.release_tag, "@mss/launcher/v0.2.1");
+    assert_eq!(
+      selected.download_url,
+      "https://example.com/legacy/latest.json"
+    );
+  }
+
+  #[test]
+  fn prerelease_selection_ignores_non_launcher_prerelease_tags() {
+    let releases = vec![
+      release(
+        "@mss/api/v0.1.0-beta.32",
+        true,
+        false,
+        &[("latest.json", "https://example.com/api/latest.json")],
+      ),
+      release(
+        "v0.2.0-beta.35",
+        true,
+        false,
+        &[("latest.json", "https://example.com/launcher/latest.json")],
+      ),
+    ];
+
+    let selected =
+      select_release_updater_asset(&releases, LauncherReleaseChannel::Prerelease)
+        .expect("expected prerelease launcher build");
+
+    assert_eq!(selected.release_tag, "v0.2.0-beta.35");
+    assert_eq!(
+      selected.download_url,
+      "https://example.com/launcher/latest.json"
+    );
+  }
+
+  #[test]
+  fn stable_selection_falls_back_to_launcher_prerelease_manifest() {
+    let releases = vec![
+      release("@minerelay/launcher/v0.3.1", false, false, &[]),
+      release(
+        "v0.3.2-beta.1",
+        true,
+        false,
+        &[("latest.json", "https://example.com/beta/latest.json")],
+      ),
+    ];
+
+    let selected = select_release_updater_asset(&releases, LauncherReleaseChannel::Stable)
+      .expect("expected stable fallback release");
+
+    assert_eq!(selected.release_tag, "v0.3.2-beta.1");
+    assert_eq!(
+      selected.download_url,
+      "https://example.com/beta/latest.json"
+    );
+    assert_eq!(selected.source, "github-stable-fallback");
+  }
+
+  #[test]
+  fn managed_updater_endpoint_includes_legacy_repo_url() {
+    assert!(is_managed_updater_endpoint(DEFAULT_UPDATER_ENDPOINT));
+    assert!(is_managed_updater_endpoint(LEGACY_DEFAULT_UPDATER_ENDPOINT));
+    assert!(!is_managed_updater_endpoint("https://example.com/latest.json"));
   }
 
   #[test]
