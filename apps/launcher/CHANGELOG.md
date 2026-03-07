@@ -1,5 +1,26 @@
 # Changelog
 
+## [@minerelay/launcher/v0.4.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.4.0) (2026-03-07)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.3.2...%40minerelay%2Flauncher%2Fv0.4.0)
+
+## Performance
+
+- **launcher:** optimize build output and component rendering ([d60f792](https://github.com/isaacismaelx14/minerelay/commit/d60f792477fefacb29227b087ac7eb6f75229d20))
+  - perf(launcher): memoize CompactWindow filtered list and handler with useMemo/useCallback
+  - perf(launcher): wrap ServerControlBar with memo and extract useCallback handlers
+  - perf(launcher): wrap ToastContainer with memo
+  - perf(launcher): add terser minification and manual chunks to vite build config
+  - perf(launcher): add optimized release profile to Cargo.toml
+
+## Features
+
+- **launcher:** replace native close dialogs with custom quit modal ([87b95dd](https://github.com/isaacismaelx14/minerelay/commit/87b95dd48d98b17206232b9aaf4371ba9d03a5d9))
+
+## CI
+
+- **launcher:** update minerelay-launcher ([89cbacc](https://github.com/isaacismaelx14/minerelay/commit/89cbaccec728659a146022432adcee68554b6569))
+
 ## [@minerelay/launcher/v0.3.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.3.2) (2026-03-07)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.3.1...%40minerelay%2Flauncher%2Fv0.3.2)
