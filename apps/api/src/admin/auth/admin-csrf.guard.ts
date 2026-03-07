@@ -1,19 +1,21 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  ForbiddenException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Request } from 'express';
-import { ADMIN_ACCESS_QUERY, CSRF_COOKIE } from './admin-session.service';
+import type { Request } from 'express';
+import { AdminErrorCode } from '../common/admin-error-catalog';
+import { AdminExceptionMapper } from '../common/admin-exception.mapper';
+import { AdminInputParserService } from '../common/admin-input-parser.service';
 import { ADMIN_PUBLIC_KEY } from '../admin-auth.decorator';
+import { CSRF_COOKIE } from './admin-session.service';
 
 export const CSRF_HEADER = 'x-csrf-token';
 
 @Injectable()
 export class AdminCsrfGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly parser: AdminInputParserService,
+    private readonly errors: AdminExceptionMapper,
+  ) {}
 
   canActivate(context: ExecutionContext): boolean {
     const isPublic = this.reflector.getAllAndOverride<boolean>(
@@ -32,38 +34,17 @@ export class AdminCsrfGuard implements CanActivate {
       return true;
     }
 
-    const authorization = request.header('authorization')?.trim();
-    if (authorization?.startsWith('Bearer ')) {
+    if (this.parser.readBearerAuthorization(request)) {
       return true;
     }
 
-    const accessTokenQuery = request.query[ADMIN_ACCESS_QUERY];
-    if (
-      (typeof accessTokenQuery === 'string' && accessTokenQuery.trim()) ||
-      (Array.isArray(accessTokenQuery) &&
-        typeof accessTokenQuery[0] === 'string' &&
-        accessTokenQuery[0].trim())
-    ) {
-      return true;
-    }
-
-    const csrfCookie = this.readCookie(request, CSRF_COOKIE);
-    const csrfHeader = request.header(CSRF_HEADER);
+    const csrfCookie = this.parser.readCookie(request, CSRF_COOKIE);
+    const csrfHeader = this.parser.readHeader(request, CSRF_HEADER);
 
     if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
-      throw new ForbiddenException('Invalid CSRF token');
+      throw this.errors.fromCode(AdminErrorCode.CSRF_INVALID);
     }
 
     return true;
-  }
-
-  private readCookie(request: Request, name: string): string | null {
-    if (!request.headers.cookie) {
-      return null;
-    }
-    const match = request.headers.cookie.match(
-      new RegExp(`(^| )${name}=([^;]+)`),
-    );
-    return match ? decodeURIComponent(match[2] || '') : null;
   }
 }

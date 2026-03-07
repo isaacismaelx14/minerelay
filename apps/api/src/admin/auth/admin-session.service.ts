@@ -1,20 +1,22 @@
 import {
   Injectable,
+  Logger,
   OnModuleDestroy,
   OnModuleInit,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../db/prisma.service';
+import { AdminErrorCode } from '../common/admin-error-catalog';
+import { AdminExceptionMapper } from '../common/admin-exception.mapper';
+import { AdminInputParserService } from '../common/admin-input-parser.service';
 import { AdminAuthService } from './admin-auth.service';
 
 export const ACCESS_COOKIE = 'mvl_admin_access';
 export const REFRESH_COOKIE = 'mvl_admin_refresh';
 export const CSRF_COOKIE = 'mvl_admin_csrf';
 export const ADMIN_REFRESH_HEADER = 'x-admin-refresh-token';
-export const ADMIN_ACCESS_QUERY = 'accessToken';
 
 export interface AdminSessionResult {
   sessionId: string;
@@ -26,6 +28,7 @@ export interface AdminSessionResult {
 
 @Injectable()
 export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AdminSessionService.name);
   private readonly accessTtlMs: number;
   private readonly refreshTtlMs: number;
   private readonly cookieSecure: boolean;
@@ -35,6 +38,8 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly authService: AdminAuthService,
+    private readonly parser: AdminInputParserService,
+    private readonly errors: AdminExceptionMapper,
   ) {
     const accessMinutes = Number(
       this.config.get('ADMIN_ACCESS_TOKEN_TTL_MINUTES') ?? 15,
@@ -54,23 +59,11 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
   }
 
   public readCookie(request: Request, name: string): string | null {
-    if (!request.headers.cookie) {
-      return null;
-    }
-    const match = request.headers.cookie.match(
-      new RegExp(`(^| )${name}=([^;]+)`),
-    );
-    return match ? decodeURIComponent(match[2] || '') : null;
+    return this.parser.readCookie(request, name);
   }
 
   public readAuthorizationBearer(request: Request): string | null {
-    const raw = request.header('authorization')?.trim();
-    if (!raw || !raw.startsWith('Bearer ')) {
-      return null;
-    }
-
-    const token = raw.slice('Bearer '.length).trim();
-    return token || null;
+    return this.parser.readBearerAuthorization(request);
   }
 
   public readQueryParam(request: Request, name: string): string | null {
@@ -92,13 +85,12 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
   public readAccessToken(request: Request): string | null {
     return (
       this.readAuthorizationBearer(request) ??
-      this.readQueryParam(request, ADMIN_ACCESS_QUERY) ??
       this.readCookie(request, ACCESS_COOKIE)
     );
   }
 
   public readRefreshToken(request: Request): string | null {
-    const header = request.header(ADMIN_REFRESH_HEADER)?.trim();
+    const header = this.parser.readHeader(request, ADMIN_REFRESH_HEADER);
     if (header) {
       return header;
     }
@@ -156,11 +148,11 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
     });
 
     if (!session || session.revokedAt) {
-      throw new UnauthorizedException('Invalid or revoked session');
+      throw this.errors.fromCode(AdminErrorCode.SESSION_INVALID);
     }
 
     if (session.refreshExpiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException('Session expired');
+      throw this.errors.fromCode(AdminErrorCode.SESSION_EXPIRED);
     }
 
     const newAccessToken = this.authService.generateRandomToken(48);
@@ -261,12 +253,16 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
     // Run cleanup every hour
     this.cleanupInterval = setInterval(
       () => {
-        this.cleanupExpiredSessions().catch(console.error);
+        this.cleanupExpiredSessions().catch((error) => {
+          this.logger.error('Failed to clean up sessions', error);
+        });
       },
       60 * 60 * 1000,
     );
     // Run once at startup
-    this.cleanupExpiredSessions().catch(console.error);
+    this.cleanupExpiredSessions().catch((error) => {
+      this.logger.error('Failed to clean up sessions', error);
+    });
   }
 
   onModuleDestroy() {
@@ -286,12 +282,12 @@ export class AdminSessionService implements OnModuleInit, OnModuleDestroy {
         },
       });
       if (result.count > 0) {
-        console.log(
-          `[AdminSessionService] Cleaned up ${result.count} expired/revoked sessions`,
+        this.logger.log(
+          `Cleaned up ${result.count} expired/revoked admin sessions`,
         );
       }
     } catch (e) {
-      console.error('[AdminSessionService] Failed to clean up sessions', e);
+      this.logger.error('Failed to clean up sessions', e);
     }
   }
 }

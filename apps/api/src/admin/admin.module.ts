@@ -1,31 +1,24 @@
 import { Module } from '@nestjs/common';
-import { AdminController } from './admin.controller';
-import { AdminSessionGuard } from './admin.guard';
 import { AdminService } from './admin.service';
-import { AdminAuthService } from './auth/admin-auth.service';
-import { AdminSessionService } from './auth/admin-session.service';
-import { AdminCsrfGuard } from './auth/admin-csrf.guard';
-import { BundleSandboxClient } from './bundle-sandbox.client';
-import { CoreModPolicyService } from './core-mod-policy.service';
-import { FancyPreviewAssemblerService } from './fancy-preview-assembler.service';
-import { ArtifactsModule } from '../artifacts/artifacts.module';
-import { ExarotonApiClient } from './exaroton/exaroton-api.client';
-import { LauncherSecurityModule } from '../launcher-security/launcher-security.module';
+import { AdminAuthContextModule } from './auth/admin-auth-context.module';
+import { AdminExarotonModule } from './exaroton/admin-exaroton.module';
+import { AdminLauncherPairingModule } from './launcher/admin-launcher-pairing.module';
+import { AdminMediaModule } from './media/admin-media.module';
+import { AdminModsModule } from './mods/admin-mods.module';
+import { AdminPublishModule } from './publish/admin-publish.module';
+import { AdminSettingsModule } from './settings/admin-settings.module';
 
 @Module({
-  imports: [ArtifactsModule, LauncherSecurityModule],
-  controllers: [AdminController],
-  providers: [
-    AdminService,
-    AdminSessionGuard,
-    AdminAuthService,
-    AdminSessionService,
-    AdminCsrfGuard,
-    BundleSandboxClient,
-    ExarotonApiClient,
-    CoreModPolicyService,
-    FancyPreviewAssemblerService,
+  imports: [
+    AdminAuthContextModule,
+    AdminSettingsModule,
+    AdminExarotonModule,
+    AdminLauncherPairingModule,
+    AdminModsModule,
+    AdminPublishModule,
+    AdminMediaModule,
   ],
+  providers: [AdminService],
   exports: [AdminService],
 })
 export class AdminModule {}

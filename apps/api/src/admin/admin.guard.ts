@@ -1,11 +1,8 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { AdminErrorCode } from './common/admin-error-catalog';
+import { AdminExceptionMapper } from './common/admin-exception.mapper';
 import { AdminSessionService } from './auth/admin-session.service';
 import { ADMIN_PUBLIC_KEY } from './admin-auth.decorator';
 
@@ -14,6 +11,7 @@ export class AdminSessionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly sessionService: AdminSessionService,
+    private readonly errors: AdminExceptionMapper,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -30,14 +28,14 @@ export class AdminSessionGuard implements CanActivate {
 
     const accessToken = this.sessionService.readAccessToken(request);
     if (!accessToken) {
-      throw new UnauthorizedException('Admin authentication required');
+      throw this.errors.fromCode(AdminErrorCode.AUTH_REQUIRED);
     }
 
     const tokenHash = this.sessionService.hashToken(accessToken);
     const session = await this.sessionService.getActiveSession(tokenHash);
 
     if (!session || session.expiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException('Admin authentication required');
+      throw this.errors.fromCode(AdminErrorCode.AUTH_REQUIRED);
     }
 
     return true;
