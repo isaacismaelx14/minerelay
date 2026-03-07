@@ -1,5 +1,13 @@
 # Changelog
 
+## [@minerelay/shared/v0.2.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.1) (2026-03-07)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.0...%40minerelay%2Fshared%2Fv0.2.1)
+
+## Bug Fixes
+
+- **core:** normalize release asset names in updater validation ([f3ddfb6](https://github.com/isaacismaelx14/minerelay/commit/f3ddfb6f5dc667082d625d1c4161e088659f34b4))
+
 ## [@minerelay/shared/v0.2.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40mss%2Fshared%2Fv0.2.0) (2026-03-05)
 
 [Release Tag](https://github.com/isaacismaelx14/minerelay/releases/tag/%40mss%2Fshared%2Fv0.2.0)
