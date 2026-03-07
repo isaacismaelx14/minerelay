@@ -10,13 +10,13 @@ import { ProfileService } from './profile.service';
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
-  @Get('/v1/profile')
+  @Get('/profile')
   @ApiOkResponse({ type: ProfileResponseDto })
   getDefaultProfile() {
     return this.profileService.getDefaultProfile();
   }
 
-  @Get('/v1/servers/:serverId/profile')
+  @Get('/servers/:serverId/profile')
   @ApiOkResponse({ type: ProfileResponseDto })
   getProfile(@Param('serverId') serverId: string) {
     return this.profileService.getProfile(serverId);

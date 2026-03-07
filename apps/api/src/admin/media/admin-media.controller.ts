@@ -12,7 +12,7 @@ export class AdminMediaController {
     private readonly origin: RequestOriginService,
   ) {}
 
-  @Post('/v1/admin/media/upload')
+  @Post('/admin/media/upload')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )
@@ -29,7 +29,7 @@ export class AdminMediaController {
     return this.media.uploadMedia(file, this.origin.resolve(request));
   }
 
-  @Post('/v1/admin/fancymenu/bundle/upload')
+  @Post('/admin/fancymenu/bundle/upload')
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )

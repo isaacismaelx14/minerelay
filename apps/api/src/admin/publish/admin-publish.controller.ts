@@ -14,17 +14,17 @@ export class AdminPublishController {
     private readonly sse: SseStreamService,
   ) {}
 
-  @Post('/v1/admin/lockfile/generate')
+  @Post('/admin/lockfile/generate')
   generateLockfile(@Body() payload: GenerateLockfileDto) {
     return this.publish.generateLockfile(payload);
   }
 
-  @Post('/v1/admin/profile/publish')
+  @Post('/admin/profile/publish')
   publishProfile(@Body() payload: PublishProfileDto, @Req() request: Request) {
     return this.publish.publishProfile(payload, this.origin.resolve(request));
   }
 
-  @Post('/v1/admin/profile/publish/start')
+  @Post('/admin/profile/publish/start')
   startPublishProfile(
     @Body() payload: PublishProfileDto,
     @Req() request: Request,
@@ -35,7 +35,7 @@ export class AdminPublishController {
     );
   }
 
-  @Get('/v1/admin/profile/publish/stream')
+  @Get('/admin/profile/publish/stream')
   publishProfileStream(
     @Query('jobId') jobId = '',
     @Req() req: Request,

@@ -6,7 +6,7 @@ import { ArtifactsStorageService } from './artifacts-storage.service';
 
 @ApiTags('artifacts')
 @Throttle({ public_read: { limit: 120, ttl: 60000 } })
-@Controller('/v1/artifacts')
+@Controller('/artifacts')
 export class ArtifactsController {
   constructor(private readonly storage: ArtifactsStorageService) {}
 

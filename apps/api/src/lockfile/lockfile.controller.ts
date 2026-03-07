@@ -6,7 +6,7 @@ import { LockfileService } from './lockfile.service';
 
 @ApiTags('lockfile')
 @Throttle({ public_read: { limit: 120, ttl: 60000 } })
-@Controller('/v1/locks')
+@Controller('/locks')
 export class LockfileController {
   constructor(private readonly lockfileService: LockfileService) {}
 

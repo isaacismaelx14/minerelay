@@ -7,22 +7,22 @@ import { AdminSettingsContextService } from './admin-settings-context.service';
 export class AdminSettingsController {
   constructor(private readonly settings: AdminSettingsContextService) {}
 
-  @Get('/v1/admin/bootstrap')
+  @Get('/admin/bootstrap')
   getBootstrap(@Query('includeLoaders') includeLoaders = '') {
     return this.settings.getBootstrap(includeLoaders === 'true');
   }
 
-  @Patch('/v1/admin/settings')
+  @Patch('/admin/settings')
   updateSettings(@Body() payload: UpdateSettingsDto) {
     return this.settings.updateSettings(payload);
   }
 
-  @Patch('/v1/admin/draft')
+  @Patch('/admin/draft')
   saveDraft(@Body() payload: SaveDraftDto) {
     return this.settings.saveDraft(payload);
   }
 
-  @Delete('/v1/admin/draft')
+  @Delete('/admin/draft')
   discardDraft() {
     return this.settings.discardDraft();
   }

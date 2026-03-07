@@ -12,14 +12,14 @@ import { AdminModsContextService } from './admin-mods-context.service';
 export class AdminModsController {
   constructor(private readonly mods: AdminModsContextService) {}
 
-  @Get('/v1/admin/fabric/versions')
+  @Get('/admin/fabric/versions')
   getFabricVersions(
     @Query('minecraftVersion') minecraftVersion = '',
   ): Promise<FabricVersionsResponseDto> {
     return this.mods.getFabricVersions(minecraftVersion);
   }
 
-  @Get('/v1/admin/mods/search')
+  @Get('/admin/mods/search')
   searchMods(
     @Query('query') query = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -27,7 +27,7 @@ export class AdminModsController {
     return this.mods.searchMods(query, minecraftVersion);
   }
 
-  @Get('/v1/admin/mods/resolve')
+  @Get('/admin/mods/resolve')
   resolveMod(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -41,7 +41,7 @@ export class AdminModsController {
     );
   }
 
-  @Get('/v1/admin/mods/analyze')
+  @Get('/admin/mods/analyze')
   analyzeMod(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -49,7 +49,7 @@ export class AdminModsController {
     return this.mods.analyzeModDependencies(projectId, minecraftVersion);
   }
 
-  @Post('/v1/admin/mods/analyze/batch')
+  @Post('/admin/mods/analyze/batch')
   analyzeModsBatch(@Body() payload: AnalyzeModsBatchDto) {
     return this.mods.analyzeModDependenciesBatch(
       payload.projectIds,
@@ -57,7 +57,7 @@ export class AdminModsController {
     );
   }
 
-  @Get('/v1/admin/mods/versions')
+  @Get('/admin/mods/versions')
   getModVersions(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -65,12 +65,12 @@ export class AdminModsController {
     return this.mods.getAssetVersions(projectId, minecraftVersion, 'mod');
   }
 
-  @Post('/v1/admin/mods/install')
+  @Post('/admin/mods/install')
   installMod(@Body() payload: InstallModDto) {
     return this.mods.installMod(payload);
   }
 
-  @Get('/v1/admin/assets/search')
+  @Get('/admin/assets/search')
   searchAssets(
     @Query('query') query = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -80,7 +80,7 @@ export class AdminModsController {
     return this.mods.searchAssets(query, minecraftVersion, type, Number(limit));
   }
 
-  @Get('/v1/admin/assets/popular')
+  @Get('/admin/assets/popular')
   popularAssets(
     @Query('minecraftVersion') minecraftVersion = '',
     @Query('type') type: 'mod' | 'resourcepack' | 'shaderpack' = 'mod',
@@ -89,7 +89,7 @@ export class AdminModsController {
     return this.mods.popularAssets(minecraftVersion, type, Number(limit));
   }
 
-  @Get('/v1/admin/assets/resolve')
+  @Get('/admin/assets/resolve')
   resolveAsset(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -104,7 +104,7 @@ export class AdminModsController {
     );
   }
 
-  @Get('/v1/admin/assets/versions')
+  @Get('/admin/assets/versions')
   getAssetVersions(
     @Query('projectId') projectId = '',
     @Query('minecraftVersion') minecraftVersion = '',
@@ -113,7 +113,7 @@ export class AdminModsController {
     return this.mods.getAssetVersions(projectId, minecraftVersion, type);
   }
 
-  @Post('/v1/admin/assets/install')
+  @Post('/admin/assets/install')
   installAsset(@Body() payload: InstallAssetDto) {
     return this.mods.installAsset(payload);
   }

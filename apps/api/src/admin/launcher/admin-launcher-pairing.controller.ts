@@ -7,22 +7,22 @@ import { AdminLauncherPairingContextService } from './admin-launcher-pairing-con
 export class AdminLauncherPairingController {
   constructor(private readonly pairing: AdminLauncherPairingContextService) {}
 
-  @Post('/v1/admin/launcher/pairing/claims')
+  @Post('/admin/launcher/pairing/claims')
   createPairingClaim(@Body() payload: CreateLauncherPairingClaimDto) {
     return this.pairing.createPairingClaim(payload.apiBaseUrl);
   }
 
-  @Get('/v1/admin/launcher/pairing/claims')
+  @Get('/admin/launcher/pairing/claims')
   listPairingClaims() {
     return this.pairing.listPairingClaims();
   }
 
-  @Delete('/v1/admin/launcher/pairing/claims/:claimId')
+  @Delete('/admin/launcher/pairing/claims/:claimId')
   revokePairingClaim(@Param('claimId') claimId = '') {
     return this.pairing.revokePairingClaim(claimId.trim());
   }
 
-  @Post('/v1/admin/launcher/trust/reset')
+  @Post('/admin/launcher/trust/reset')
   resetTrust() {
     return this.pairing.resetTrust();
   }

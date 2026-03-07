@@ -20,7 +20,7 @@ import { LauncherService } from './launcher.service';
 
 @Throttle({ public_read: { limit: 240, ttl: 60000 } })
 @UseGuards(LauncherAuthGuard)
-@Controller('/v1/launcher')
+@Controller('/launcher')
 export class LauncherController {
   constructor(private readonly launcherService: LauncherService) {}
 

@@ -10,7 +10,7 @@ import { AdminAuthContextService } from './admin-auth-context.service';
 export class AdminAuthController {
   constructor(private readonly auth: AdminAuthContextService) {}
 
-  @Post('/v1/admin/auth/login')
+  @Post('/admin/auth/login')
   @AdminPublic()
   @Throttle({ admin_auth: { limit: 10, ttl: 300000 } })
   login(
@@ -21,7 +21,7 @@ export class AdminAuthController {
     return this.auth.login(payload.password, request, response);
   }
 
-  @Post('/v1/admin/auth/refresh')
+  @Post('/admin/auth/refresh')
   @AdminPublic()
   @Throttle({ admin_auth: { limit: 20, ttl: 60000 } })
   refresh(
@@ -31,7 +31,7 @@ export class AdminAuthController {
     return this.auth.refresh(request, response);
   }
 
-  @Post('/v1/admin/auth/logout')
+  @Post('/admin/auth/logout')
   @Throttle({ admin_auth: { limit: 20, ttl: 60000 } })
   logout(
     @Req() request: Request,

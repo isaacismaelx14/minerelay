@@ -17,47 +17,47 @@ export class AdminExarotonController {
     private readonly sse: SseStreamService,
   ) {}
 
-  @Post('/v1/admin/exaroton/connect')
+  @Post('/admin/exaroton/connect')
   connect(@Body() payload: ConnectExarotonDto) {
     return this.exaroton.connect(payload.apiKey);
   }
 
-  @Delete('/v1/admin/exaroton/disconnect')
+  @Delete('/admin/exaroton/disconnect')
   disconnect() {
     return this.exaroton.disconnect();
   }
 
-  @Get('/v1/admin/exaroton/status')
+  @Get('/admin/exaroton/status')
   getStatus() {
     return this.exaroton.getStatus();
   }
 
-  @Get('/v1/admin/exaroton/servers')
+  @Get('/admin/exaroton/servers')
   listServers() {
     return this.exaroton.listServers();
   }
 
-  @Post('/v1/admin/exaroton/server/select')
+  @Post('/admin/exaroton/server/select')
   selectServer(@Body() payload: SelectExarotonServerDto) {
     return this.exaroton.selectServer(payload.serverId);
   }
 
-  @Post('/v1/admin/exaroton/server/action')
+  @Post('/admin/exaroton/server/action')
   serverAction(@Body() payload: ExarotonServerActionDto) {
     return this.exaroton.serverAction(payload.action);
   }
 
-  @Patch('/v1/admin/exaroton/settings')
+  @Patch('/admin/exaroton/settings')
   updateSettings(@Body() payload: UpdateExarotonSettingsDto) {
     return this.exaroton.updateSettings(payload);
   }
 
-  @Post('/v1/admin/exaroton/mods/sync')
+  @Post('/admin/exaroton/mods/sync')
   syncMods() {
     return this.exaroton.syncModsNow();
   }
 
-  @Get('/v1/admin/exaroton/server/stream')
+  @Get('/admin/exaroton/server/stream')
   async stream(@Req() req: Request, @Res() res: Response) {
     const stream = this.sse.open(req, res);
     let closeUpstream: (() => void) | null = null;

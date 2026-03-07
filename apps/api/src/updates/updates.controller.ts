@@ -6,7 +6,7 @@ import { UpdatesService } from './updates.service';
 
 @ApiTags('updates')
 @Throttle({ public_read: { limit: 120, ttl: 60000 } })
-@Controller('/v1/servers/:serverId/updates')
+@Controller('/servers/:serverId/updates')
 export class UpdatesController {
   constructor(private readonly updatesService: UpdatesService) {}
 
