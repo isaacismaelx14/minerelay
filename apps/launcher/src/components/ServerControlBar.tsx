@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import type { LauncherServerControlsState } from "../types";
 
 type Props = {
@@ -13,7 +14,7 @@ type Props = {
   iconButtonClassName?: string;
 };
 
-export function ServerControlBar({
+export const ServerControlBar = memo(function ServerControlBar({
   launcherServerControls,
   isServerActionBusy,
   runLauncherServerAction,
@@ -23,6 +24,19 @@ export function ServerControlBar({
   iconActionsClassName = "compact-server-icon-actions",
   iconButtonClassName = "compact-server-icon-btn",
 }: Props) {
+  const handleStart = useCallback(
+    () => void runLauncherServerAction("start"),
+    [runLauncherServerAction],
+  );
+  const handleRestart = useCallback(
+    () => void runLauncherServerAction("restart"),
+    [runLauncherServerAction],
+  );
+  const handleStop = useCallback(
+    () => void runLauncherServerAction("stop"),
+    [runLauncherServerAction],
+  );
+
   const statusToneClass = (() => {
     if (!launcherServerControls?.enabled) {
       return "is-disabled";
@@ -75,7 +89,7 @@ export function ServerControlBar({
             {launcherServerControls.permissions.canStartServer && (
               <button
                 className={iconButtonClassName}
-                onClick={() => void runLauncherServerAction("start")}
+                onClick={handleStart}
                 disabled={isServerActionBusy || disableStartByStatus}
                 title="Start server"
                 aria-label="Start server"
@@ -86,7 +100,7 @@ export function ServerControlBar({
             {launcherServerControls.permissions.canRestartServer && (
               <button
                 className={iconButtonClassName}
-                onClick={() => void runLauncherServerAction("restart")}
+                onClick={handleRestart}
                 disabled={isServerActionBusy || disableRestartByStatus}
                 title="Restart server"
                 aria-label="Restart server"
@@ -97,7 +111,7 @@ export function ServerControlBar({
             {launcherServerControls.permissions.canStopServer && (
               <button
                 className={iconButtonClassName}
-                onClick={() => void runLauncherServerAction("stop")}
+                onClick={handleStop}
                 disabled={isServerActionBusy || disableStopByStatus}
                 title="Stop server"
                 aria-label="Stop server"
@@ -110,4 +124,4 @@ export function ServerControlBar({
       </section>
     </div>
   );
-}
+});

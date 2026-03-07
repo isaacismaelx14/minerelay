@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import type { useAppCore } from "../hooks/useAppCore";
 import { bytesToHuman, formatEta, formatTime, formatDateTime } from "../utils";
 import { ServerControlBar } from "./ServerControlBar";
@@ -31,6 +32,22 @@ export function CompactWindow({
     isServerActionBusy,
     runLauncherServerAction,
   } = core;
+
+  const filteredLaunchers = useMemo(
+    () => launchers.filter((candidate) => candidate.id !== "custom"),
+    [launchers],
+  );
+
+  const handleLauncherChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const value = event.target.value;
+      void updateLauncherSelection(value);
+      if (value === "custom") {
+        void openSetupWindow();
+      }
+    },
+    [updateLauncherSelection, openSetupWindow],
+  );
 
   const compactHasServerInfo = catalog !== null;
   const compactNeedsConnect = !compactHasServerInfo;
@@ -80,25 +97,17 @@ export function CompactWindow({
                   <select
                     className="select compact-launcher-select"
                     value={settings?.selectedLauncherId ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      void updateLauncherSelection(value);
-                      if (value === "custom") {
-                        void openSetupWindow();
-                      }
-                    }}
+                    onChange={handleLauncherChange}
                   >
                     <option value="">Select Launcher</option>
-                    {launchers
-                      .filter((candidate) => candidate.id !== "custom")
-                      .map((candidate) => (
-                        <option
-                          key={`${candidate.id}:${candidate.path}`}
-                          value={candidate.id}
-                        >
-                          {candidate.name}
-                        </option>
-                      ))}
+                    {filteredLaunchers.map((candidate) => (
+                      <option
+                        key={`${candidate.id}:${candidate.path}`}
+                        value={candidate.id}
+                      >
+                        {candidate.name}
+                      </option>
+                    ))}
                     <option value="custom">Custom path...</option>
                   </select>
                 )}
