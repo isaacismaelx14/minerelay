@@ -50,6 +50,12 @@ pub fn run() {
   let state = Arc::new(state::AppState::new(config));
 
   let app = tauri::Builder::default()
+    .on_menu_event(|app, event| {
+      // Route native app-menu quit actions through the same confirmation flow.
+      if event.id().as_ref() == "quit" {
+        request_quit_via_frontend(app);
+      }
+    })
     .manage(state)
     .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
       let app_state = app.state::<Arc<state::AppState>>().inner().clone();
