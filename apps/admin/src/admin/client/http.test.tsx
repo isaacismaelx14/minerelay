@@ -126,15 +126,13 @@ describe("buildEventSourceUrl", () => {
     process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN = API_ORIGIN;
   });
 
-  it("builds an absolute stream URL with the current access token", () => {
+  it("builds an absolute stream URL without token query params", () => {
     writeAdminSession(createAuthPayload());
 
     expect(
       buildEventSourceUrl("/v1/admin/profile/publish/stream", {
         jobId: "job-123",
       }),
-    ).toBe(
-      `${API_ORIGIN}/v1/admin/profile/publish/stream?accessToken=access-token&jobId=job-123`,
-    );
+    ).toBe(`${API_ORIGIN}/v1/admin/profile/publish/stream?jobId=job-123`);
   });
 });

@@ -7,7 +7,6 @@ export type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
 const DEFAULT_API_ORIGIN = "http://localhost:3000";
 const GET_CACHE_TTL_MS = 15_000;
 const PREVIEW_POST_CACHE_TTL_MS = 15_000;
-const ACCESS_TOKEN_QUERY = "accessToken";
 const CSRF_COOKIE = "mvl_admin_csrf";
 const CSRF_HEADER = "x-csrf-token";
 export const ADMIN_SESSION_STORAGE_KEY = "mss.admin.session.v1";
@@ -319,10 +318,6 @@ export function buildEventSourceUrl(
   searchParams?: Record<string, string>,
 ): string {
   const url = new URL(buildAdminApiUrl(path));
-  const session = readAdminSession();
-  if (session?.accessToken) {
-    url.searchParams.set(ACCESS_TOKEN_QUERY, session.accessToken);
-  }
 
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
@@ -333,4 +328,13 @@ export function buildEventSourceUrl(
   }
 
   return url.toString();
+}
+
+export function createAdminEventSource(
+  path: string,
+  searchParams?: Record<string, string>,
+): EventSource {
+  return new EventSource(buildEventSourceUrl(path, searchParams), {
+    withCredentials: true,
+  });
 }

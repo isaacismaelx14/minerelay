@@ -1,6 +1,6 @@
 "use client";
 
-import { buildEventSourceUrl, requestJson } from "@/admin/client/http";
+import { createAdminEventSource, requestJson } from "@/admin/client/http";
 import type {
   AdminResourcePack,
   AdminShaderPack,
@@ -222,10 +222,11 @@ export function useTopBarModel() {
       });
 
       const published = await new Promise<PublishPayload>((resolve, reject) => {
-        const stream = new EventSource(
-          buildEventSourceUrl("/v1/admin/profile/publish/stream", {
+        const stream = createAdminEventSource(
+          "/v1/admin/profile/publish/stream",
+          {
             jobId: started.jobId,
-          }),
+          },
         );
 
         const cleanup = () => stream.close();

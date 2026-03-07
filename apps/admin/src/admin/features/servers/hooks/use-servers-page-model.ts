@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { buildEventSourceUrl, requestJson } from "@/admin/client/http";
+import { createAdminEventSource, requestJson } from "@/admin/client/http";
 import type {
   ConnectExarotonPayload,
   ExarotonSelectPayload,
@@ -291,9 +291,7 @@ export function useServersPageModel() {
       return;
     }
 
-    const stream = new EventSource(
-      buildEventSourceUrl("/v1/admin/exaroton/server/stream"),
-    );
+    const stream = createAdminEventSource("/v1/admin/exaroton/server/stream");
 
     const onStatus = (event: Event) => {
       const message = event as MessageEvent<string>;

@@ -3,15 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useServersPageModel } from "./use-servers-page-model";
 
-const { requestJsonMock, buildEventSourceUrlMock, useAdminStoreMock } =
+const { requestJsonMock, createAdminEventSourceMock, useAdminStoreMock } =
   vi.hoisted(() => ({
     requestJsonMock: vi.fn(),
-    buildEventSourceUrlMock: vi.fn(),
+    createAdminEventSourceMock: vi.fn(),
     useAdminStoreMock: vi.fn(),
   }));
 
 vi.mock("@/admin/client/http", () => ({
-  buildEventSourceUrl: buildEventSourceUrlMock,
+  createAdminEventSource: createAdminEventSourceMock,
   requestJson: requestJsonMock,
 }));
 
@@ -22,9 +22,11 @@ vi.mock("@/admin/shared/store/admin-store", () => ({
 describe("useServersPageModel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    buildEventSourceUrlMock.mockReturnValue(
-      "https://api.example.com/v1/admin/exaroton/server/stream",
-    );
+    createAdminEventSourceMock.mockReturnValue({
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      close: vi.fn(),
+    });
     useAdminStoreMock.mockReturnValue({
       exaroton: {
         configured: true,
