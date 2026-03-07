@@ -12,6 +12,7 @@ type ReleaseAsset = {
 };
 
 type GithubRelease = {
+  assets_url: string;
   tag_name: string;
   assets: ReleaseAsset[];
 };
@@ -89,6 +90,25 @@ async function fetchJson<T>(url: string, token?: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function fetchAllReleaseAssets(
+  assetsUrl: string,
+  token?: string,
+): Promise<ReleaseAsset[]> {
+  const allAssets: ReleaseAsset[] = [];
+  let page = 1;
+  while (true) {
+    const separator = assetsUrl.includes("?") ? "&" : "?";
+    const pageUrl = `${assetsUrl}${separator}per_page=100&page=${page}`;
+    const pageAssets = await fetchJson<ReleaseAsset[]>(pageUrl, token);
+    allAssets.push(...pageAssets);
+    if (pageAssets.length < 100) {
+      break;
+    }
+    page += 1;
+  }
+  return allAssets;
+}
+
 function hasWindowsAssets(assets: ReleaseAsset[]): boolean {
   const names = assets.map((asset) => asset.name.toLowerCase());
   const hasInstaller = names.some(
@@ -146,6 +166,10 @@ function filenameFromAssetUrl(assetUrl: string): string | null {
   }
 }
 
+function normalizeGithubAssetName(name: string): string {
+  return name.replace(/ /gu, ".");
+}
+
 type ParsedReleaseAssetUrl = {
   owner: string;
   repo: string;
@@ -195,6 +219,7 @@ async function main(): Promise<void> {
     `https://api.github.com/repos/${args.owner}/${args.repo}/releases/tags/${encodeURIComponent(args.tag)}`,
     args.token,
   );
+  release.assets = await fetchAllReleaseAssets(release.assets_url, args.token);
 
   const latestJsonAsset = release.assets.find(
     (asset) => asset.name === "latest.json",
@@ -211,7 +236,9 @@ async function main(): Promise<void> {
   if (platformKeys.length === 0) {
     throw new Error("latest.json has no platforms entries.");
   }
-  const releaseAssetNames = new Set(release.assets.map((asset) => asset.name));
+  const releaseAssetNames = new Set(
+    release.assets.map((asset) => normalizeGithubAssetName(asset.name)),
+  );
 
   for (const [platform, info] of Object.entries(latest.platforms ?? {})) {
     if (!info?.signature || !info?.url) {
@@ -246,12 +273,16 @@ async function main(): Promise<void> {
         `latest.json platform '${platform}' points to tag '${parsedAssetUrl.tag}', expected '${args.tag}'.`,
       );
     }
-    if (!releaseAssetNames.has(parsedAssetUrl.assetName)) {
+    if (
+      !releaseAssetNames.has(normalizeGithubAssetName(parsedAssetUrl.assetName))
+    ) {
       throw new Error(
         `latest.json platform '${platform}' points to '${parsedAssetUrl.assetName}', but that asset is not attached to release ${release.tag_name}.`,
       );
     }
-    if (signedFile !== urlFile) {
+    if (
+      normalizeGithubAssetName(signedFile) !== normalizeGithubAssetName(urlFile)
+    ) {
       throw new Error(
         `Signature filename mismatch on '${platform}': signature says '${signedFile}' but url points to '${urlFile}'.`,
       );

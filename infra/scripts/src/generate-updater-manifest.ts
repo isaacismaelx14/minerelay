@@ -178,7 +178,9 @@ function releaseAssetUrl(
   tag: string,
   assetName: string,
 ): string {
-  return `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetName)}`;
+  // GitHub normalizes spaces in uploaded asset names to dots.
+  const githubAssetName = assetName.replace(/ /gu, ".");
+  return `https://github.com/${owner}/${repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(githubAssetName)}`;
 }
 
 function readSignature(path: string): string {
