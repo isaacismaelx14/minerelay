@@ -12,9 +12,17 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
+  const adminApiOrigin = process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN ?? "";
+
   return (
     <html lang="en">
-      <head />
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__MSS_ADMIN_API_ORIGIN__ = ${JSON.stringify(adminApiOrigin)};`,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
   );

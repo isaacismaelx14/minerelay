@@ -4,6 +4,12 @@ import type { AdminAuthPayload } from "./types";
 
 export type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
+declare global {
+  interface Window {
+    __MSS_ADMIN_API_ORIGIN__?: string;
+  }
+}
+
 const DEFAULT_API_ORIGIN = "http://localhost:3000";
 const GET_CACHE_TTL_MS = 15_000;
 const PREVIEW_POST_CACHE_TTL_MS = 15_000;
@@ -13,6 +19,7 @@ export const ADMIN_SESSION_STORAGE_KEY = "mss.admin.session.v1";
 
 const responseCache = new Map<string, { expiresAt: number; data: unknown }>();
 let refreshInFlight: Promise<void> | null = null;
+let runtimeApiOrigin: string | null = null;
 
 type AdminSessionSnapshot = Omit<AdminAuthPayload, "success">;
 
@@ -57,9 +64,24 @@ function normalizeApiOrigin(raw: string): string {
 }
 
 export function getAdminApiOrigin(): string {
+  const fromWindow =
+    typeof window !== "undefined"
+      ? (window.__MSS_ADMIN_API_ORIGIN__ ?? null)
+      : null;
   const configured =
-    process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN ?? DEFAULT_API_ORIGIN;
+    runtimeApiOrigin ??
+    fromWindow ??
+    process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN ??
+    DEFAULT_API_ORIGIN;
   return normalizeApiOrigin(configured);
+}
+
+export function setRuntimeAdminApiOrigin(raw: string | null | undefined): void {
+  if (!raw) {
+    return;
+  }
+
+  runtimeApiOrigin = normalizeApiOrigin(raw);
 }
 
 export function buildAdminApiUrl(path: string): string {
