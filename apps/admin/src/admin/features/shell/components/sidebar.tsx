@@ -12,7 +12,7 @@ function NavIcon({
   if (view === "overview") {
     return (
       <svg
-        className="nav-icon"
+        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -30,7 +30,7 @@ function NavIcon({
   if (view === "identity") {
     return (
       <svg
-        className="nav-icon"
+        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -45,7 +45,7 @@ function NavIcon({
   if (view === "assets") {
     return (
       <svg
-        className="nav-icon"
+        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -60,7 +60,7 @@ function NavIcon({
   if (view === "fancy") {
     return (
       <svg
-        className="nav-icon"
+        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -78,7 +78,7 @@ function NavIcon({
   if (view === "servers") {
     return (
       <svg
-        className="nav-icon"
+        className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -95,7 +95,7 @@ function NavIcon({
   }
   return (
     <svg
-      className="nav-icon"
+      className="w-[18px] h-[18px] opacity-70 transition-all duration-150 text-current group-hover:opacity-100 group-hover:text-[var(--color-brand-accent)] group-hover:scale-110 group-data-[active=true]:opacity-100 group-data-[active=true]:text-[var(--color-brand-accent)] group-data-[active=true]:scale-110"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -131,17 +131,22 @@ export const Sidebar = memo(function Sidebar() {
   } = useAdminStore();
 
   return (
-    <aside className="nav">
-      <div className="brand">
-        <h1>MineRelay Admin</h1>
-        <span className="tag">Control Room</span>
+    <aside className="border border-[var(--color-line)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface)] backdrop-blur-[var(--blur-glass)] p-[24px] grid grid-rows-[auto_1fr_auto] gap-[32px] animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)]">
+      <div className="grid gap-[4px] pb-[16px] border-b border-[var(--color-line)]">
+        <h1 className="m-0 text-[1.25rem] font-bold bg-gradient-to-br from-white to-[#a5b4fc] text-transparent bg-clip-text tracking-[-0.01em]">
+          MineRelay Admin
+        </h1>
+        <span className="font-mono text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-brand-accent)] font-medium">
+          Control Room
+        </span>
       </div>
 
-      <nav className="nav-list" aria-label="Sections">
+      <nav className="grid content-start gap-[8px]" aria-label="Sections">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.view}
-            className={`nav-item ${view === item.view ? "active" : ""}`}
+            className={`border border-transparent rounded-[var(--radius-md)] bg-transparent text-[var(--color-text-secondary)] py-[14px] px-[20px] text-[0.95rem] font-medium cursor-pointer flex items-center gap-[14px] transition-all duration-150 ease-out text-left w-full relative hover:bg-[var(--color-bg-card-hover)] hover:text-white hover:translate-x-[4px] group before:absolute before:left-0 before:top-[25%] before:bottom-[25%] before:w-[3px] before:bg-[var(--color-brand-primary)] before:scale-y-0 before:transition-transform before:duration-150 before:rounded-r-[4px] hover:before:scale-y-[0.6] data-[active=true]:before:scale-y-[1.5] data-[active=true]:before:top-[15%] data-[active=true]:before:bottom-[15%] data-[active=true]:bg-gradient-to-r data-[active=true]:from-[rgba(99,102,241,0.15)] data-[active=true]:to-[rgba(99,102,241,0.02)] data-[active=true]:border-[rgba(99,102,241,0.2)] data-[active=true]:text-white data-[active=true]:font-semibold`}
+            data-active={view === item.view}
             type="button"
             onClick={() => setView(item.view)}
           >
@@ -151,33 +156,41 @@ export const Sidebar = memo(function Sidebar() {
         ))}
       </nav>
 
-      <div className="nav-status">
+      <div className="grid gap-[8px]">
         {isBusy.bootstrap ? (
           <>
-            <div className="rail-chip rail-chip-loading">
+            <div className="text-[0.82rem] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex items-center gap-[12px] text-[var(--color-text-muted)] italic justify-center">
               Loading runtime...
             </div>
-            <div className="rail-chip rail-chip-loading">Loading loader...</div>
-            <div className="rail-chip rail-chip-loading">Loading mods...</div>
+            <div className="text-[0.82rem] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex items-center gap-[12px] text-[var(--color-text-muted)] italic justify-center">
+              Loading loader...
+            </div>
+            <div className="text-[0.82rem] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex items-center gap-[12px] text-[var(--color-text-muted)] italic justify-center">
+              Loading mods...
+            </div>
           </>
         ) : (
           <>
-            <div className="rail-chip">
-              <b>MC</b> {rail.minecraft}
+            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
+              <b className="text-[var(--color-text-secondary)]">MC</b>{" "}
+              {rail.minecraft}
             </div>
-            <div className="rail-chip">
-              <b>Loader</b> {rail.fabric}
+            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
+              <b className="text-[var(--color-text-secondary)]">Loader</b>{" "}
+              {rail.fabric}
             </div>
-            <div className="rail-chip">{selectedMods.length} mods</div>
-            <div className="rail-chip">
+            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
+              {selectedMods.length} mods
+            </div>
+            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
               {selectedResources.length} resourcepacks
             </div>
-            <div className="rail-chip">
+            <div className="text-[0.82rem] text-[var(--color-text-primary)] bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]">
               {selectedShaders.length} shaderpacks
             </div>
             {hasPendingPublish ? (
               <div
-                className="rail-chip"
+                className="text-[0.82rem] bg-black/20 border rounded-[var(--radius-sm)] py-[8px] px-[12px] flex justify-between items-center gap-[12px]"
                 style={{
                   color: "var(--warning)",
                   borderColor: "var(--warning)",

@@ -193,21 +193,11 @@ function AddModsModal({
   };
 
   return (
-    <ModalShell onClose={onClose} cardClassName="modal-card wide">
-      <div
-        className="modal-head"
-        style={{
-          padding: "16px 20px",
-          borderBottom: "1px solid var(--line)",
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+    <ModalShell onClose={onClose} wide>
+      <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
         <h3 style={{ margin: 0 }}>Add Mods</h3>
         <button
-          className="modal-close-icon"
+          className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
           type="button"
           onClick={onClose}
           aria-label="Close"
@@ -234,9 +224,12 @@ function AddModsModal({
         </div>
       ) : null}
 
-      <div className="add-mods-layout" style={{ flex: 1, minHeight: 0 }}>
-        <div className="add-mods-search-pane">
-          <div className="add-mods-search-bar">
+      <div
+        className="flex gap-[24px] min-h-[50vh] max-h-[70vh]"
+        style={{ flex: 1, minHeight: 0 }}
+      >
+        <div className="flex-1 flex flex-col gap-[16px] min-w-0">
+          <div className="flex gap-[12px]">
             <input
               id="addModsSearch"
               value={localQuery}
@@ -253,7 +246,7 @@ function AddModsModal({
             />
             <button
               type="button"
-              className="btn ghost"
+              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
               style={{ padding: "8px 14px", flexShrink: 0 }}
               onClick={() => void searchMods()}
               disabled={isBusy.search}
@@ -271,13 +264,19 @@ function AddModsModal({
               : statuses.mods.text}
           </div>
 
-          <div className="add-mods-search-results">
+          <div className="flex-1 overflow-y-auto flex flex-col gap-[12px] pr-[8px]">
             {isLoadingPopular ? (
-              <p className="hint" style={{ margin: 0 }}>
+              <p
+                className="text-[0.9rem] text-[var(--color-text-muted)] leading-[1.5]"
+                style={{ margin: 0 }}
+              >
                 Loading popular mods...
               </p>
             ) : displayResults.length === 0 ? (
-              <p className="hint" style={{ margin: 0 }}>
+              <p
+                className="text-[0.9rem] text-[var(--color-text-muted)] leading-[1.5]"
+                style={{ margin: 0 }}
+              >
                 {localQuery
                   ? "No results. Try a different query."
                   : "Search for a mod to get started."}
@@ -290,42 +289,44 @@ function AddModsModal({
                 return (
                   <div
                     key={result.projectId}
-                    className={`search-result-card${inCart ? " in-cart" : ""}${installed ? " already-installed" : ""}`}
+                    className={`flex items-center gap-[16px] p-[12px_16px] border border-[var(--color-line)] rounded-[var(--radius-md)] transition-all duration-200 ${inCart ? "border-[var(--color-brand-primary)] bg-[rgba(99,102,241,0.05)]" : "bg-black/20"} ${installed ? "opacity-60 grayscale" : ""}`}
                   >
                     <img
                       src={result.iconUrl || "https://modrinth.com/favicon.ico"}
                       alt={result.title}
-                      className="search-result-icon"
+                      className="w-[48px] h-[48px] rounded-[var(--radius-sm)] object-contain bg-black/30 p-[4px]"
                       onError={(event) => {
                         event.currentTarget.src =
                           "https://modrinth.com/favicon.ico";
                       }}
                     />
-                    <div className="search-result-info">
-                      <div className="search-result-name">
+                    <div className="flex-1 min-w-0 flex flex-col gap-[4px]">
+                      <div className="font-semibold text-[1.05rem] whitespace-nowrap overflow-hidden text-ellipsis">
                         <a
                           href={`https://modrinth.com/mod/${result.slug}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="modrinth-title-link"
+                          className="text-white no-underline inline-flex items-center gap-[6px] transition-colors duration-150 hover:text-[var(--color-brand-accent)]"
                           title="View on Modrinth"
                         >
                           {result.title}
                           <ExternalLinkIcon />
                         </a>
                       </div>
-                      <div className="search-result-sub">
+                      <div className="text-[0.82rem] text-[var(--color-text-muted)] flex items-center gap-[12px]">
                         {result.author ? <span>by {result.author}</span> : null}
                         {result.latestVersion ? (
                           <span>{result.latestVersion}</span>
                         ) : null}
                         {dep ? (
                           dep.requiresDependencies ? (
-                            <span className="dep-badge has-deps">
+                            <span className="text-[0.72rem] py-[2px] px-[6px] rounded-[var(--radius-sm)] font-semibold bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20">
                               +{dep.dependencyDetails.length} deps
                             </span>
                           ) : (
-                            <span className="dep-badge no-deps">No deps</span>
+                            <span className="text-[0.72rem] py-[2px] px-[6px] rounded-[var(--radius-sm)] font-semibold bg-[#10b981]/10 text-[var(--color-success)] border border-[#10b981]/20">
+                              No deps
+                            </span>
                           )
                         ) : null}
                         {installed ? (
@@ -353,7 +354,7 @@ function AddModsModal({
                       ) : inCart ? (
                         <button
                           type="button"
-                          className="btn danger"
+                          className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[#e11d48] to-[#be123c] text-white shadow-[0_4px_12px_rgba(225,29,72,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(225,29,72,0.4)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
                           style={{ padding: "5px 10px", fontSize: "0.75rem" }}
                           onClick={() => removeFromCart(result.projectId)}
                         >
@@ -362,7 +363,7 @@ function AddModsModal({
                       ) : (
                         <button
                           type="button"
-                          className="btn"
+                          className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(99,102,241,0.4),0_0_12px_rgba(99,102,241,0.2)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
                           style={{ padding: "5px 10px", fontSize: "0.75rem" }}
                           onClick={() => void addToCart(result)}
                         >
@@ -377,39 +378,47 @@ function AddModsModal({
           </div>
         </div>
 
-        <div className="add-mods-cart-pane">
-          <div className="add-mods-cart-title">
+        <div className="w-[320px] flex flex-col gap-[16px] bg-black/20 rounded-[var(--radius-md)] border border-[var(--color-line)] p-[16px]">
+          <div className="font-semibold text-[1.1rem] text-white flex items-center justify-between border-b border-[var(--color-line)] pb-[12px] m-0">
             Queue
             {cart.length > 0 ? (
-              <span className="cart-count-badge">{cart.length}</span>
+              <span className="bg-[var(--color-brand-primary)] text-white text-[0.8rem] py-[2px] px-[8px] rounded-full">
+                {cart.length}
+              </span>
             ) : null}
           </div>
 
           {cart.length === 0 ? (
-            <div className="cart-empty">
+            <div className="flex-1 flex flex-col items-center justify-center text-center gap-[12px] text-[0.9rem] text-[var(--color-text-muted)] opacity-70 p-[24px]">
               <span style={{ fontSize: "2rem" }}>🧺</span>
               <span>Add mods from search to queue them for install.</span>
             </div>
           ) : (
-            <div className="add-mods-cart-list">
+            <div className="flex-1 overflow-y-auto flex flex-col gap-[8px] pr-[4px]">
               {cart.map((entry) => (
-                <div key={entry.projectId} className="cart-item">
+                <div
+                  key={entry.projectId}
+                  className="flex items-center gap-[12px] bg-white/5 p-[8px_12px] rounded-[var(--radius-sm)] border border-white/5"
+                >
                   <img
                     src={entry.iconUrl || "https://modrinth.com/favicon.ico"}
                     alt={entry.title}
-                    className="cart-item-icon"
+                    className="w-[28px] h-[28px] rounded-[4px] object-contain"
                     onError={(event) => {
                       event.currentTarget.src =
                         "https://modrinth.com/favicon.ico";
                     }}
                   />
-                  <div className="cart-item-info" style={{ minWidth: 0 }}>
-                    <div className="cart-item-name">
+                  <div
+                    className="flex flex-col gap-[2px] flex-1"
+                    style={{ minWidth: 0 }}
+                  >
+                    <div className="text-[0.88rem] font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
                       <a
                         href={`https://modrinth.com/mod/${entry.slug ?? entry.projectId}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="modrinth-title-link"
+                        className="text-white no-underline inline-flex items-center gap-[6px] transition-colors duration-150 hover:text-[var(--color-brand-accent)]"
                         title="View on Modrinth"
                       >
                         {entry.title}
@@ -417,14 +426,14 @@ function AddModsModal({
                       </a>
                     </div>
                     {entry.deps.length > 0 ? (
-                      <div className="cart-item-deps">
+                      <div className="text-[0.75rem] text-[#f59e0b]">
                         +{entry.deps.length} deps
                       </div>
                     ) : null}
                   </div>
                   <button
                     type="button"
-                    className="btn ghost"
+                    className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
                     style={{ padding: "3px 7px", fontSize: "0.7rem" }}
                     onClick={() => removeFromCart(entry.projectId)}
                     title="Remove from cart"
@@ -438,15 +447,19 @@ function AddModsModal({
         </div>
       </div>
 
-      <div className="add-mods-footer">
+      <div className="py-[16px] px-[20px] border-t border-[var(--color-line)] flex justify-between items-center shrink-0 bg-[var(--color-bg-card)]">
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <button type="button" className="btn ghost" onClick={onClose}>
+          <button
+            type="button"
+            className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
+            onClick={onClose}
+          >
             Cancel
           </button>
           {cart.length > 0 ? (
             <button
               type="button"
-              className="btn ghost"
+              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
               style={{ color: "var(--danger)" }}
               onClick={clearCart}
             >
@@ -456,7 +469,7 @@ function AddModsModal({
         </div>
         <button
           type="button"
-          className="btn"
+          className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(99,102,241,0.4),0_0_12px_rgba(99,102,241,0.2)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
           disabled={cart.length === 0 || isBusy.install}
           onClick={() => onInstall(cart)}
         >
@@ -518,11 +531,11 @@ function ModGridCardItem({
 
   return (
     <div
-      className={`mod-grid-card${isLocked ? " core-mod" : ""}`}
+      className={`flex flex-col relative bg-black/20 border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[20px] transition-all duration-200 items-center text-center gap-[12px] ${isLocked ? "bg-white/5 border-[var(--color-line-strong)]" : "hover:border-[var(--color-line-strong)] hover:bg-white/5 hover:-translate-y-[2px]"}`}
       style={{ animationDelay: `${index * 50}ms` }}
     >
       {!isLocked ? (
-        <label className="mod-card-check">
+        <label className="absolute top-[12px] left-[12px] cursor-pointer">
           <input
             type="checkbox"
             checked={selectedModKeys.has(modKey)}
@@ -543,7 +556,7 @@ function ModGridCardItem({
       ) : null}
       {isLocked ? (
         <span
-          className="lock-badge mod-grid-badge"
+          className="absolute top-[12px] right-[12px] bg-white/10 text-[var(--color-text-muted)] border border-white/15"
           style={{ fontSize: "0.6rem", padding: "1px 6px" }}
         >
           Core
@@ -557,14 +570,19 @@ function ModGridCardItem({
             : "https://modrinth.com/favicon.ico")
         }
         alt={mod.name}
-        className="mod-grid-icon"
+        className="w-[64px] h-[64px] rounded-[var(--radius-md)] object-contain bg-black/30 p-[8px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
         onError={(event) => {
           event.currentTarget.src = "https://modrinth.com/favicon.ico";
         }}
       />
-      <div className="mod-grid-name">{mod.name}</div>
+      <div className="font-semibold text-[1.15rem] text-white leading-[1.3] line-clamp-2 w-full">
+        {mod.name}
+      </div>
       {mod.versionId ? (
-        <div className="mod-grid-meta" title={mod.versionId}>
+        <div
+          className="text-[0.8rem] text-[var(--color-text-secondary)] font-mono bg-black/30 py-[4px] px-[8px] rounded-[4px] border border-[var(--color-line)] whitespace-nowrap overflow-hidden text-ellipsis max-w-full"
+          title={mod.versionId}
+        >
           {mod.versionId}
         </div>
       ) : null}
@@ -573,14 +591,14 @@ function ModGridCardItem({
           href={`https://modrinth.com/mod/${mod.slug}`}
           target="_blank"
           rel="noreferrer"
-          className="modrinth-link"
+          className="text-[var(--color-text-muted)] transition-colors duration-150 hover:text-[var(--color-brand-primary)]"
           title="View on Modrinth"
           style={{ marginBottom: 2 }}
         >
           <ExternalLinkIcon />
         </a>
       ) : null}
-      <div className="mod-grid-actions">
+      <div className="flex flex-col w-full gap-[6px] mt-auto pt-[12px] border-t border-[var(--color-line)]">
         {exaroton.connected ? (
           <select
             value={mod.side || (isFabric ? "both" : "client")}
@@ -615,9 +633,7 @@ function ModGridCardItem({
         {projectId ? (
           <>
             <button
-              type="button"
-              className="btn ghost"
-              style={{ padding: "4px 8px", fontSize: "0.72rem" }}
+              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
               onClick={() => void actions.loadModVersions(projectId)}
               disabled={isLocked}
             >
@@ -651,9 +667,7 @@ function ModGridCardItem({
           </>
         ) : null}
         <button
-          type="button"
-          className="btn danger"
-          style={{ padding: "4px 8px", fontSize: "0.72rem" }}
+          className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[#e11d48] to-[#be123c] text-white shadow-[0_4px_12px_rgba(225,29,72,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(225,29,72,0.4)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
           disabled={isLocked}
           onClick={() =>
             setRemoveTarget({ projectId, sha256: mod.sha256, name: mod.name })
@@ -740,7 +754,7 @@ export function ModManagerPage() {
 
   return (
     <>
-      <section className="panel">
+      <section className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150 relative">
         <div
           style={{
             display: "flex",
@@ -751,16 +765,19 @@ export function ModManagerPage() {
         >
           <div>
             <h3 style={{ margin: 0 }}>Installed Mods</h3>
-            <p className="hint" style={{ margin: "4px 0 0" }}>
+            <p
+              className="text-[0.9rem] text-[var(--color-text-muted)] leading-[1.5]"
+              style={{ margin: "4px 0 0" }}
+            >
               {selectedMods.length} mod{selectedMods.length !== 1 ? "s" : ""}{" "}
               installed
             </p>
           </div>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="flex items-center gap-[16px]" style={{ gap: 8 }}>
             {exaroton.connected ? (
               <button
                 type="button"
-                className="btn ghost"
+                className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
                 onClick={() => void syncExarotonMods()}
                 style={{ flexShrink: 0 }}
               >
@@ -769,7 +786,7 @@ export function ModManagerPage() {
             ) : null}
             <button
               type="button"
-              className="btn"
+              className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[var(--color-brand-primary)] to-[var(--color-brand-accent)] text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(99,102,241,0.4),0_0_12px_rgba(99,102,241,0.2)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
               onClick={() => setShowAddMods(true)}
               style={{ flexShrink: 0 }}
             >
@@ -782,8 +799,11 @@ export function ModManagerPage() {
           {statuses.mods.text}
         </div>
 
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <label className="check">
+        <div
+          className="flex items-center gap-[16px]"
+          style={{ justifyContent: "space-between" }}
+        >
+          <label className="flex items-center gap-[12px] cursor-pointer text-[0.9rem] text-[var(--color-text-primary)] transition-colors hover:text-white [&>input]:w-[18px] [&>input]:h-[18px] [&>input]:accent-[var(--color-brand-primary)] [&>input]:cursor-pointer">
             <input
               type="checkbox"
               checked={allSelectableSelected}
@@ -803,7 +823,7 @@ export function ModManagerPage() {
           </label>
 
           {selectedBulkEntries.length > 0 ? (
-            <div className="row" style={{ gap: 8 }}>
+            <div className="flex items-center gap-[16px]" style={{ gap: 8 }}>
               {exaroton.connected ? (
                 <>
                   <select
@@ -824,7 +844,7 @@ export function ModManagerPage() {
                   </select>
                   <button
                     type="button"
-                    className="btn ghost"
+                    className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
                     onClick={() =>
                       setModsInstallTargetBulk(selectedBulkEntries, bulkTarget)
                     }
@@ -835,7 +855,7 @@ export function ModManagerPage() {
               ) : null}
               <button
                 type="button"
-                className="btn danger"
+                className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[#e11d48] to-[#be123c] text-white shadow-[0_4px_12px_rgba(225,29,72,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(225,29,72,0.4)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
                 onClick={() => {
                   removeModsBulk(selectedBulkEntries);
                   setSelectedModKeys(new Set());
@@ -848,17 +868,20 @@ export function ModManagerPage() {
         </div>
 
         {selectedMods.length === 0 ? (
-          <p className="hint" style={{ marginTop: 16 }}>
+          <p
+            className="text-[0.9rem] text-[var(--color-text-muted)] leading-[1.5] m-0"
+            style={{ marginTop: 16 }}
+          >
             No mods installed. Click &quot;Add Mods&quot; to get started.
           </p>
         ) : (
           <>
             {userMods.length > 0 ? (
               <>
-                <div className="mods-section-label">
+                <div className="text-[1.15rem] font-bold text-white mt-[32px] mb-[16px] flex items-center gap-[12px]">
                   User Mods — {userMods.length}
                 </div>
-                <div className="mods-grid">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[16px]">
                   {userMods.map((mod, index) => (
                     <ModGridCardItem
                       key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
@@ -883,10 +906,13 @@ export function ModManagerPage() {
 
             {coreMods.length > 0 ? (
               <>
-                <div className="mods-section-label core">
+                <div className="text-[1.15rem] font-bold text-white mt-[32px] mb-[16px] flex items-center gap-[12px]">
                   Core Mods — {coreMods.length}
                 </div>
-                <div className="mods-grid" style={{ marginBottom: 28 }}>
+                <div
+                  className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[16px]"
+                  style={{ marginBottom: 28 }}
+                >
                   {coreMods.map((mod, index) => (
                     <ModGridCardItem
                       key={`${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
@@ -930,7 +956,7 @@ export function ModManagerPage() {
       {removeTarget ? (
         <ModalShell onClose={() => setRemoveTarget(null)}>
           <div
-            className="modal-head"
+            className="flex items-center justify-between border-b border-[var(--color-line)] pb-[16px] mb-[8px] shrink-0"
             style={{
               display: "flex",
               alignItems: "center",
@@ -939,7 +965,7 @@ export function ModManagerPage() {
           >
             <h3 style={{ margin: 0 }}>Remove {removeTarget.name}?</h3>
             <button
-              className="modal-close-icon"
+              className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
               type="button"
               aria-label="Close"
               onClick={() => setRemoveTarget(null)}
@@ -952,18 +978,18 @@ export function ModManagerPage() {
             requires a publish to apply to users.
           </p>
           <div
-            className="row"
+            className="flex items-center gap-[16px]"
             style={{ justifyContent: "flex-end", marginTop: 8 }}
           >
             <button
-              className="btn ghost"
+              className="border border-white/5 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-white/5 text-[var(--color-text-secondary)] shadow-none backdrop-blur-[4px] hover:not-disabled:bg-white/10 hover:not-disabled:border-white/15 hover:not-disabled:text-white hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
               type="button"
               onClick={() => setRemoveTarget(null)}
             >
               Cancel
             </button>
             <button
-              className="btn danger"
+              className="border border-white/10 rounded-[var(--radius-md)] py-[12px] px-[20px] font-semibold cursor-pointer transition-all duration-300 ease-out inline-flex items-center justify-center text-[0.9rem] gap-[8px] bg-gradient-to-br from-[#e11d48] to-[#be123c] text-white shadow-[0_4px_12px_rgba(225,29,72,0.3)] hover:not-disabled:shadow-[0_8px_20px_rgba(225,29,72,0.4)] hover:not-disabled:-translate-y-[2px] disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.8]"
               type="button"
               onClick={() => {
                 removeMod(removeTarget.projectId, removeTarget.sha256);

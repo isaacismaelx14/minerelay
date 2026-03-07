@@ -2,6 +2,7 @@
 
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
 import { statusClass } from "@/admin/shared/ui/status";
+import { ui } from "@/admin/shared/ui/styles";
 
 import { useAssetsPageModel } from "../hooks/use-assets-page-model";
 
@@ -29,20 +30,11 @@ function PopularAssetModal({
   const title = type === "resourcepack" ? "Add Resourcepack" : "Add Shaderpack";
 
   return (
-    <ModalShell onClose={onClose} cardClassName="modal-card wide">
-      <div
-        className="modal-head"
-        style={{
-          padding: "16px 20px",
-          borderBottom: "1px solid var(--line)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+    <ModalShell onClose={onClose} wide>
+      <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
         <h3 style={{ margin: 0 }}>{title}</h3>
         <button
-          className="modal-close-icon"
+          className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
           type="button"
           onClick={onClose}
           aria-label="Close"
@@ -52,37 +44,21 @@ function PopularAssetModal({
       </div>
 
       <div style={{ padding: "16px 20px" }}>
-        <p className="hint" style={{ marginTop: 0 }}>
-          Top 10 popular on Modrinth.
-        </p>
+        <p className={`${ui.hint} mt-0`}>Top 10 popular on Modrinth.</p>
 
         {loading ? (
-          <p className="hint">Loading...</p>
+          <p className={ui.hint}>Loading...</p>
         ) : popular.length === 0 ? (
-          <p className="hint">No popular items found.</p>
+          <p className={ui.hint}>No popular items found.</p>
         ) : (
-          <div className="list">
+          <div className="grid gap-[10px]">
             {popular.map((entry) => (
-              <div key={entry.projectId} className="list-row">
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "10px",
-                      overflow: "hidden",
-                      border: "1px solid var(--line)",
-                      background: "rgba(255,255,255,.04)",
-                      flexShrink: 0,
-                    }}
-                  >
+              <div
+                key={entry.projectId}
+                className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[10px_12px]"
+              >
+                <div className="flex items-center gap-[12px] min-w-0">
+                  <div className="w-[42px] h-[42px] rounded-[10px] overflow-hidden border border-[var(--color-line)] bg-white/5 shrink-0">
                     {entry.iconUrl ? (
                       <img
                         src={entry.iconUrl}
@@ -95,16 +71,20 @@ function PopularAssetModal({
                           objectFit: "cover",
                         }}
                       />
-                    ) : null}
+                    ) : (
+                      <span className="grid place-items-center w-full h-full text-[0.75rem] text-[var(--color-text-muted)]">
+                        ?
+                      </span>
+                    )}
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{entry.title}</div>
-                    <div className="hint">by {entry.author}</div>
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{entry.title}</div>
+                    <div className={ui.hint}>by {entry.author}</div>
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="btn"
+                  className={ui.buttonPrimary}
                   onClick={() => void onInstall(entry.projectId)}
                   disabled={installingId === entry.projectId}
                 >
@@ -132,7 +112,7 @@ function AssetIcon({
 }) {
   return (
     <div
-      className="asset-icon"
+      className="rounded-[8px] overflow-hidden border border-[var(--color-line)] bg-white/5 shrink-0 text-[var(--color-text-muted)] grid place-items-center"
       style={{
         width: `${size}px`,
         height: `${size}px`,
@@ -156,7 +136,7 @@ function AssetIcon({
 }
 
 function EmptyAssetState({ text }: { text: string }) {
-  return <p className="assets-empty">{text}</p>;
+  return <p className={ui.hint}>{text}</p>;
 }
 
 export function AssetsPage() {
@@ -181,11 +161,11 @@ export function AssetsPage() {
   const hiddenMods = Math.max(selectedMods.length - modPreview.length, 0);
 
   return (
-    <section className="section">
-      <header className="section-head">
+    <section className="grid gap-[24px]">
+      <header className="flex items-start justify-between gap-[16px]">
         <div>
           <h2>Assets</h2>
-          <p className="hint">
+          <p className="text-[0.9rem] text-[var(--color-text-muted)] m-0 leading-[1.5]">
             Manage user-side assets. Mods, resourcepacks, and shaderpacks are
             tracked here.
           </p>
@@ -194,46 +174,48 @@ export function AssetsPage() {
 
       <div className={statusClass(status.tone)}>{status.text}</div>
 
-      <div className="assets-board">
-        <section className="assets-section assets-section-full">
-          <div className="assets-section-head">
-            <div className="assets-head-meta">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-[16px]">
+        <section className={`${ui.panel} xl:col-span-2`}>
+          <div className="flex items-center justify-between gap-[12px]">
+            <div className="grid gap-[4px]">
               <h3>Mods</h3>
-              <span className="assets-count">
-                Installed: {selectedMods.length}
-              </span>
+              <span className={ui.hint}>Installed: {selectedMods.length}</span>
             </div>
-            <button type="button" className="btn" onClick={openModsManager}>
+            <button
+              type="button"
+              className={ui.buttonPrimary}
+              onClick={openModsManager}
+            >
               Open Mods Manager
             </button>
           </div>
 
-          <div className="assets-list-shell">
+          <div className="grid gap-[10px]">
             {modPreview.length === 0 ? (
               <EmptyAssetState text="No mods installed yet." />
             ) : (
-              <div className="assets-list">
+              <div className="grid gap-[10px]">
                 {modPreview.map((entry) => (
                   <div
                     key={`${entry.projectId ?? entry.sha256}-${entry.versionId ?? "latest"}`}
-                    className="assets-row"
+                    className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[12px]"
                   >
-                    <div className="assets-row-meta">
+                    <div className="flex items-center gap-[12px] min-w-0">
                       <AssetIcon
                         src={entry.iconUrl}
                         alt={`${entry.name} icon`}
                         fallback="M"
                       />
-                      <div className="assets-row-text">
-                        <strong>{entry.name}</strong>
-                        <span>
+                      <div className="grid gap-[2px] min-w-0">
+                        <strong className="truncate">{entry.name}</strong>
+                        <span className={ui.hint}>
                           {entry.side === "both" ? "user + server" : entry.side}
                         </span>
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="btn ghost"
+                      className={ui.buttonGhost}
                       onClick={openModsManager}
                     >
                       Managed in Mods Manager
@@ -243,53 +225,56 @@ export function AssetsPage() {
               </div>
             )}
             {hiddenMods > 0 ? (
-              <p className="assets-more">
+              <p className={ui.hint}>
                 +{hiddenMods} more mod(s) in Mods Manager.
               </p>
             ) : null}
           </div>
         </section>
 
-        <section className="assets-section">
-          <div className="assets-section-head">
-            <div className="assets-head-meta">
+        <section className={ui.panel}>
+          <div className="flex items-center justify-between gap-[12px]">
+            <div className="grid gap-[4px]">
               <h3>Resourcepacks</h3>
-              <span className="assets-count">
+              <span className={ui.hint}>
                 Installed: {selectedResources.length}
               </span>
             </div>
             <button
               type="button"
-              className="btn"
+              className={ui.buttonPrimary}
               onClick={() => void openPopularModal("resourcepack")}
             >
               Add Resourcepack
             </button>
           </div>
 
-          <div className="assets-list-shell">
+          <div className="grid gap-[10px]">
             {selectedResources.length === 0 ? (
               <EmptyAssetState text="No resourcepacks installed." />
             ) : (
-              <div className="assets-list">
+              <div className="grid gap-[10px]">
                 {selectedResources.map((entry) => (
-                  <div key={entry.sha256} className="assets-row">
-                    <div className="assets-row-meta">
+                  <div
+                    key={entry.sha256}
+                    className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[12px]"
+                  >
+                    <div className="flex items-center gap-[12px] min-w-0">
                       <AssetIcon
                         src={entry.iconUrl}
                         alt={`${entry.name} icon`}
                         fallback="R"
                       />
-                      <div className="assets-row-text">
-                        <strong>{entry.name}</strong>
-                        <span>
+                      <div className="grid gap-[2px] min-w-0">
+                        <strong className="truncate">{entry.name}</strong>
+                        <span className={ui.hint}>
                           {entry.slug ?? entry.projectId ?? "custom pack"}
                         </span>
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="btn danger"
+                      className={ui.buttonDanger}
                       onClick={() =>
                         removeResource(entry.projectId, entry.sha256)
                       }
@@ -303,46 +288,49 @@ export function AssetsPage() {
           </div>
         </section>
 
-        <section className="assets-section">
-          <div className="assets-section-head">
-            <div className="assets-head-meta">
+        <section className={ui.panel}>
+          <div className="flex items-center justify-between gap-[12px]">
+            <div className="grid gap-[4px]">
               <h3>Shaderpacks</h3>
-              <span className="assets-count">
+              <span className={ui.hint}>
                 Installed: {selectedShaders.length}
               </span>
             </div>
             <button
               type="button"
-              className="btn"
+              className={ui.buttonPrimary}
               onClick={() => void openPopularModal("shaderpack")}
             >
               Add Shaderpack
             </button>
           </div>
 
-          <div className="assets-list-shell">
+          <div className="grid gap-[10px]">
             {selectedShaders.length === 0 ? (
               <EmptyAssetState text="No shaderpacks installed." />
             ) : (
-              <div className="assets-list">
+              <div className="grid gap-[10px]">
                 {selectedShaders.map((entry) => (
-                  <div key={entry.sha256} className="assets-row">
-                    <div className="assets-row-meta">
+                  <div
+                    key={entry.sha256}
+                    className="flex items-center justify-between gap-[12px] border border-[var(--color-line)] bg-black/20 rounded-[var(--radius-md)] p-[12px]"
+                  >
+                    <div className="flex items-center gap-[12px] min-w-0">
                       <AssetIcon
                         src={entry.iconUrl}
                         alt={`${entry.name} icon`}
                         fallback="S"
                       />
-                      <div className="assets-row-text">
-                        <strong>{entry.name}</strong>
-                        <span>
+                      <div className="grid gap-[2px] min-w-0">
+                        <strong className="truncate">{entry.name}</strong>
+                        <span className={ui.hint}>
                           {entry.slug ?? entry.projectId ?? "custom shader"}
                         </span>
                       </div>
                     </div>
                     <button
                       type="button"
-                      className="btn danger"
+                      className={ui.buttonDanger}
                       onClick={() =>
                         removeShader(entry.projectId, entry.sha256)
                       }

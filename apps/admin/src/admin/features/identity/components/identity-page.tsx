@@ -6,6 +6,7 @@ import { DataItem, DataList } from "@/admin/shared/ui/data-list";
 import { TextInput } from "@/admin/shared/ui/form-controls";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
 import { statusClass } from "@/admin/shared/ui/status";
+import { ui } from "@/admin/shared/ui/styles";
 
 import { useIdentityPageModel } from "../hooks/use-identity-page-model";
 
@@ -28,7 +29,7 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
   return (
     <ModalShell onClose={onClose}>
       <button
-        className="modal-close-icon"
+        className="bg-transparent border-none text-[var(--color-text-muted)] cursor-pointer text-[1.2rem] flex items-center justify-center w-[32px] h-[32px] rounded-[var(--radius-sm)] transition-all duration-200 hover:bg-white/10 hover:text-white"
         type="button"
         onClick={onClose}
         title="Close"
@@ -47,20 +48,20 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
         </svg>
       </button>
 
-      <div className="modal-head">
-        <div className="modal-brand">
+      <div className="flex items-center justify-between border-b border-[var(--color-line)] pb-[16px] mb-[8px] shrink-0">
+        <div className={ui.modalBrand}>
           <h3>Support Matrix</h3>
-          <p className="meta">Internal Runtime Settings</p>
+          <p className={ui.modalMeta}>Internal Runtime Settings</p>
         </div>
       </div>
-      <div className="alert-box danger">
+      <div className="p-[16px_20px] rounded-[var(--radius-md)] text-[0.9rem] leading-[1.5] border flex flex-col gap-[4px] bg-[#ef4444]/5 border-[#ef4444]/20 text-[#fca5a5] [&>strong]:text-[#ef4444] [&>strong]:uppercase [&>strong]:text-[0.75rem] [&>strong]:tracking-[0.05em]">
         <strong>Risk Warning</strong>
         <p>
           Altering support matrix values can break launcher bootup and runtime
           compatibility. This action requires server-side validation.
         </p>
       </div>
-      <div className="grid two">
+      <div className={ui.gridTwo}>
         <TextInput
           name="minecraftVersion"
           label="Selected Minecraft Version"
@@ -68,13 +69,14 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
           placeholder="1.21.1"
           onChange={setTextFieldFromEvent}
         />
-        <div className="data-item">
-          <span className="data-label">Fabric Loader Version</span>
+        <div className={ui.dataItem}>
+          <span className={ui.dataLabel}>Fabric Loader Version</span>
           <select
             id="loaderVersion"
             name="loaderVersion"
             value={form.loaderVersion}
             onChange={setTextFieldFromEvent}
+            className={ui.selectField}
           >
             <option value="">Select loader version</option>
             {loaderOptions.map((entry) => (
@@ -89,7 +91,7 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
 
       {hasChanges ? (
         <>
-          <label className="check danger">
+          <label className={`${ui.check} ${ui.checkDanger}`}>
             <input
               type="checkbox"
               checked={confirmed}
@@ -97,18 +99,18 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
             />
             <span>I understand this change can break the system.</span>
           </label>
-          <div className="row">
+          <div className={ui.row}>
             <button
               type="button"
-              className="btn ghost"
+              className={ui.buttonGhost}
               onClick={() => void refreshLoaders()}
             >
               Refresh Loader List
             </button>
-            <div className="btn-wrapper">
+            <div className="relative inline-flex flex-col items-center">
               <button
                 type="button"
-                className="btn"
+                className={ui.buttonPrimary}
                 disabled={!confirmed}
                 onClick={() => {
                   void saveSettings();
@@ -118,16 +120,18 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
                 Save Matrix
               </button>
               {!confirmed ? (
-                <span className="btn-tooltip">Confirm to enable save</span>
+                <span className="absolute top-full mt-[8px] bg-black/80 backdrop-blur-[4px] text-[var(--color-text-muted)] text-[0.75rem] p-[6px_10px] rounded-[var(--radius-sm)] border border-[var(--color-line)] whitespace-nowrap animate-[fadeIn_0.2s_ease-out] pointer-events-none z-10">
+                  Confirm to enable save
+                </span>
               ) : null}
             </div>
           </div>
         </>
       ) : (
-        <div className="row">
+        <div className={ui.row}>
           <button
             type="button"
-            className="btn ghost"
+            className={ui.buttonGhost}
             onClick={() => void refreshLoaders()}
           >
             Refresh Loader List
@@ -149,13 +153,13 @@ export function IdentityPage() {
 
   return (
     <>
-      <div className="grid two">
-        <article className="panel">
+      <div className={ui.gridTwo}>
+        <article className={ui.panel}>
           <h3>Server Identity</h3>
-          <p className="hint">
+          <p className={ui.hint}>
             Master identification and connection endpoints.
           </p>
-          <div className="grid">
+          <div className="grid gap-[16px]">
             <TextInput
               name="serverName"
               label="Display Name"
@@ -178,17 +182,17 @@ export function IdentityPage() {
           </div>
         </article>
 
-        <article className="panel">
+        <article className={ui.panel}>
           <h3>Runtime & Compatibility</h3>
-          <p className="hint">Minecraft and Fabric loader configuration.</p>
+          <p className={ui.hint}>Minecraft and Fabric loader configuration.</p>
           <DataList>
             <DataItem label="MC Version" value={form.minecraftVersion} />
             <DataItem label="Loader" value={form.loaderVersion} />
           </DataList>
-          <div className="row">
+          <div className={ui.row}>
             <button
               type="button"
-              className="btn"
+              className={ui.buttonPrimary}
               onClick={() => setOpenMatrix(true)}
             >
               Update Runtime Settings
@@ -196,25 +200,30 @@ export function IdentityPage() {
           </div>
         </article>
 
-        <article className="panel">
+        <article className={ui.panel}>
           <h3>Branding & Assets</h3>
-          <p className="hint">Visual identity for the launcher and menu.</p>
-          <div className="grid">
-            <div className="image-field">
-              <div className="image-preview-box">
+          <p className={ui.hint}>Visual identity for the launcher and menu.</p>
+          <div className="grid gap-[16px]">
+            <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-[12px] items-center">
+              <div className="w-[84px] h-[84px] rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/30 overflow-hidden grid place-items-center text-[var(--color-text-muted)]">
                 {form.brandingLogoUrl ? (
-                  <img src={form.brandingLogoUrl} alt="Logo" />
+                  <img
+                    src={form.brandingLogoUrl}
+                    alt="Logo"
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <span>Icon</span>
                 )}
               </div>
-              <div className="upload-controls">
-                <span className="data-label">Server Logo / Icon</span>
-                <div className="file-input-wrapper">
-                  <button className="btn ghost" type="button">
+              <div className="grid gap-[8px]">
+                <span className={ui.dataLabel}>Server Logo / Icon</span>
+                <div className="relative inline-flex items-center w-fit">
+                  <button className={ui.buttonGhost} type="button">
                     Change Icon
                   </button>
                   <input
+                    className="absolute inset-0 opacity-0 cursor-pointer"
                     type="file"
                     accept="image/*"
                     onChange={(event) =>
@@ -228,21 +237,26 @@ export function IdentityPage() {
               </div>
             </div>
 
-            <div className="image-field">
-              <div className="image-preview-box">
+            <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-[12px] items-center">
+              <div className="w-[84px] h-[84px] rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/30 overflow-hidden grid place-items-center text-[var(--color-text-muted)]">
                 {form.brandingBackgroundUrl ? (
-                  <img src={form.brandingBackgroundUrl} alt="BG" />
+                  <img
+                    src={form.brandingBackgroundUrl}
+                    alt="BG"
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <span>BG</span>
                 )}
               </div>
-              <div className="upload-controls">
-                <span className="data-label">Background Wallpaper</span>
-                <div className="file-input-wrapper">
-                  <button className="btn ghost" type="button">
+              <div className="grid gap-[8px]">
+                <span className={ui.dataLabel}>Background Wallpaper</span>
+                <div className="relative inline-flex items-center w-fit">
+                  <button className={ui.buttonGhost} type="button">
                     Change BG
                   </button>
                   <input
+                    className="absolute inset-0 opacity-0 cursor-pointer"
                     type="file"
                     accept="image/*"
                     onChange={(event) =>

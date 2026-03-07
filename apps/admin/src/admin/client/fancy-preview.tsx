@@ -11,7 +11,11 @@ export const FancyPreviewCanvas = memo(function FancyPreviewCanvas({
   model,
 }: Props) {
   if (!model) {
-    return <p className="hint">No preview yet.</p>;
+    return (
+      <p className="text-[0.9rem] text-[var(--color-text-muted)] m-0 leading-[1.5]">
+        No preview yet.
+      </p>
+    );
   }
 
   return (
