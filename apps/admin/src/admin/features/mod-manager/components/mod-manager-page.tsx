@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from "react";
 
 import type {
   AdminMod,
@@ -12,11 +18,13 @@ import { Button } from "@/admin/shared/ui/button";
 import { DiscoverModal } from "@/admin/shared/ui/discover-modal";
 import { ModalShell } from "@/admin/shared/ui/modal-shell";
 import { statusClass } from "@/admin/shared/ui/status";
+import { Tooltip } from "@/admin/shared/ui/tooltip";
 
 import { useModManagerPageModel } from "../hooks/use-mod-manager-page-model";
 import { useTopBarModel } from "@/admin/features/shell/hooks/use-top-bar-model";
 
 const CART_STORAGE_KEY = "admin-mod-cart";
+const MODRINTH_FALLBACK_ICON_URL = "https://modrinth.com/favicon.ico";
 
 type CartEntry = {
   projectId: string;
@@ -25,6 +33,80 @@ type CartEntry = {
   slug?: string;
   deps: Array<{ projectId: string; title: string }>;
 };
+
+type SideSupport = "required" | "optional" | "unsupported";
+
+function normalizeSideSupport(value: unknown): SideSupport | undefined {
+  if (value === "required" || value === "optional" || value === "unsupported") {
+    return value;
+  }
+  return undefined;
+}
+
+function sideBadgeStyle(side?: SideSupport): {
+  bg: string;
+  dot: string;
+  label: string;
+} {
+  if (side === "required") {
+    return {
+      bg: "bg-[#10b981]/10 border-[#10b981]/25",
+      dot: "bg-[#10b981]",
+      label: "text-[#34d399]",
+    };
+  }
+  if (side === "unsupported") {
+    return {
+      bg: "bg-[#ef4444]/8 border-[#ef4444]/20",
+      dot: "bg-[#ef4444]",
+      label: "text-[#f87171]",
+    };
+  }
+  return {
+    bg: "bg-white/[0.03] border-white/10",
+    dot: "bg-[var(--color-text-muted)]",
+    label: "text-[var(--color-text-muted)]",
+  };
+}
+
+function sideTooltipText(env: "Client" | "Server", side?: SideSupport): string {
+  if (side === "required") {
+    return `This mod must be installed on the ${env.toLowerCase()} to work.`;
+  }
+  if (side === "unsupported") {
+    return `This mod does not run on the ${env.toLowerCase()}.`;
+  }
+  return `This mod can optionally be installed on the ${env.toLowerCase()}.`;
+}
+
+function serverRequirementHint(input: {
+  clientSide?: SideSupport;
+  serverSide?: SideSupport;
+}): string | null {
+  if (input.clientSide === "unsupported") {
+    return "Not supported on client";
+  }
+  if (input.serverSide === "required") {
+    return "Required in server";
+  }
+  if (input.serverSide === "optional") {
+    return "Can install on server";
+  }
+  return null;
+}
+
+function installedHint(
+  mod: AdminMod,
+  hasServerIntegration: boolean,
+): string | null {
+  if (hasServerIntegration) {
+    return null;
+  }
+  return serverRequirementHint({
+    clientSide: normalizeSideSupport(mod.clientSide),
+    serverSide: normalizeSideSupport(mod.serverSide),
+  });
+}
 
 function loadCartFromStorage(): CartEntry[] {
   try {
@@ -41,6 +123,17 @@ function saveCartToStorage(cart: CartEntry[]): void {
   } catch {
     // ignore
   }
+}
+
+function handleInstalledIconError(event: SyntheticEvent<HTMLImageElement>) {
+  const image = event.currentTarget;
+  if (image.dataset.fallbackApplied === "true") {
+    image.style.display = "none";
+    image.nextElementSibling?.classList.remove("hidden");
+    return;
+  }
+  image.dataset.fallbackApplied = "true";
+  image.src = MODRINTH_FALLBACK_ICON_URL;
 }
 
 const ExternalLinkIcon = () => (
@@ -194,7 +287,9 @@ function AddModsModal({
     dependencyMap,
     selectedMods,
     statuses,
+    setStatus,
     form,
+    exaroton,
     isBusy,
     setSearchQuery,
     searchMods,
@@ -241,6 +336,8 @@ function AddModsModal({
             iconUrl?: string;
             categories?: string[];
             latestVersion?: string;
+            clientSide?: SideSupport;
+            serverSide?: SideSupport;
           }>
         >(`/v1/admin/mods/search?${searchParams}`, "GET");
 
@@ -319,6 +416,20 @@ function AddModsModal({
       saveCartToStorage(next);
       return next;
     });
+
+    if (!exaroton.connected) {
+      const hint = serverRequirementHint({
+        clientSide: normalizeSideSupport(result.clientSide),
+        serverSide: normalizeSideSupport(result.serverSide),
+      });
+      if (hint) {
+        setStatus(
+          "mods",
+          `Warning: ${result.title} - ${hint}. Without server integration, installs are client-only.`,
+          "error",
+        );
+      }
+    }
   };
 
   const removeFromCart = (projectId: string) => {
@@ -466,6 +577,13 @@ function AddModsModal({
           </div>
         ) : null}
 
+        {!exaroton.connected ? (
+          <div className="bg-[var(--color-danger)]/10 text-[var(--color-danger)] border border-[var(--color-danger)]/25 p-3 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <UiIcon className="w-[18px] h-[18px]" name="info" />
+            No server integration connected. Installs are client-only.
+          </div>
+        ) : null}
+
         {displayResults.length === 0 && !isLoadingPopular && !isBusy.search ? (
           <p className="text-[0.9rem] text-[var(--color-text-muted)] leading-[1.5] m-0">
             {localQuery
@@ -478,6 +596,12 @@ function AddModsModal({
               const dep = dependencyMap[result.projectId];
               const inCart = cartIds.has(result.projectId);
               const installed = installedIds.has(result.projectId);
+              const clientSide = normalizeSideSupport(result.clientSide);
+              const serverSide = normalizeSideSupport(result.serverSide);
+              const serverHint = serverRequirementHint({
+                clientSide,
+                serverSide,
+              });
               return (
                 <div
                   key={result.projectId}
@@ -534,25 +658,78 @@ function AddModsModal({
                     {(dep && dep.requiresDependencies) || installed ? (
                       <div className="flex flex-wrap gap-1.5 mt-3">
                         {dep && dep.requiresDependencies ? (
-                          <span className="px-2 py-0.5 rounded-md bg-[#f59e0b]/10 text-[#f59e0b] text-[10px] font-bold border border-[#f59e0b]/20 flex items-center gap-1">
-                            <UiIcon
-                              className="w-[12px] h-[12px]"
-                              name="extension"
-                            />
-                            Requires {dep.dependencyDetails.length} deps
-                          </span>
+                          <Tooltip
+                            content={
+                              <>
+                                <span className="font-bold text-[#fbbf24]">
+                                  {dep.dependencyDetails.length} dependencies
+                                </span>{" "}
+                                will be auto-installed:{" "}
+                                {dep.dependencyDetails
+                                  .map((d) => d.title)
+                                  .join(", ")}
+                              </>
+                            }
+                          >
+                            <span className="px-2.5 py-1 rounded-lg bg-[#f59e0b]/8 text-[#fbbf24] text-[10px] font-bold border border-[#f59e0b]/20 flex items-center gap-1.5 backdrop-blur-sm cursor-default">
+                              <UiIcon
+                                className="w-[11px] h-[11px]"
+                                name="extension"
+                              />
+                              {dep.dependencyDetails.length} deps
+                            </span>
+                          </Tooltip>
                         ) : null}
                         {installed ? (
-                          <span className="px-2 py-0.5 rounded-md bg-[var(--color-success)]/10 text-[var(--color-success)] text-[10px] font-bold border border-[var(--color-success)]/20 flex items-center gap-1">
-                            <UiIcon
-                              className="w-[12px] h-[12px]"
-                              name="check_circle"
-                            />
-                            Installed
-                          </span>
+                          <Tooltip content="This mod is already in your profile.">
+                            <span className="px-2.5 py-1 rounded-lg bg-[#10b981]/10 text-[#34d399] text-[10px] font-bold border border-[#10b981]/20 flex items-center gap-1.5 backdrop-blur-sm cursor-default">
+                              <UiIcon
+                                className="w-[11px] h-[11px]"
+                                name="check_circle"
+                              />
+                              Installed
+                            </span>
+                          </Tooltip>
                         ) : null}
                       </div>
                     ) : null}
+                    {(() => {
+                      const cs = sideBadgeStyle(clientSide);
+                      const ss = sideBadgeStyle(serverSide);
+                      return (
+                        <div className="flex items-center gap-2 mt-2.5">
+                          <Tooltip
+                            content={sideTooltipText("Client", clientSide)}
+                          >
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border cursor-default ${cs.bg}`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${cs.dot} shrink-0`}
+                              />
+                              <span className={cs.label}>Client</span>
+                            </span>
+                          </Tooltip>
+                          <Tooltip
+                            content={sideTooltipText("Server", serverSide)}
+                          >
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border cursor-default ${ss.bg}`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${ss.dot} shrink-0`}
+                              />
+                              <span className={ss.label}>Server</span>
+                            </span>
+                          </Tooltip>
+                          {!exaroton.connected && serverHint ? (
+                            <span className="text-[10px] text-[#f87171] font-medium ml-0.5">
+                              {serverHint}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex items-center justify-between mt-2 pt-4 border-t border-[var(--color-line)]">
@@ -596,6 +773,7 @@ function AddModsModal({
 
 function InstalledModRow({
   mod,
+  isDraft,
   selectedModKeys,
   setSelectedModKeys,
   setRemoveTarget,
@@ -605,6 +783,7 @@ function InstalledModRow({
   actions,
 }: {
   mod: AdminMod;
+  isDraft: boolean;
   selectedModKeys: Set<string>;
   setSelectedModKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
   setRemoveTarget: React.Dispatch<
@@ -638,6 +817,7 @@ function InstalledModRow({
   const selectedVersion = versions.some((v) => v.id === mod.versionId)
     ? mod.versionId
     : "";
+  const compatibilityHint = installedHint(mod, exaroton.connected);
 
   return (
     <div
@@ -666,29 +846,29 @@ function InstalledModRow({
       ) : null}
 
       <div
-        className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 border overflow-hidden p-[2px] shadow-inner relative ${isLocked ? "bg-[var(--color-brand-primary)]/10 border-[var(--color-brand-primary)]/30 text-[var(--color-brand-primary)]" : "bg-black/20 border-[var(--color-line)]"} ${!isLocked && "ml-6"}`}
+        className={`relative shrink-0 overflow-visible ${!isLocked && "ml-6"}`}
       >
         {isLocked ? (
-          <div className="absolute top-0 right-0 bg-[var(--color-brand-primary)] px-1 text-[8px] font-bold text-white rounded-bl opacity-80 z-10 hidden sm:block">
+          <span className="absolute -top-2 -right-2 z-20 rounded-full bg-[var(--color-brand-primary)] px-2 py-0.5 text-[9px] font-bold text-white shadow-lg hidden sm:block">
             CORE
-          </div>
+          </span>
+        ) : isDraft ? (
+          <span className="absolute -top-2 -right-2 z-20 rounded-full bg-[#f59e0b] px-2 py-0.5 text-[9px] font-bold text-white shadow-lg hidden sm:block">
+            DRAFT
+          </span>
         ) : null}
-        {projectId ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
+        <div
+          className={`w-12 h-12 rounded-lg flex items-center justify-center border overflow-hidden p-[2px] shadow-inner ${isLocked ? "bg-[var(--color-brand-primary)]/10 border-[var(--color-brand-primary)]/30 text-[var(--color-brand-primary)]" : "bg-black/20 border-[var(--color-line)]"}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`https://cdn.modrinth.com/data/${projectId}/icon.png`}
+            src={mod.iconUrl || MODRINTH_FALLBACK_ICON_URL}
             alt={mod.name}
             className="w-full h-full object-contain rounded-md"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-              e.currentTarget.nextElementSibling?.classList.remove("hidden");
-            }}
+            onError={handleInstalledIconError}
           />
-        ) : null}
-        <UiIcon
-          className={`w-[28px] h-[28px] ${projectId ? "hidden" : ""}`}
-          name="extension"
-        />
+          <UiIcon className="w-[28px] h-[28px] hidden" name="extension" />
+        </div>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -716,6 +896,11 @@ function InstalledModRow({
         <p className="text-[10px] text-[var(--color-text-muted)] truncate m-0 mt-0.5 max-w-lg font-mono tracking-tight opacity-70">
           {projectId || mod.sha256}
         </p>
+        {compatibilityHint ? (
+          <p className="text-[10px] font-semibold text-[var(--color-danger)] m-0 mt-1">
+            {compatibilityHint}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4 shrink-0 sm:pl-4 sm:border-l border-[var(--color-line)]">
@@ -814,6 +999,7 @@ function InstalledModRow({
 
 function ModGridCardItem({
   mod,
+  isDraft,
   selectedModKeys,
   setSelectedModKeys,
   setRemoveTarget,
@@ -823,6 +1009,7 @@ function ModGridCardItem({
   actions,
 }: {
   mod: AdminMod;
+  isDraft: boolean;
   selectedModKeys: Set<string>;
   setSelectedModKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
   setRemoveTarget: React.Dispatch<
@@ -858,6 +1045,7 @@ function ModGridCardItem({
   const selectedVersion = versions.some((v) => v.id === mod.versionId)
     ? (mod.versionId ?? "")
     : "";
+  const compatibilityHint = installedHint(mod, exaroton.connected);
 
   return (
     <div
@@ -873,30 +1061,28 @@ function ModGridCardItem({
       }}
     >
       <div className="flex justify-between items-start">
-        <div
-          className={`w-14 h-14 rounded-lg flex items-center justify-center shrink-0 border overflow-hidden p-[2px] shadow-inner relative ${isLocked ? "bg-[var(--color-brand-primary)]/10 border-[var(--color-brand-primary)]/30 text-[var(--color-brand-primary)]" : "bg-black/20 border-[var(--color-line)]"}`}
-        >
+        <div className="relative shrink-0 overflow-visible">
           {isLocked ? (
-            <div className="absolute top-0 right-0 bg-[var(--color-brand-primary)] px-1 text-[8px] font-bold text-white rounded-bl opacity-80 z-10 hidden sm:block">
+            <div className="absolute -top-2 -right-2 bg-[var(--color-brand-primary)] px-1.5 py-0.5 text-[8px] font-bold text-white rounded-full opacity-90 z-20 hidden sm:block shadow-lg">
               CORE
             </div>
+          ) : isDraft ? (
+            <div className="absolute -top-2 -right-2 bg-[#f59e0b] px-1.5 py-0.5 text-[8px] font-bold text-white rounded-full opacity-90 z-20 hidden sm:block shadow-lg">
+              DRAFT
+            </div>
           ) : null}
-          {projectId ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
+          <div
+            className={`w-14 h-14 rounded-lg flex items-center justify-center border overflow-hidden p-[2px] shadow-inner ${isLocked ? "bg-[var(--color-brand-primary)]/10 border-[var(--color-brand-primary)]/30 text-[var(--color-brand-primary)]" : "bg-black/20 border-[var(--color-line)]"}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`https://cdn.modrinth.com/data/${projectId}/icon.png`}
+              src={mod.iconUrl || MODRINTH_FALLBACK_ICON_URL}
               alt={mod.name}
               className="w-full h-full object-contain rounded-[4px]"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-                e.currentTarget.nextElementSibling?.classList.remove("hidden");
-              }}
+              onError={handleInstalledIconError}
             />
-          ) : null}
-          <UiIcon
-            className={`w-[28px] h-[28px] ${projectId ? "hidden" : ""}`}
-            name="extension"
-          />
+            <UiIcon className="w-[28px] h-[28px] hidden" name="extension" />
+          </div>
         </div>
         {!isLocked && (
           <input
@@ -936,6 +1122,11 @@ function ModGridCardItem({
             {projectId ||
               (mod.sha256 ? mod.sha256.substring(0, 12) + "..." : "Unknown ID")}
           </span>
+          {compatibilityHint ? (
+            <span className="px-1.5 py-0.5 rounded-md bg-[var(--color-danger)]/10 text-[var(--color-danger)] text-[9px] font-bold border border-[var(--color-danger)]/20">
+              {compatibilityHint}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -1045,8 +1236,9 @@ export function ModManagerPage() {
   const {
     exaroton,
     modVersionOptions,
-    coreModPolicy,
+    effectiveCorePolicy,
     selectedMods,
+    baselineMods,
     statuses,
     requestAndConfirmInstall,
     removeMod,
@@ -1057,6 +1249,14 @@ export function ModManagerPage() {
     applyModVersion,
     syncExarotonMods,
   } = useModManagerPageModel();
+
+  const publishedModKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const mod of baselineMods) {
+      keys.add(mod.projectId ?? mod.sha256);
+    }
+    return keys;
+  }, [baselineMods]);
 
   const [showAddMods, setShowAddMods] = useState(false);
   const [bulkTarget, setBulkTarget] = useState<"client" | "server" | "both">(
@@ -1078,9 +1278,9 @@ export function ModManagerPage() {
       selectedMods.filter(
         (mod) =>
           mod.projectId &&
-          coreModPolicy.lockedProjectIds.includes(mod.projectId),
+          effectiveCorePolicy.lockedProjectIds.includes(mod.projectId),
       ),
-    [selectedMods, coreModPolicy],
+    [selectedMods, effectiveCorePolicy],
   );
   const userMods = useMemo(
     () =>
@@ -1088,18 +1288,20 @@ export function ModManagerPage() {
         (mod) =>
           !(
             mod.projectId &&
-            coreModPolicy.lockedProjectIds.includes(mod.projectId)
+            effectiveCorePolicy.lockedProjectIds.includes(mod.projectId)
           ),
       ),
-    [selectedMods, coreModPolicy],
+    [selectedMods, effectiveCorePolicy],
   );
   const selectableMods = useMemo(
     () =>
       selectedMods.filter(
         (mod) =>
-          !coreModPolicy.nonRemovableProjectIds.includes(mod.projectId ?? ""),
+          !effectiveCorePolicy.nonRemovableProjectIds.includes(
+            mod.projectId ?? "",
+          ),
       ),
-    [selectedMods, coreModPolicy],
+    [selectedMods, effectiveCorePolicy],
   );
   const allSelectableSelected =
     selectableMods.length > 0 &&
@@ -1309,10 +1511,13 @@ export function ModManagerPage() {
                       <ModGridCardItem
                         key={`user-grid-${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
                         mod={mod}
+                        isDraft={
+                          !publishedModKeys.has(mod.projectId ?? mod.sha256)
+                        }
                         selectedModKeys={selectedModKeys}
                         setSelectedModKeys={setSelectedModKeys}
                         setRemoveTarget={setRemoveTarget}
-                        coreModPolicy={coreModPolicy}
+                        coreModPolicy={effectiveCorePolicy}
                         exaroton={exaroton}
                         modVersionOptions={modVersionOptions}
                         actions={{
@@ -1325,10 +1530,13 @@ export function ModManagerPage() {
                       <InstalledModRow
                         key={`user-row-${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
                         mod={mod}
+                        isDraft={
+                          !publishedModKeys.has(mod.projectId ?? mod.sha256)
+                        }
                         selectedModKeys={selectedModKeys}
                         setSelectedModKeys={setSelectedModKeys}
                         setRemoveTarget={setRemoveTarget}
-                        coreModPolicy={coreModPolicy}
+                        coreModPolicy={effectiveCorePolicy}
                         exaroton={exaroton}
                         modVersionOptions={modVersionOptions}
                         actions={{
@@ -1363,10 +1571,13 @@ export function ModManagerPage() {
                       <ModGridCardItem
                         key={`core-grid-${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
                         mod={mod}
+                        isDraft={
+                          !publishedModKeys.has(mod.projectId ?? mod.sha256)
+                        }
                         selectedModKeys={selectedModKeys}
                         setSelectedModKeys={setSelectedModKeys}
                         setRemoveTarget={setRemoveTarget}
-                        coreModPolicy={coreModPolicy}
+                        coreModPolicy={effectiveCorePolicy}
                         exaroton={exaroton}
                         modVersionOptions={modVersionOptions}
                         actions={{
@@ -1379,10 +1590,13 @@ export function ModManagerPage() {
                       <InstalledModRow
                         key={`core-row-${mod.projectId ?? mod.name}-${mod.versionId ?? mod.sha256}`}
                         mod={mod}
+                        isDraft={
+                          !publishedModKeys.has(mod.projectId ?? mod.sha256)
+                        }
                         selectedModKeys={selectedModKeys}
                         setSelectedModKeys={setSelectedModKeys}
                         setRemoveTarget={setRemoveTarget}
-                        coreModPolicy={coreModPolicy}
+                        coreModPolicy={effectiveCorePolicy}
                         exaroton={exaroton}
                         modVersionOptions={modVersionOptions}
                         actions={{
@@ -1446,16 +1660,20 @@ export function ModManagerPage() {
                     key={mod.projectId || mod.sha256}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg bg-black/20 border border-[var(--color-line)]"
                   >
-                    {mod.projectId ? (
-                      <img
-                        src={`https://cdn.modrinth.com/data/${mod.projectId}/icon.png`}
-                        alt=""
-                        className="w-7 h-7 rounded shrink-0 object-contain"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                        }}
-                      />
-                    ) : null}
+                    <img
+                      src={mod.iconUrl || MODRINTH_FALLBACK_ICON_URL}
+                      alt=""
+                      className="w-7 h-7 rounded shrink-0 object-contain"
+                      onError={(event) => {
+                        const image = event.currentTarget;
+                        if (image.dataset.fallbackApplied === "true") {
+                          image.style.display = "none";
+                          return;
+                        }
+                        image.dataset.fallbackApplied = "true";
+                        image.src = MODRINTH_FALLBACK_ICON_URL;
+                      }}
+                    />
                     <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">
                       {mod.name}
                     </span>

@@ -8,6 +8,18 @@ import { ui } from "@/admin/shared/ui/styles";
 
 import { useAssetsPageModel } from "../hooks/use-assets-page-model";
 
+const MODRINTH_FALLBACK_ICON_URL = "https://modrinth.com/favicon.ico";
+
+function makeDraftKeySet(
+  baseline: Array<{ projectId?: string; sha256: string }>,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const entry of baseline) {
+    keys.add(entry.projectId ?? entry.sha256);
+  }
+  return keys;
+}
+
 function InstalledRow({
   iconUrl,
   name,
@@ -16,6 +28,7 @@ function InstalledRow({
   tag2,
   description,
   rightActions,
+  isDraft,
 }: {
   iconUrl?: string;
   name: string;
@@ -24,15 +37,34 @@ function InstalledRow({
   tag2?: string;
   description?: string;
   rightActions: React.ReactNode;
+  isDraft?: boolean;
 }) {
   return (
     <div className="bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-xl p-4 flex items-center gap-4 hover:border-[var(--color-brand-primary)]/30 transition-colors">
-      <div className="w-12 h-12 bg-black/20 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] border border-[var(--color-line)] shrink-0 overflow-hidden">
-        {iconUrl ? (
-          <img src={iconUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <span className="font-bold text-xl">{fallback}</span>
-        )}
+      <div className="relative shrink-0 overflow-visible">
+        {isDraft ? (
+          <span className="absolute -top-2 -right-2 z-20 rounded-full bg-[#f59e0b] px-2 py-0.5 text-[9px] font-bold text-white shadow-lg">
+            DRAFT
+          </span>
+        ) : null}
+        <div className="w-12 h-12 bg-black/20 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] border border-[var(--color-line)] shrink-0 overflow-hidden">
+          <img
+            src={iconUrl || MODRINTH_FALLBACK_ICON_URL}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(event) => {
+              const image = event.currentTarget;
+              if (image.dataset.fallbackApplied === "true") {
+                image.style.display = "none";
+                image.nextElementSibling?.classList.remove("hidden");
+                return;
+              }
+              image.dataset.fallbackApplied = "true";
+              image.src = MODRINTH_FALLBACK_ICON_URL;
+            }}
+          />
+          <span className="font-bold text-xl hidden">{fallback}</span>
+        </div>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -207,6 +239,9 @@ export function AssetsPage() {
     selectedMods,
     selectedResources,
     selectedShaders,
+    baselineMods,
+    baselineResources,
+    baselineShaders,
     openModsManager,
     modalType,
     popular,
@@ -220,6 +255,19 @@ export function AssetsPage() {
     removeResource,
     removeShader,
   } = useAssetsPageModel();
+
+  const publishedModKeys = React.useMemo(
+    () => makeDraftKeySet(baselineMods),
+    [baselineMods],
+  );
+  const publishedResourceKeys = React.useMemo(
+    () => makeDraftKeySet(baselineResources),
+    [baselineResources],
+  );
+  const publishedShaderKeys = React.useMemo(
+    () => makeDraftKeySet(baselineShaders),
+    [baselineShaders],
+  );
 
   const modPreview = selectedMods.slice(0, 6);
   const hiddenMods = Math.max(selectedMods.length - modPreview.length, 0);
@@ -277,6 +325,9 @@ export function AssetsPage() {
                   fallback="M"
                   tag1={entry.side === "both" ? "user + server" : entry.side}
                   description={entry.slug ?? "Managed mod"}
+                  isDraft={
+                    !publishedModKeys.has(entry.projectId ?? entry.sha256)
+                  }
                   rightActions={
                     <button
                       type="button"
@@ -340,6 +391,9 @@ export function AssetsPage() {
                   name={entry.name}
                   fallback="R"
                   tag1={entry.slug ?? entry.projectId ?? "custom pack"}
+                  isDraft={
+                    !publishedResourceKeys.has(entry.projectId ?? entry.sha256)
+                  }
                   rightActions={
                     <button
                       type="button"
@@ -392,6 +446,9 @@ export function AssetsPage() {
                   name={entry.name}
                   fallback="S"
                   tag1={entry.slug ?? entry.projectId ?? "custom shader"}
+                  isDraft={
+                    !publishedShaderKeys.has(entry.projectId ?? entry.sha256)
+                  }
                   rightActions={
                     <button
                       type="button"

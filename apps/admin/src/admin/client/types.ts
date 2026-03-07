@@ -3,6 +3,8 @@ export type AdminMod = {
   name: string;
   provider: "modrinth" | "direct";
   side: "client" | "server" | "both";
+  clientSide?: "required" | "optional" | "unsupported";
+  serverSide?: "required" | "optional" | "unsupported";
   projectId?: string;
   versionId?: string;
   url: string;
@@ -39,6 +41,8 @@ export type CoreModPolicy = {
   fabricApiProjectId: string;
   fancyMenuProjectId: string;
   modMenuProjectId: string;
+  fancyMenuDependencyProjectIds: string[];
+  modMenuDependencyProjectIds: string[];
   lockedProjectIds: string[];
   nonRemovableProjectIds: string[];
   rules: {
@@ -165,6 +169,8 @@ export type SearchResult = {
   iconUrl?: string;
   categories?: string[];
   latestVersion?: string;
+  clientSide?: "required" | "optional" | "unsupported";
+  serverSide?: "required" | "optional" | "unsupported";
 };
 
 export type DependencyAnalysis = {

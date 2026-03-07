@@ -26,9 +26,11 @@ import type {
   CoreModPolicy,
   DependencyAnalysis,
   FabricVersionsPayload,
+  InstallModsPayload,
   SearchResult,
 } from "@/admin/client/types";
 import {
+  buildPublishedSnapshotFromBootstrap,
   buildPublishSnapshot,
   DEFAULT_EXAROTON,
   DEFAULT_FORM,
@@ -195,9 +197,25 @@ function normalizeCoreModPolicy(
     merged.fabricApiProjectId,
     merged.modMenuProjectId,
   ]);
+  const fancyDeps = Array.from(
+    new Set(
+      (merged.fancyMenuDependencyProjectIds ?? [])
+        .map((entry) => entry?.trim?.() ?? "")
+        .filter(Boolean),
+    ),
+  );
+  const modMenuDeps = Array.from(
+    new Set(
+      (merged.modMenuDependencyProjectIds ?? [])
+        .map((entry) => entry?.trim?.() ?? "")
+        .filter(Boolean),
+    ),
+  );
 
   return {
     ...merged,
+    fancyMenuDependencyProjectIds: fancyDeps,
+    modMenuDependencyProjectIds: modMenuDeps,
     nonRemovableProjectIds: Array.from(nonRemovable).filter(Boolean),
     lockedProjectIds: Array.from(locked).filter(Boolean),
   };
@@ -228,9 +246,12 @@ function buildInitialState(initialBootstrap: BootstrapPayload | null) {
   }
 
   const form = mapBootstrapToForm(initialBootstrap);
-  const selectedMods = initialBootstrap.latestProfile.mods ?? [];
-  const selectedResources = initialBootstrap.latestProfile.resources ?? [];
-  const selectedShaders = initialBootstrap.latestProfile.shaders ?? [];
+  const draft = initialBootstrap.draft;
+  const selectedMods = draft?.mods ?? initialBootstrap.latestProfile.mods ?? [];
+  const selectedResources =
+    draft?.resources ?? initialBootstrap.latestProfile.resources ?? [];
+  const selectedShaders =
+    draft?.shaders ?? initialBootstrap.latestProfile.shaders ?? [];
 
   return {
     form,
@@ -244,9 +265,9 @@ function buildInitialState(initialBootstrap: BootstrapPayload | null) {
       initialBootstrap.exaroton,
       DEFAULT_EXAROTON,
     ),
-    baselineMods: selectedMods,
-    baselineResources: selectedResources,
-    baselineShaders: selectedShaders,
+    baselineMods: initialBootstrap.latestProfile.mods ?? [],
+    baselineResources: initialBootstrap.latestProfile.resources ?? [],
+    baselineShaders: initialBootstrap.latestProfile.shaders ?? [],
     baselineRuntime: {
       minecraftVersion: initialBootstrap.latestProfile.minecraftVersion ?? "",
       loaderVersion: initialBootstrap.latestProfile.loaderVersion ?? "",
@@ -256,12 +277,8 @@ function buildInitialState(initialBootstrap: BootstrapPayload | null) {
       initialBootstrap.hasSavedDraft ?? initialBootstrap.draft !== null,
     loaderOptions: initialBootstrap.fabricVersions?.loaders ?? [],
     hasBootstrapped: true,
-    lastPublishedSnapshot: buildPublishSnapshot(
-      form,
-      selectedMods,
-      selectedResources,
-      selectedShaders,
-    ),
+    lastPublishedSnapshot:
+      buildPublishedSnapshotFromBootstrap(initialBootstrap),
   };
 }
 
@@ -460,9 +477,41 @@ export function AdminStoreProvider({
       }
 
       let next = [...mods];
+      const currentFancyDeps = Array.from(
+        new Set(coreModPolicy.fancyMenuDependencyProjectIds ?? []),
+      );
+      const currentModMenuDeps = Array.from(
+        new Set(coreModPolicy.modMenuDependencyProjectIds ?? []),
+      );
+
+      const fabricProjectId = coreModPolicy.fabricApiProjectId?.trim();
+      const fancyProjectId = coreModPolicy.fancyMenuProjectId?.trim();
+      const modMenuProjectId = coreModPolicy.modMenuProjectId?.trim();
+      const incomingHasFabric = fabricProjectId
+        ? mods.some((mod) => mod.projectId === fabricProjectId)
+        : false;
+      const baseCoreIds = [fabricProjectId, fancyProjectId, modMenuProjectId]
+        .map((entry) => entry?.trim() || "")
+        .filter(Boolean);
+
       if (!fancyEnabled) {
+        const removableFancyIds = new Set(
+          [fancyProjectId, ...currentFancyDeps].filter(Boolean),
+        );
         next = next.filter(
-          (mod) => mod.projectId !== coreModPolicy.fancyMenuProjectId,
+          (mod) => !removableFancyIds.has(mod.projectId?.trim() || ""),
+        );
+        setCoreModPolicy((current) =>
+          normalizeCoreModPolicy({
+            ...current,
+            fancyMenuDependencyProjectIds: [],
+            lockedProjectIds: (current.lockedProjectIds ?? []).filter(
+              (id) => !removableFancyIds.has(id),
+            ),
+            nonRemovableProjectIds: (
+              current.nonRemovableProjectIds ?? []
+            ).filter((id) => !removableFancyIds.has(id)),
+          }),
         );
       }
 
@@ -471,10 +520,14 @@ export function AdminStoreProvider({
           `/v1/admin/mods/resolve?projectId=${encodeURIComponent(projectId)}&minecraftVersion=${encodeURIComponent(cleanVersion)}`,
           "GET",
         );
-
-      const fabricProjectId = coreModPolicy.fabricApiProjectId?.trim();
-      const fancyProjectId = coreModPolicy.fancyMenuProjectId?.trim();
-      const modMenuProjectId = coreModPolicy.modMenuProjectId?.trim();
+      const installProjectWithDependencies = async (
+        projectId: string,
+      ): Promise<InstallModsPayload> =>
+        requestJson<InstallModsPayload>("/v1/admin/mods/install", "POST", {
+          projectId,
+          minecraftVersion: cleanVersion,
+          includeDependencies: true,
+        });
 
       const hasFabric = fabricProjectId
         ? next.some((mod) => mod.projectId === fabricProjectId)
@@ -491,40 +544,168 @@ export function AdminStoreProvider({
         }
       }
 
+      let resolvedFancyDeps = currentFancyDeps;
       if (fancyEnabled) {
         const hasFancy = fancyProjectId
           ? next.some((mod) => mod.projectId === fancyProjectId)
           : true;
-        if (!hasFancy) {
+        const hasAllTrackedFancyDeps = currentFancyDeps.every((dependencyId) =>
+          next.some((mod) => mod.projectId === dependencyId),
+        );
+        const shouldResolveFancyDeps =
+          !hasFancy || currentFancyDeps.length === 0 || !hasAllTrackedFancyDeps;
+
+        if (shouldResolveFancyDeps) {
           try {
             if (!fancyProjectId) {
               throw new Error("Missing FancyMenu projectId in core policy");
             }
-            const fancy = await resolveProject(fancyProjectId);
-            next = mergeMods(next, [fancy]);
+            const payload =
+              await installProjectWithDependencies(fancyProjectId);
+            const resolvedMods = payload.mods ?? [];
+            next = mergeMods(next, resolvedMods);
+            resolvedFancyDeps = Array.from(
+              new Set(
+                resolvedMods
+                  .map((mod) => mod.projectId?.trim() || "")
+                  .filter(
+                    (projectId) =>
+                      projectId.length > 0 && !baseCoreIds.includes(projectId),
+                  ),
+              ),
+            );
+            setCoreModPolicy((current) =>
+              normalizeCoreModPolicy({
+                ...current,
+                fancyMenuDependencyProjectIds: resolvedFancyDeps,
+                lockedProjectIds: Array.from(
+                  new Set([
+                    ...(current.lockedProjectIds ?? []),
+                    ...(fancyProjectId ? [fancyProjectId] : []),
+                    ...resolvedFancyDeps,
+                  ]),
+                ),
+                nonRemovableProjectIds: Array.from(
+                  new Set([
+                    ...(current.nonRemovableProjectIds ?? []),
+                    ...(fancyProjectId ? [fancyProjectId] : []),
+                    ...resolvedFancyDeps,
+                  ]),
+                ),
+              }),
+            );
           } catch {
-            setStatus("mods", "Could not auto-sync FancyMenu mod.", "error");
+            setStatus(
+              "mods",
+              "Could not auto-sync FancyMenu and required dependencies.",
+              "error",
+            );
           }
         }
       }
 
+      let resolvedModMenuDeps = currentModMenuDeps;
       const hasModMenu = modMenuProjectId
         ? next.some((mod) => mod.projectId === modMenuProjectId)
         : true;
-      if (!hasModMenu) {
+      const hasAllTrackedModMenuDeps = currentModMenuDeps.every(
+        (dependencyId) => next.some((mod) => mod.projectId === dependencyId),
+      );
+      const shouldResolveModMenuDeps =
+        !hasModMenu ||
+        currentModMenuDeps.length === 0 ||
+        !hasAllTrackedModMenuDeps;
+      if (shouldResolveModMenuDeps) {
         try {
           if (!modMenuProjectId) {
             throw new Error("Missing Mod Menu projectId in core policy");
           }
-          const modMenu = await resolveProject(modMenuProjectId);
-          next = mergeMods(next, [modMenu]);
+          const payload =
+            await installProjectWithDependencies(modMenuProjectId);
+          const resolvedMods = payload.mods ?? [];
+          next = mergeMods(next, resolvedMods);
+          resolvedModMenuDeps = Array.from(
+            new Set(
+              resolvedMods
+                .map((mod) => mod.projectId?.trim() || "")
+                .filter(
+                  (projectId) =>
+                    projectId.length > 0 &&
+                    !baseCoreIds.includes(projectId) &&
+                    !resolvedFancyDeps.includes(projectId),
+                ),
+            ),
+          );
+          setCoreModPolicy((current) =>
+            normalizeCoreModPolicy({
+              ...current,
+              modMenuDependencyProjectIds: resolvedModMenuDeps,
+              lockedProjectIds: Array.from(
+                new Set([
+                  ...(current.lockedProjectIds ?? []),
+                  ...(modMenuProjectId ? [modMenuProjectId] : []),
+                  ...resolvedModMenuDeps,
+                ]),
+              ),
+              nonRemovableProjectIds: Array.from(
+                new Set([
+                  ...(current.nonRemovableProjectIds ?? []),
+                  ...(modMenuProjectId ? [modMenuProjectId] : []),
+                  ...resolvedModMenuDeps,
+                ]),
+              ),
+            }),
+          );
         } catch (error) {
-          console.warn("[admin] failed to auto-sync Mod Menu", {
-            minecraftVersion: cleanVersion,
-            projectId: modMenuProjectId,
-            error: error instanceof Error ? error.message : String(error),
-          });
+          try {
+            if (!modMenuProjectId) {
+              throw new Error("Missing Mod Menu projectId in core policy");
+            }
+            const modMenu = await resolveProject(modMenuProjectId);
+            next = mergeMods(next, [modMenu]);
+          } catch (fallbackError) {
+            console.warn("[admin] failed to auto-sync Mod Menu", {
+              minecraftVersion: cleanVersion,
+              projectId: modMenuProjectId,
+              error:
+                fallbackError instanceof Error
+                  ? fallbackError.message
+                  : String(fallbackError),
+            });
+          }
         }
+      }
+
+      if (
+        fancyProjectId ||
+        modMenuProjectId ||
+        resolvedFancyDeps.length > 0 ||
+        resolvedModMenuDeps.length > 0
+      ) {
+        next = next.map((mod) => {
+          if (fancyProjectId && mod.projectId === fancyProjectId) {
+            return { ...mod, side: "client" };
+          }
+          if (modMenuProjectId && mod.projectId === modMenuProjectId) {
+            return { ...mod, side: "client" };
+          }
+          if (resolvedFancyDeps.includes(mod.projectId?.trim() || "")) {
+            return { ...mod, side: "client" };
+          }
+          if (resolvedModMenuDeps.includes(mod.projectId?.trim() || "")) {
+            return { ...mod, side: "client" };
+          }
+          return mod;
+        });
+      }
+
+      if (fabricProjectId && !incomingHasFabric) {
+        const defaultFabricSide = exaroton.connected ? "both" : "client";
+        next = next.map((mod) =>
+          mod.projectId === fabricProjectId
+            ? { ...mod, side: defaultFabricSide }
+            : mod,
+        );
       }
 
       return next;
@@ -532,7 +713,10 @@ export function AdminStoreProvider({
     [
       coreModPolicy.fabricApiProjectId,
       coreModPolicy.fancyMenuProjectId,
+      coreModPolicy.fancyMenuDependencyProjectIds,
       coreModPolicy.modMenuProjectId,
+      coreModPolicy.modMenuDependencyProjectIds,
+      exaroton.connected,
       setStatus,
     ],
   );
@@ -552,9 +736,15 @@ export function AdminStoreProvider({
         setCoreModPolicy(
           normalizeCoreModPolicy(payload.latestProfile.coreModPolicy),
         );
-        setSelectedMods(payload.latestProfile.mods ?? []);
-        setSelectedResources(payload.latestProfile.resources ?? []);
-        setSelectedShaders(payload.latestProfile.shaders ?? []);
+        setSelectedMods(
+          payload.draft?.mods ?? payload.latestProfile.mods ?? [],
+        );
+        setSelectedResources(
+          payload.draft?.resources ?? payload.latestProfile.resources ?? [],
+        );
+        setSelectedShaders(
+          payload.draft?.shaders ?? payload.latestProfile.shaders ?? [],
+        );
         setBaselineMods(payload.latestProfile.mods ?? []);
         setBaselineResources(payload.latestProfile.resources ?? []);
         setBaselineShaders(payload.latestProfile.shaders ?? []);
@@ -588,14 +778,7 @@ export function AdminStoreProvider({
         } else {
           await loadFabricVersions(nextForm.minecraftVersion);
         }
-        setLastPublishedSnapshot(
-          buildPublishSnapshot(
-            nextForm,
-            payload.latestProfile.mods ?? [],
-            payload.latestProfile.resources ?? [],
-            payload.latestProfile.shaders ?? [],
-          ),
-        );
+        setLastPublishedSnapshot(buildPublishedSnapshotFromBootstrap(payload));
       } catch (error) {
         setStatus(
           "bootstrap",
@@ -658,12 +841,29 @@ export function AdminStoreProvider({
   const effectiveCorePolicy = useMemo<CoreModPolicy>(() => {
     const nonRemovable = new Set(coreModPolicy.nonRemovableProjectIds);
     const locked = new Set(coreModPolicy.lockedProjectIds);
+    const fancyDeps = coreModPolicy.fancyMenuDependencyProjectIds ?? [];
+    const modMenuDeps = coreModPolicy.modMenuDependencyProjectIds ?? [];
+    for (const dependencyId of modMenuDeps) {
+      if (!dependencyId) continue;
+      nonRemovable.add(dependencyId);
+      locked.add(dependencyId);
+    }
     if (form.fancyMenuEnabled === "true") {
       nonRemovable.add(coreModPolicy.fancyMenuProjectId);
       locked.add(coreModPolicy.fancyMenuProjectId);
+      for (const dependencyId of fancyDeps) {
+        if (!dependencyId) continue;
+        nonRemovable.add(dependencyId);
+        locked.add(dependencyId);
+      }
     } else {
       nonRemovable.delete(coreModPolicy.fancyMenuProjectId);
       locked.delete(coreModPolicy.fancyMenuProjectId);
+      for (const dependencyId of fancyDeps) {
+        if (!dependencyId) continue;
+        nonRemovable.delete(dependencyId);
+        locked.delete(dependencyId);
+      }
     }
 
     return {

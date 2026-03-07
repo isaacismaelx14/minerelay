@@ -156,6 +156,8 @@ export const DEFAULT_POLICY: CoreModPolicy = {
   fabricApiProjectId: "P7dR8mSH",
   fancyMenuProjectId: "Wq5SjeWM",
   modMenuProjectId: "mOgUt4GM",
+  fancyMenuDependencyProjectIds: [],
+  modMenuDependencyProjectIds: [],
   lockedProjectIds: ["P7dR8mSH", "mOgUt4GM"],
   nonRemovableProjectIds: ["P7dR8mSH", "mOgUt4GM"],
   rules: {
@@ -186,8 +188,10 @@ export function mapBootstrapToForm(payload: BootstrapPayload): FormState {
       payload.latestProfile.releaseVersion ??
       payload.appSettings.releaseVersion ??
       "1.0.0",
-    minecraftVersion: payload.latestProfile.minecraftVersion ?? "",
-    loaderVersion: payload.latestProfile.loaderVersion ?? "",
+    minecraftVersion:
+      draft?.minecraftVersion ?? payload.latestProfile.minecraftVersion ?? "",
+    loaderVersion:
+      draft?.loaderVersion ?? payload.latestProfile.loaderVersion ?? "",
     supportedMinecraftVersions: (
       payload.appSettings.supportedMinecraftVersions ?? []
     ).join(", "),
@@ -202,6 +206,38 @@ export function mapBootstrapToForm(payload: BootstrapPayload): FormState {
     hideRealms: fancy?.hideRealms === false ? "false" : "true",
     fancyMenuCustomLayoutUrl: fancy?.customLayoutUrl ?? "",
     fancyMenuCustomLayoutSha256: fancy?.customLayoutSha256 ?? "",
+  };
+}
+
+function normalizeFancyMenuPayload(
+  value: Partial<FancyMenuPayload> | undefined,
+): FancyMenuPayload {
+  return {
+    enabled: value?.enabled !== false,
+    mode: value?.mode === "custom" ? "custom" : "simple",
+    playButtonLabel: value?.playButtonLabel?.trim() || "Play",
+    hideSingleplayer: value?.hideSingleplayer !== false,
+    hideMultiplayer: value?.hideMultiplayer !== false,
+    hideRealms: value?.hideRealms !== false,
+    customLayoutUrl: value?.customLayoutUrl?.trim() || undefined,
+    customLayoutSha256: value?.customLayoutSha256?.trim() || undefined,
+  };
+}
+
+export function buildPublishedSnapshotFromBootstrap(
+  payload: BootstrapPayload,
+): PublishSnapshot {
+  return {
+    profileId: payload.server.profileId?.trim() || "",
+    serverName: payload.server.name?.trim() || "",
+    serverAddress: payload.server.address?.trim() || "",
+    minecraftVersion: payload.latestProfile.minecraftVersion?.trim() || "",
+    loaderVersion: payload.latestProfile.loaderVersion?.trim() || "",
+    fancyMenu: normalizeFancyMenuPayload(payload.latestProfile.fancyMenu),
+    branding: normalizeBrandingForCompare(payload.latestProfile.branding ?? {}),
+    mods: [...(payload.latestProfile.mods ?? [])],
+    resources: [...(payload.latestProfile.resources ?? [])],
+    shaders: [...(payload.latestProfile.shaders ?? [])],
   };
 }
 

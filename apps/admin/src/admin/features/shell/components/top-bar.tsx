@@ -9,6 +9,7 @@ import {
   exarotonStatusClass,
   getExarotonStatusTone,
 } from "@/admin/shared/ui/status";
+import { useToast } from "@/admin/shared/ui/toast";
 
 import { useTopBarModel } from "../hooks/use-top-bar-model";
 
@@ -124,6 +125,7 @@ export const TopBar = memo(function TopBar() {
     publishProfile,
     statuses,
   } = useTopBarModel();
+  const { pushToast } = useToast();
   const [showExarotonPublishWarning, setShowExarotonPublishWarning] =
     useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -148,13 +150,21 @@ export const TopBar = memo(function TopBar() {
       return;
     }
 
-    void publishProfile();
+    void publishProfile().then(() => {
+      const s = statuses.publish;
+      if (s.tone === "ok") pushToast("success", s.text);
+      else if (s.tone === "error") pushToast("error", s.text);
+    });
   };
 
   const acknowledgeWarningAndPublish = () => {
     localStorage.setItem(EXAROTON_MODS_WARNING_KEY, "1");
     setShowExarotonPublishWarning(false);
-    void publishProfile();
+    void publishProfile().then(() => {
+      const s = statuses.publish;
+      if (s.tone === "ok") pushToast("success", s.text);
+      else if (s.tone === "error") pushToast("error", s.text);
+    });
   };
 
   return (
@@ -203,7 +213,17 @@ export const TopBar = memo(function TopBar() {
         <div className="w-px h-6 bg-white/[0.08] mx-0.5" />
 
         {/* Save Draft */}
-        <Button variant="outline" size="sm" onClick={() => void saveDraft()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            void saveDraft().then(() => {
+              const s = statuses.draft;
+              if (s.tone === "ok") pushToast("success", s.text);
+              else if (s.tone === "error") pushToast("error", s.text);
+            })
+          }
+        >
           Save Draft
         </Button>
 
@@ -250,7 +270,11 @@ export const TopBar = memo(function TopBar() {
               size="md"
               className="!bg-amber-500 !text-black !border-transparent hover:not-disabled:!bg-amber-400 shadow-lg shadow-amber-500/20"
               onClick={() => {
-                void discardDraft();
+                void discardDraft().then(() => {
+                  const s = statuses.draft;
+                  if (s.tone === "ok") pushToast("success", "Draft discarded.");
+                  else if (s.tone === "error") pushToast("error", s.text);
+                });
                 setShowDiscardConfirm(false);
               }}
             >

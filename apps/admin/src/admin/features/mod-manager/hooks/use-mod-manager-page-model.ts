@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { requestJson } from "@/admin/client/http";
 import type {
   AdminMod,
@@ -13,6 +15,106 @@ import type {
 } from "@/admin/client/types";
 import { mergeMods } from "@/admin/shared/domain/mods";
 import { useAdminStore } from "@/admin/shared/store/admin-store";
+
+type SideSupport = "required" | "optional" | "unsupported";
+type InstallTarget = "client" | "server" | "both";
+
+type TargetNormalization = {
+  target: InstallTarget;
+  reason: string | null;
+  tone?: "ok" | "error";
+};
+
+type SideCompatibility = {
+  clientSide?: SideSupport;
+  serverSide?: SideSupport;
+};
+
+function normalizeSideSupport(value: unknown): SideSupport | undefined {
+  if (value === "required" || value === "optional" || value === "unsupported") {
+    return value;
+  }
+  return undefined;
+}
+
+function getCompatibilityForProject(
+  projectId: string,
+  mods: AdminMod[],
+  searchResults: SearchResult[],
+): SideCompatibility {
+  const fromInstalled = mods.find((mod) => mod.projectId === projectId);
+  if (fromInstalled) {
+    return {
+      clientSide: normalizeSideSupport(fromInstalled.clientSide),
+      serverSide: normalizeSideSupport(fromInstalled.serverSide),
+    };
+  }
+  const fromSearch = searchResults.find(
+    (result) => result.projectId === projectId,
+  );
+  return {
+    clientSide: normalizeSideSupport(fromSearch?.clientSide),
+    serverSide: normalizeSideSupport(fromSearch?.serverSide),
+  };
+}
+
+function defaultTargetFromCompatibility(
+  compatibility: SideCompatibility,
+  hasServerIntegration: boolean,
+): InstallTarget {
+  if (!hasServerIntegration) {
+    return "client";
+  }
+
+  const clientSide = compatibility.clientSide ?? "optional";
+  const serverSide = compatibility.serverSide ?? "optional";
+
+  if (clientSide === "unsupported") {
+    return "server";
+  }
+  if (serverSide === "unsupported") {
+    return "client";
+  }
+  if (clientSide === "required" || serverSide === "required") {
+    return "both";
+  }
+  return "client";
+}
+
+function targetCompatibilityWarning(
+  target: InstallTarget,
+  compatibility: SideCompatibility,
+): string | null {
+  const clientSide = compatibility.clientSide;
+  const serverSide = compatibility.serverSide;
+  const usesClient = target === "client" || target === "both";
+  const usesServer = target === "server" || target === "both";
+
+  if (usesClient && clientSide === "unsupported") {
+    return "Warning: this mod is not supported on client.";
+  }
+  if (usesServer && serverSide === "unsupported") {
+    return "Warning: this mod is not supported on server.";
+  }
+  if (!usesServer && serverSide === "required") {
+    return "Warning: this mod requires server installation.";
+  }
+  if (!usesClient && clientSide === "required") {
+    return "Warning: this mod requires client installation.";
+  }
+
+  return null;
+}
+
+function clientOnlyInstallWarning(mods: AdminMod[]): string | null {
+  const requiresServer = mods.find(
+    (mod) => mod.serverSide === "required" || mod.clientSide === "unsupported",
+  );
+  if (!requiresServer) {
+    return null;
+  }
+  return `Warning: ${requiresServer.name} requires server-side support. Connect a server integration to apply server installs.`;
+}
 
 function isClientRequiredMod(
   projectId: string,
@@ -45,19 +147,31 @@ function isClientRequiredMod(
 
 function normalizeInstallTarget(
   projectId: string,
-  requestedTarget: "client" | "server" | "both",
+  requestedTarget: InstallTarget,
   mods: AdminMod[],
   coreModPolicy: CoreModPolicy,
   dependencyMap: Record<string, DependencyAnalysis>,
-): { target: "client" | "server" | "both"; reason: string | null } {
+  compatibility: SideCompatibility,
+  hasServerIntegration: boolean,
+): TargetNormalization {
+  if (!hasServerIntegration && requestedTarget !== "client") {
+    return {
+      target: "client",
+      reason:
+        "Server integration is not connected. Target was set to User (client-only).",
+      tone: "error",
+    };
+  }
+
   if (projectId === coreModPolicy.fabricApiProjectId) {
-    return { target: requestedTarget, reason: null };
+    return { target: requestedTarget, reason: null, tone: "ok" };
   }
 
   if (projectId === coreModPolicy.fancyMenuProjectId) {
     return {
       target: "client",
       reason: "FancyMenu is user-side only.",
+      tone: "ok",
     };
   }
 
@@ -65,6 +179,7 @@ function normalizeInstallTarget(
     return {
       target: "client",
       reason: "Mod Menu is user-side only.",
+      tone: "ok",
     };
   }
 
@@ -76,14 +191,103 @@ function normalizeInstallTarget(
       target: "both",
       reason:
         "This mod is required by a user-side mod, so target was set to User + Server.",
+      tone: "ok",
     };
   }
 
-  return { target: requestedTarget, reason: null };
+  const warning = targetCompatibilityWarning(requestedTarget, compatibility);
+  if (warning) {
+    return { target: requestedTarget, reason: warning, tone: "error" };
+  }
+
+  return { target: requestedTarget, reason: null, tone: "ok" };
 }
 
 export function useModManagerPageModel() {
   const store = useAdminStore();
+  const activeCorePolicy = store.effectiveCorePolicy;
+  const selectedModsRef = useRef(store.selectedMods);
+  const searchResultsRef = useRef(store.searchResults);
+  const fancyEnabledRef = useRef(store.form.fancyMenuEnabled === "true");
+
+  useEffect(() => {
+    selectedModsRef.current = store.selectedMods;
+  }, [store.selectedMods]);
+
+  useEffect(() => {
+    searchResultsRef.current = store.searchResults;
+  }, [store.searchResults]);
+
+  useEffect(() => {
+    fancyEnabledRef.current = store.form.fancyMenuEnabled === "true";
+  }, [store.form.fancyMenuEnabled]);
+
+  const syncInstalledMods = async (
+    incomingMods: AdminMod[],
+    minecraftVersion: string,
+  ) => {
+    const currentMods = selectedModsRef.current;
+    const incomingProjectIds = new Set(
+      incomingMods
+        .map((mod) => mod.projectId?.trim())
+        .filter(Boolean) as string[],
+    );
+    const currentSides = new Map(
+      currentMods
+        .map((mod) => [mod.projectId?.trim(), mod.side] as const)
+        .filter((entry): entry is readonly [string, InstallTarget] =>
+          Boolean(entry[0] && entry[1]),
+        ),
+    );
+
+    const mergedMods: AdminMod[] = mergeMods(
+      currentMods,
+      incomingMods ?? [],
+    ).map((mod): AdminMod => {
+      const projectId = mod.projectId?.trim();
+      if (!projectId) {
+        return mod;
+      }
+
+      const persistedSide = currentSides.get(projectId);
+      if (persistedSide) {
+        return { ...mod, side: persistedSide };
+      }
+
+      if (!incomingProjectIds.has(projectId)) {
+        return mod;
+      }
+
+      if (projectId === activeCorePolicy.fabricApiProjectId) {
+        return {
+          ...mod,
+          side: store.exaroton.connected ? "both" : "client",
+        };
+      }
+
+      const compatibility = getCompatibilityForProject(
+        projectId,
+        incomingMods,
+        searchResultsRef.current,
+      );
+      return {
+        ...mod,
+        side: defaultTargetFromCompatibility(
+          compatibility,
+          store.exaroton.connected,
+        ),
+      };
+    });
+    const synced = await store.ensureCoreMods(
+      mergedMods,
+      fancyEnabledRef.current,
+      minecraftVersion,
+    );
+    const nextMods = synced.length ? synced : currentMods;
+    selectedModsRef.current = nextMods;
+    store.setSelectedMods(nextMods);
+    return nextMods;
+  };
 
   const searchMods = async () => {
     const query = store.form.searchQuery?.trim?.() ?? "";
@@ -219,17 +423,16 @@ export function useModManagerPageModel() {
         "POST",
         { projectId, minecraftVersion, includeDependencies: true },
       );
-      const mergedMods = mergeMods(store.selectedMods, payload.mods ?? []);
-      const synced = await store.ensureCoreMods(
-        mergedMods,
-        store.form.fancyMenuEnabled === "true",
-        minecraftVersion,
-      );
-      store.setSelectedMods((current) => (synced.length ? synced : current));
+      await syncInstalledMods(payload.mods ?? [], minecraftVersion);
+      const warning = store.exaroton.connected
+        ? null
+        : clientOnlyInstallWarning(payload.mods ?? []);
       store.setStatus(
         "mods",
-        `Installed ${payload.primary?.name || projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies.`,
-        "ok",
+        warning
+          ? `Installed ${payload.primary?.name || projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies. ${warning}`
+          : `Installed ${payload.primary?.name || projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies.`,
+        warning ? "error" : "ok",
       );
     } catch (error) {
       store.setStatus(
@@ -264,18 +467,17 @@ export function useModManagerPageModel() {
           includeDependencies: true,
         },
       );
-      const mergedMods = mergeMods(store.selectedMods, payload.mods ?? []);
-      const synced = await store.ensureCoreMods(
-        mergedMods,
-        store.form.fancyMenuEnabled === "true",
-        minecraftVersion,
-      );
-      store.setSelectedMods(synced);
+      await syncInstalledMods(payload.mods ?? [], minecraftVersion);
       store.setPendingInstall(null);
+      const warning = store.exaroton.connected
+        ? null
+        : clientOnlyInstallWarning(payload.mods ?? []);
       store.setStatus(
         "mods",
-        `Installed ${payload.primary?.name || store.pendingInstall.projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies.`,
-        "ok",
+        warning
+          ? `Installed ${payload.primary?.name || store.pendingInstall.projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies. ${warning}`
+          : `Installed ${payload.primary?.name || store.pendingInstall.projectId} with ${String(payload.dependencies?.length ?? 0)} dependencies.`,
+        warning ? "error" : "ok",
       );
     } catch (error) {
       store.setStatus(
@@ -289,11 +491,10 @@ export function useModManagerPageModel() {
   };
 
   const removeMod = (projectId: string, sha256?: string) => {
-    const nonRemovable = new Set(store.coreModPolicy.nonRemovableProjectIds);
-    if (store.form.fancyMenuEnabled === "true") {
-      nonRemovable.add(store.coreModPolicy.fancyMenuProjectId);
-    }
-    if (projectId && nonRemovable.has(projectId)) {
+    if (
+      projectId &&
+      activeCorePolicy.nonRemovableProjectIds.includes(projectId)
+    ) {
       store.setStatus("mods", "This core mod cannot be removed.", "error");
       return;
     }
@@ -308,20 +509,31 @@ export function useModManagerPageModel() {
 
   const setModInstallTarget = (
     projectId: string,
-    target: "client" | "server" | "both",
+    target: InstallTarget,
     sha256?: string,
   ) => {
+    const targetMod = store.selectedMods.find((entry) => {
+      if (projectId && entry.projectId === projectId) return true;
+      if (sha256 && entry.sha256 === sha256) return true;
+      return false;
+    });
     const targetKey =
       projectId ||
       store.selectedMods.find((entry) => sha256 && entry.sha256 === sha256)
         ?.projectId ||
       "";
+    const compatibility = {
+      clientSide: normalizeSideSupport(targetMod?.clientSide),
+      serverSide: normalizeSideSupport(targetMod?.serverSide),
+    };
     const normalized = normalizeInstallTarget(
       targetKey,
       target,
       store.selectedMods,
-      store.coreModPolicy,
+      activeCorePolicy,
       store.dependencyMap,
+      compatibility,
+      store.exaroton.connected,
     );
 
     store.setSelectedMods((current) =>
@@ -338,13 +550,13 @@ export function useModManagerPageModel() {
     store.setStatus(
       "mods",
       normalized.reason || "Mod install target updated.",
-      "ok",
+      normalized.reason ? (normalized.tone ?? "ok") : "ok",
     );
   };
 
   const setModsInstallTargetBulk = (
     entries: Array<{ projectId?: string; sha256?: string }>,
-    target: "client" | "server" | "both",
+    target: InstallTarget,
   ) => {
     const keys = new Set(
       entries.map((entry) => entry.projectId || entry.sha256).filter(Boolean),
@@ -359,17 +571,27 @@ export function useModManagerPageModel() {
 
     const nextById = new Map<string, "client" | "server" | "both">();
     let autoAdjustedCount = 0;
+    let warningCount = 0;
     for (const mod of touched) {
       const projectId = mod.projectId || "";
+      const compatibility = {
+        clientSide: normalizeSideSupport(mod.clientSide),
+        serverSide: normalizeSideSupport(mod.serverSide),
+      };
       const normalized = normalizeInstallTarget(
         projectId,
         target,
         store.selectedMods,
-        store.coreModPolicy,
+        activeCorePolicy,
         store.dependencyMap,
+        compatibility,
+        store.exaroton.connected,
       );
       if (normalized.target !== target) {
         autoAdjustedCount += 1;
+      }
+      if (normalized.tone === "error") {
+        warningCount += 1;
       }
       nextById.set(mod.projectId || mod.sha256, normalized.target);
     }
@@ -385,11 +607,13 @@ export function useModManagerPageModel() {
       }),
     );
 
-    if (autoAdjustedCount > 0) {
+    if (autoAdjustedCount > 0 || warningCount > 0) {
       store.setStatus(
         "mods",
-        `Bulk target updated. ${String(autoAdjustedCount)} mod(s) were auto-adjusted to safe targets.`,
-        "ok",
+        warningCount > 0
+          ? `Bulk target updated with ${String(warningCount)} compatibility warning(s). ${String(autoAdjustedCount)} mod(s) were auto-adjusted to safe targets.`
+          : `Bulk target updated. ${String(autoAdjustedCount)} mod(s) were auto-adjusted to safe targets.`,
+        warningCount > 0 ? "error" : "ok",
       );
       return;
     }
@@ -407,17 +631,15 @@ export function useModManagerPageModel() {
     const keys = new Set(
       entries.map((entry) => entry.projectId || entry.sha256).filter(Boolean),
     );
-    const nonRemovable = new Set(store.coreModPolicy.nonRemovableProjectIds);
-    if (store.form.fancyMenuEnabled === "true") {
-      nonRemovable.add(store.coreModPolicy.fancyMenuProjectId);
-    }
-
     const next = store.selectedMods.filter((entry) => {
       const key = entry.projectId || entry.sha256;
       if (!keys.has(key)) {
         return true;
       }
-      if (entry.projectId && nonRemovable.has(entry.projectId)) {
+      if (
+        entry.projectId &&
+        activeCorePolicy.nonRemovableProjectIds.includes(entry.projectId)
+      ) {
         return true;
       }
       return false;

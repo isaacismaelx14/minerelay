@@ -3,6 +3,8 @@
 import { Button } from "@/admin/shared/ui/button";
 import { useOverviewPageModel } from "../hooks/use-overview-page-model";
 
+const MODRINTH_FALLBACK_ICON_URL = "https://modrinth.com/favicon.ico";
+
 export function OverviewPage() {
   const {
     form,
@@ -219,21 +221,20 @@ export function OverviewPage() {
               className="flex items-center gap-3 py-2.5 px-3 rounded-xl border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.05] transition-colors"
             >
               <div className="w-8 h-8 rounded-lg bg-black/30 border border-white/[0.06] flex items-center justify-center shrink-0 overflow-hidden">
-                {mod.projectId ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={`https://cdn.modrinth.com/data/${mod.projectId}/icon.png`}
-                    alt=""
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <span className="material-symbols-outlined text-[var(--color-text-muted)] text-[16px]">
-                    extension
-                  </span>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={mod.iconUrl || MODRINTH_FALLBACK_ICON_URL}
+                  alt=""
+                  className="w-full h-full object-contain"
+                  onError={(event) => {
+                    const image = event.currentTarget;
+                    if (image.dataset.fallbackApplied === "true") {
+                      return;
+                    }
+                    image.dataset.fallbackApplied = "true";
+                    image.src = MODRINTH_FALLBACK_ICON_URL;
+                  }}
+                />
               </div>
               <span className="text-sm font-medium text-white truncate flex-1">
                 {mod.name}

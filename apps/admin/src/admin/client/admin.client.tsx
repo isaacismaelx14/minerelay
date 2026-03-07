@@ -10,6 +10,7 @@ import {
 
 import type { BootstrapPayload } from "@/admin/client/types";
 import { AdminShell } from "@/admin/features/shell/components/admin-shell";
+import { ToastProvider } from "@/admin/shared/ui/toast";
 import {
   AdminProvider,
   getAdminViewForPath,
@@ -34,7 +35,9 @@ export function AdminConsolePage({
       initialView={initialView}
       initialBootstrap={initialBootstrap}
     >
-      <AdminShell>{children}</AdminShell>
+      <ToastProvider>
+        <AdminShell>{children}</AdminShell>
+      </ToastProvider>
     </AdminProvider>
   );
 }

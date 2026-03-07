@@ -42,6 +42,8 @@ function createBootstrapPayload(): BootstrapPayload {
         fabricApiProjectId: "P7dR8mSH",
         fancyMenuProjectId: "Wq5SjeWM",
         modMenuProjectId: "mOgUt4GM",
+        fancyMenuDependencyProjectIds: [],
+        modMenuDependencyProjectIds: [],
         lockedProjectIds: ["P7dR8mSH", "mOgUt4GM"],
         nonRemovableProjectIds: ["P7dR8mSH", "mOgUt4GM"],
         rules: {
