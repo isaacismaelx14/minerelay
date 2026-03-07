@@ -121,6 +121,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
     let _ = paths.apply_prism(&context.remote_lock);
   }
   ensure_layout(&paths)?;
+  migrate_legacy_encoded_filenames(&paths, &context.remote_lock).await?;
 
   emit_sync_progress(
     app,
@@ -1165,7 +1166,7 @@ fn flatten_local(lock: &ProfileLock) -> LauncherResult<HashMap<String, LocalFile
   Ok(map)
 }
 
-fn extract_filename(url: &str) -> LauncherResult<String> {
+fn extract_raw_filename(url: &str) -> LauncherResult<String> {
   let parsed = Url::parse(url).map_err(|error| LauncherError::InvalidData(error.to_string()))?;
   let last = parsed
     .path_segments()
@@ -1186,6 +1187,20 @@ fn extract_filename(url: &str) -> LauncherResult<String> {
   Ok(last.to_string())
 }
 
+fn extract_filename(url: &str) -> LauncherResult<String> {
+  let raw = extract_raw_filename(url)?;
+  let decoded = decode_percent_segment(&raw);
+  let normalized = normalize_filename_segment(&decoded);
+
+  if normalized.is_empty() {
+    return Err(LauncherError::InvalidData(format!(
+      "url does not contain a valid filename: {url}"
+    )));
+  }
+
+  Ok(normalized)
+}
+
 fn is_safe_filename_segment(value: &str) -> bool {
   if value == "." || value == ".." {
     return false;
@@ -1196,6 +1211,134 @@ fn is_safe_filename_segment(value: &str) -> bool {
   }
 
   !value.chars().any(|ch| ch.is_control())
+}
+
+fn decode_percent_segment(value: &str) -> String {
+  fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+      b'0'..=b'9' => Some(byte - b'0'),
+      b'a'..=b'f' => Some(10 + (byte - b'a')),
+      b'A'..=b'F' => Some(10 + (byte - b'A')),
+      _ => None,
+    }
+  }
+
+  let bytes = value.as_bytes();
+  let mut decoded = Vec::with_capacity(bytes.len());
+  let mut index = 0;
+
+  while index < bytes.len() {
+    let current = bytes[index];
+    if current == b'%' && index + 2 < bytes.len() {
+      let hi = bytes[index + 1];
+      let lo = bytes[index + 2];
+      if let (Some(hi), Some(lo)) = (hex_nibble(hi), hex_nibble(lo)) {
+        decoded.push((hi << 4) | lo);
+        index += 3;
+        continue;
+      }
+    }
+
+    decoded.push(current);
+    index += 1;
+  }
+
+  String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn normalize_filename_segment(value: &str) -> String {
+  let mut normalized = String::with_capacity(value.len());
+  for ch in value.chars() {
+    if ch.is_control() {
+      continue;
+    }
+
+    match ch {
+      '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '%' => normalized.push('_'),
+      _ => normalized.push(ch),
+    }
+  }
+
+  let trimmed = normalized.trim_matches(|ch| ch == ' ' || ch == '.');
+  let mut normalized = trimmed.to_string();
+  if normalized.is_empty() || normalized == "." || normalized == ".." {
+    normalized = "download".to_string();
+  }
+
+  let stem = normalized.split('.').next().unwrap_or_default();
+  if is_reserved_windows_name(stem) {
+    normalized.insert(0, '_');
+  }
+
+  normalized
+}
+
+fn is_reserved_windows_name(value: &str) -> bool {
+  let upper = value.to_ascii_uppercase();
+  matches!(
+    upper.as_str(),
+    "CON"
+      | "PRN"
+      | "AUX"
+      | "NUL"
+      | "COM1"
+      | "COM2"
+      | "COM3"
+      | "COM4"
+      | "COM5"
+      | "COM6"
+      | "COM7"
+      | "COM8"
+      | "COM9"
+      | "LPT1"
+      | "LPT2"
+      | "LPT3"
+      | "LPT4"
+      | "LPT5"
+      | "LPT6"
+      | "LPT7"
+      | "LPT8"
+      | "LPT9"
+  )
+}
+
+async fn migrate_legacy_encoded_filenames(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
+  for item in &lock.items {
+    migrate_legacy_encoded_filename(&paths.mods, &item.url).await?;
+  }
+
+  for entry in &lock.resources {
+    migrate_legacy_encoded_filename(&paths.resourcepacks, &entry.url).await?;
+  }
+
+  for entry in &lock.shaders {
+    migrate_legacy_encoded_filename(&paths.shaderpacks, &entry.url).await?;
+  }
+
+  for entry in &lock.configs {
+    migrate_legacy_encoded_filename(&paths.config, &entry.url).await?;
+  }
+
+  Ok(())
+}
+
+async fn migrate_legacy_encoded_filename(directory: &Path, url: &str) -> LauncherResult<()> {
+  let legacy = extract_raw_filename(url)?;
+  let normalized = extract_filename(url)?;
+
+  if legacy == normalized {
+    return Ok(());
+  }
+
+  let legacy_path = directory.join(&legacy);
+  let normalized_path = directory.join(&normalized);
+
+  if !legacy_path.exists() || normalized_path.exists() {
+    return Ok(());
+  }
+
+  fs::rename(legacy_path, normalized_path).await?;
+  Ok(())
 }
 
 async fn estimate_total_bytes(state: &AppState, files: &[DesiredFile]) -> u64 {
@@ -1511,4 +1654,29 @@ fn compute_speed(start: Instant, completed: u64) -> u64 {
   }
 
   completed / elapsed
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{extract_filename, normalize_filename_segment};
+
+  #[test]
+  fn extract_filename_decodes_percent_encoding() {
+    let url = "https://cdn.modrinth.com/data/YL57xq9U/versions/TSXvi2yD/iris-fabric-1.10.6%2Bmc1.21.11.jar";
+    let filename = extract_filename(url).expect("filename should decode");
+    assert_eq!(filename, "iris-fabric-1.10.6+mc1.21.11.jar");
+  }
+
+  #[test]
+  fn extract_filename_sanitizes_windows_unsafe_characters() {
+    let url = "https://example.com/files/Connected-Paths%201.21.9%2B%20v2.1.1%3F.zip";
+    let filename = extract_filename(url).expect("filename should sanitize");
+    assert_eq!(filename, "Connected-Paths 1.21.9+ v2.1.1_.zip");
+  }
+
+  #[test]
+  fn normalize_filename_prefixes_reserved_windows_names() {
+    let normalized = normalize_filename_segment("CON.zip");
+    assert_eq!(normalized, "_CON.zip");
+  }
 }
