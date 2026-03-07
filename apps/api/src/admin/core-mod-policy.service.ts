@@ -9,6 +9,8 @@ export type ManagedMod = {
   name: string;
   provider: 'modrinth' | 'direct';
   side: 'client' | 'server' | 'both';
+  clientSide?: 'required' | 'optional' | 'unsupported';
+  serverSide?: 'required' | 'optional' | 'unsupported';
   projectId?: string;
   versionId?: string;
   url: string;
@@ -21,6 +23,8 @@ export type CoreModPolicyMetadata = {
   fabricApiProjectId: string;
   fancyMenuProjectId: string;
   modMenuProjectId: string;
+  fancyMenuDependencyProjectIds: string[];
+  modMenuDependencyProjectIds: string[];
   lockedProjectIds: string[];
   nonRemovableProjectIds: string[];
   rules: {
@@ -35,6 +39,12 @@ export type CoreModPolicyMetadata = {
 @Injectable()
 export class CoreModPolicyService {
   private readonly logger = new Logger(CoreModPolicyService.name);
+
+  private readonly coreProjectIds = new Set([
+    FABRIC_API_PROJECT_ID,
+    FANCY_MENU_PROJECT_ID,
+    MOD_MENU_PROJECT_ID,
+  ]);
 
   private isFancyMenuMod(mod: ManagedMod): boolean {
     const name = mod.name.toLowerCase();
@@ -82,19 +92,157 @@ export class CoreModPolicyService {
     }
 
     if (this.isFancyMenuMod(mod)) {
-      return { ...mod, side: 'both' };
+      return { ...mod, side: 'client' };
     }
 
     return mod;
   }
 
-  buildMetadata(fancyMenuEnabled: boolean): CoreModPolicyMetadata {
+  private coreProjectIdsWithoutFancyDeps(): string[] {
+    return [FABRIC_API_PROJECT_ID, MOD_MENU_PROJECT_ID];
+  }
+
+  private async resolveCoreModWithFallback(input: {
+    projectId: string;
+    minecraftVersion: string;
+    existing?: ManagedMod;
+    resolveMod: (
+      projectId: string,
+      minecraftVersion: string,
+      versionId?: string,
+    ) => Promise<ManagedMod>;
+    warningLabel: string;
+  }): Promise<ManagedMod> {
+    const cleanVersion = input.minecraftVersion.trim();
+    if (input.existing?.versionId) {
+      try {
+        return await input.resolveMod(
+          input.projectId,
+          cleanVersion,
+          input.existing.versionId,
+        );
+      } catch {
+        // Fall back to latest compatible below.
+      }
+    }
+
+    try {
+      return await input.resolveMod(input.projectId, cleanVersion);
+    } catch (error) {
+      if (input.existing) {
+        this.logger.warn(
+          `Using existing ${input.warningLabel} because resolver failed: ${(error as Error).message || 'unknown error'}`,
+        );
+        return input.existing;
+      }
+      throw error;
+    }
+  }
+
+  private async collectRequiredDependencies(input: {
+    rootProjectId: string;
+    rootVersionId?: string;
+    ownerLabel: string;
+    minecraftVersion: string;
+    resolveModWithDependencies?: (
+      projectId: string,
+      minecraftVersion: string,
+      versionId?: string,
+    ) => Promise<{ mod: ManagedMod; requiredDependencies: string[] }>;
+    resolveMod: (
+      projectId: string,
+      minecraftVersion: string,
+      versionId?: string,
+    ) => Promise<ManagedMod>;
+    existingByProject: Map<string, ManagedMod>;
+  }): Promise<ManagedMod[]> {
+    if (!input.resolveModWithDependencies) {
+      return [];
+    }
+
+    const cleanVersion = input.minecraftVersion.trim();
+    const deps: ManagedMod[] = [];
+    const visited = new Set<string>();
+
+    const walk = async (projectId: string, versionId?: string) => {
+      const normalized = projectId.trim();
+      if (!normalized || visited.has(normalized)) {
+        return;
+      }
+      visited.add(normalized);
+
+      const resolved = await input.resolveModWithDependencies!(
+        normalized,
+        cleanVersion,
+        versionId,
+      );
+
+      for (const depProjectId of resolved.requiredDependencies) {
+        const depId = depProjectId.trim();
+        if (!depId || visited.has(depId)) {
+          continue;
+        }
+
+        const existing = input.existingByProject.get(depId);
+        const depResolved = await this.resolveCoreModWithFallback({
+          projectId: depId,
+          minecraftVersion: cleanVersion,
+          existing,
+          resolveMod: input.resolveMod,
+          warningLabel: `${input.ownerLabel} dependency '${depId}'`,
+        });
+
+        const managedDep = this.enforceManagedSide({
+          ...depResolved,
+          side: 'client',
+        });
+        deps.push(managedDep);
+        await walk(depId);
+      }
+    };
+
+    await walk(input.rootProjectId, input.rootVersionId);
+    return this.dedupeMods(deps);
+  }
+
+  buildMetadata(
+    fancyMenuEnabled: boolean,
+    fancyMenuDependencyProjectIds: string[] = [],
+    modMenuDependencyProjectIds: string[] = [],
+  ): CoreModPolicyMetadata {
+    const normalizeDeps = (ids: string[]) =>
+      Array.from(
+        new Set(
+          ids
+            .map((value) => value.trim())
+            .filter(
+              (value) => value.length > 0 && !this.coreProjectIds.has(value),
+            ),
+        ),
+      );
+
+    const normalizedFancyDeps = normalizeDeps(fancyMenuDependencyProjectIds);
+    const normalizedModMenuDeps = normalizeDeps(modMenuDependencyProjectIds);
+
+    const lockedProjectIds = this.coreProjectIdsWithoutFancyDeps();
+    const nonRemovableProjectIds = this.coreProjectIdsWithoutFancyDeps();
+    lockedProjectIds.push(...normalizedModMenuDeps);
+    nonRemovableProjectIds.push(...normalizedModMenuDeps);
+    if (fancyMenuEnabled) {
+      lockedProjectIds.push(FANCY_MENU_PROJECT_ID);
+      nonRemovableProjectIds.push(FANCY_MENU_PROJECT_ID);
+      lockedProjectIds.push(...normalizedFancyDeps);
+      nonRemovableProjectIds.push(...normalizedFancyDeps);
+    }
+
     return {
       fabricApiProjectId: FABRIC_API_PROJECT_ID,
       fancyMenuProjectId: FANCY_MENU_PROJECT_ID,
       modMenuProjectId: MOD_MENU_PROJECT_ID,
-      lockedProjectIds: [FABRIC_API_PROJECT_ID, MOD_MENU_PROJECT_ID],
-      nonRemovableProjectIds: [FABRIC_API_PROJECT_ID, MOD_MENU_PROJECT_ID],
+      fancyMenuDependencyProjectIds: normalizedFancyDeps,
+      modMenuDependencyProjectIds: normalizedModMenuDeps,
+      lockedProjectIds: Array.from(new Set(lockedProjectIds)),
+      nonRemovableProjectIds: Array.from(new Set(nonRemovableProjectIds)),
       rules: {
         fabricApiRequired: true,
         fabricApiVersionEditable: true,
@@ -114,9 +262,21 @@ export class CoreModPolicyService {
       minecraftVersion: string,
       versionId?: string,
     ) => Promise<ManagedMod>;
+    resolveModWithDependencies?: (
+      projectId: string,
+      minecraftVersion: string,
+      versionId?: string,
+    ) => Promise<{ mod: ManagedMod; requiredDependencies: string[] }>;
   }): Promise<ManagedMod[]> {
     const minecraftVersion = input.minecraftVersion.trim();
     const deduped = this.dedupeMods(input.mods);
+    const existingByProject = new Map<string, ManagedMod>();
+    for (const mod of deduped) {
+      const projectId = mod.projectId?.trim();
+      if (projectId) {
+        existingByProject.set(projectId, mod);
+      }
+    }
 
     const filtered = deduped.filter((mod) => {
       if (this.isFabricApiMod(mod)) {
@@ -136,174 +296,98 @@ export class CoreModPolicyService {
 
     const fabricApiExisting = deduped.find((mod) => this.isFabricApiMod(mod));
     const targetFabricSide = fabricApiExisting?.side ?? 'both';
-    if (fabricApiExisting?.versionId) {
-      try {
-        const resolvedFabric = await input.resolveMod(
-          FABRIC_API_PROJECT_ID,
-          minecraftVersion,
-          fabricApiExisting.versionId,
-        );
-        filtered.push(
-          this.enforceManagedSide({
-            ...resolvedFabric,
-            side: targetFabricSide,
-          }),
-        );
-      } catch {
-        try {
-          const resolvedFabric = await input.resolveMod(
-            FABRIC_API_PROJECT_ID,
-            minecraftVersion,
-          );
-          filtered.push(
-            this.enforceManagedSide({
-              ...resolvedFabric,
-              side: targetFabricSide,
-            }),
-          );
-        } catch (error) {
-          if (fabricApiExisting) {
-            this.logger.warn(
-              `Using existing Fabric API because resolver failed: ${(error as Error).message || 'unknown error'}`,
-            );
-            filtered.push(
-              this.enforceManagedSide({
-                ...fabricApiExisting,
-                side: targetFabricSide,
-              }),
-            );
-          } else {
-            throw error;
-          }
-        }
-      }
-    } else {
-      try {
-        const resolvedFabric = await input.resolveMod(
-          FABRIC_API_PROJECT_ID,
-          minecraftVersion,
-        );
-        filtered.push(
-          this.enforceManagedSide({
-            ...resolvedFabric,
-            side: targetFabricSide,
-          }),
-        );
-      } catch (error) {
-        if (fabricApiExisting) {
-          this.logger.warn(
-            `Using existing Fabric API because resolver failed: ${(error as Error).message || 'unknown error'}`,
-          );
-          filtered.push(
-            this.enforceManagedSide({
-              ...fabricApiExisting,
-              side: targetFabricSide,
-            }),
-          );
-        } else {
-          throw error;
-        }
-      }
-    }
+    const resolvedFabric = await this.resolveCoreModWithFallback({
+      projectId: FABRIC_API_PROJECT_ID,
+      minecraftVersion,
+      existing: fabricApiExisting,
+      resolveMod: input.resolveMod,
+      warningLabel: 'Fabric API',
+    });
+    filtered.push(
+      this.enforceManagedSide({
+        ...resolvedFabric,
+        side: targetFabricSide,
+      }),
+    );
 
     if (input.fancyMenuEnabled) {
       const fancyExisting = deduped.find((mod) => this.isFancyMenuMod(mod));
-      if (fancyExisting?.versionId) {
-        try {
-          filtered.push(
-            this.enforceManagedSide(
-              await input.resolveMod(
-                FANCY_MENU_PROJECT_ID,
-                minecraftVersion,
-                fancyExisting.versionId,
-              ),
-            ),
-          );
-        } catch {
-          try {
-            filtered.push(
-              this.enforceManagedSide(
-                await input.resolveMod(FANCY_MENU_PROJECT_ID, minecraftVersion),
-              ),
-            );
-          } catch (error) {
-            if (fancyExisting) {
-              this.logger.warn(
-                `Using existing FancyMenu because resolver failed: ${(error as Error).message || 'unknown error'}`,
-              );
-              filtered.push(this.enforceManagedSide(fancyExisting));
-            } else {
-              throw error;
-            }
-          }
+      const resolvedFancy = await this.resolveCoreModWithFallback({
+        projectId: FANCY_MENU_PROJECT_ID,
+        minecraftVersion,
+        existing: fancyExisting,
+        resolveMod: input.resolveMod,
+        warningLabel: 'FancyMenu',
+      });
+      filtered.push(
+        this.enforceManagedSide({
+          ...resolvedFancy,
+          side: 'client',
+        }),
+      );
+
+      const fancyDependencies = await this.collectRequiredDependencies({
+        rootProjectId: FANCY_MENU_PROJECT_ID,
+        rootVersionId: resolvedFancy.versionId,
+        ownerLabel: 'FancyMenu',
+        minecraftVersion,
+        resolveMod: input.resolveMod,
+        resolveModWithDependencies: input.resolveModWithDependencies,
+        existingByProject,
+      });
+      for (const dependency of fancyDependencies) {
+        if (
+          dependency.projectId &&
+          this.coreProjectIds.has(dependency.projectId.trim())
+        ) {
+          continue;
         }
-      } else {
-        try {
-          filtered.push(
-            this.enforceManagedSide(
-              await input.resolveMod(FANCY_MENU_PROJECT_ID, minecraftVersion),
-            ),
-          );
-        } catch (error) {
-          if (fancyExisting) {
-            this.logger.warn(
-              `Using existing FancyMenu because resolver failed: ${(error as Error).message || 'unknown error'}`,
-            );
-            filtered.push(this.enforceManagedSide(fancyExisting));
-          } else {
-            throw error;
-          }
-        }
+        filtered.push(
+          this.enforceManagedSide({
+            ...dependency,
+            side: 'client',
+          }),
+        );
       }
     }
 
     const modMenuExisting = deduped.find((mod) => this.isModMenuMod(mod));
-    if (modMenuExisting?.versionId) {
-      try {
-        filtered.push(
-          this.enforceManagedSide(
-            await input.resolveMod(
-              MOD_MENU_PROJECT_ID,
-              minecraftVersion,
-              modMenuExisting.versionId,
-            ),
-          ),
-        );
-      } catch {
-        try {
-          filtered.push(
-            this.enforceManagedSide(
-              await input.resolveMod(MOD_MENU_PROJECT_ID, minecraftVersion),
-            ),
-          );
-        } catch (error) {
-          if (modMenuExisting) {
-            this.logger.warn(
-              `Using existing Mod Menu because resolver failed: ${(error as Error).message || 'unknown error'}`,
-            );
-            filtered.push(this.enforceManagedSide(modMenuExisting));
-          } else {
-            throw error;
-          }
-        }
+    const resolvedModMenu = await this.resolveCoreModWithFallback({
+      projectId: MOD_MENU_PROJECT_ID,
+      minecraftVersion,
+      existing: modMenuExisting,
+      resolveMod: input.resolveMod,
+      warningLabel: 'Mod Menu',
+    });
+    filtered.push(
+      this.enforceManagedSide({
+        ...resolvedModMenu,
+        side: 'client',
+      }),
+    );
+
+    const modMenuDependencies = await this.collectRequiredDependencies({
+      rootProjectId: MOD_MENU_PROJECT_ID,
+      rootVersionId: resolvedModMenu.versionId,
+      ownerLabel: 'Mod Menu',
+      minecraftVersion,
+      resolveMod: input.resolveMod,
+      resolveModWithDependencies: input.resolveModWithDependencies,
+      existingByProject,
+    });
+    for (const dependency of modMenuDependencies) {
+      if (
+        dependency.projectId &&
+        this.coreProjectIds.has(dependency.projectId.trim())
+      ) {
+        continue;
       }
-    } else {
-      try {
-        filtered.push(
-          this.enforceManagedSide(
-            await input.resolveMod(MOD_MENU_PROJECT_ID, minecraftVersion),
-          ),
-        );
-      } catch (error) {
-        if (modMenuExisting) {
-          this.logger.warn(
-            `Using existing Mod Menu because resolver failed: ${(error as Error).message || 'unknown error'}`,
-          );
-          filtered.push(this.enforceManagedSide(modMenuExisting));
-        } else {
-          throw error;
-        }
-      }
+      filtered.push(
+        this.enforceManagedSide({
+          ...dependency,
+          side: 'client',
+        }),
+      );
     }
 
     return this.dedupeMods(filtered).map((mod) => this.enforceManagedSide(mod));

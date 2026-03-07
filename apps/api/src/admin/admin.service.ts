@@ -38,7 +38,13 @@ import {
   UpdateSettingsDto,
 } from './admin.dto';
 import { BundleSandboxClient } from './bundle-sandbox.client';
-import { CoreModPolicyService, ManagedMod } from './core-mod-policy.service';
+import {
+  CoreModPolicyService,
+  FABRIC_API_PROJECT_ID,
+  FANCY_MENU_PROJECT_ID,
+  MOD_MENU_PROJECT_ID,
+  ManagedMod,
+} from './core-mod-policy.service';
 import { ArtifactsStorageService } from '../artifacts/artifacts-storage.service';
 import {
   ExarotonApiClient,
@@ -137,8 +143,12 @@ interface ModrinthSearchResponse {
     categories?: string[];
     icon_url?: string;
     latest_version?: string;
+    client_side?: 'required' | 'optional' | 'unsupported';
+    server_side?: 'required' | 'optional' | 'unsupported';
   }>;
 }
+
+type ModrinthSideSupport = 'required' | 'optional' | 'unsupported';
 
 interface ModrinthProject {
   id: string;
@@ -146,6 +156,8 @@ interface ModrinthProject {
   title: string;
   icon_url?: string;
   project_type?: string;
+  client_side?: ModrinthSideSupport;
+  server_side?: ModrinthSideSupport;
 }
 
 interface ModrinthDependency {
@@ -189,6 +201,18 @@ type ManagedShaderPack = {
   kind: 'shaderpack';
   name: string;
   provider: 'modrinth' | 'direct';
+  projectId?: string;
+  versionId?: string;
+  url: string;
+  sha256: string;
+  iconUrl?: string;
+  slug?: string;
+};
+
+type BootstrapAsset = {
+  kind: 'resourcepack' | 'shaderpack';
+  name: string;
+  provider?: 'modrinth' | 'direct';
   projectId?: string;
   versionId?: string;
   url: string;
@@ -355,6 +379,13 @@ export class AdminService implements OnModuleInit {
         fancyMenuEnabled: activeFancyMenu?.enabled === true,
         resolveMod: (projectId, minecraftVersion, versionId) =>
           this.resolveCompatibleMod(projectId, minecraftVersion, versionId),
+        resolveModWithDependencies: (projectId, minecraftVersion, versionId) =>
+          this.resolveCompatibleModWithDependencies(
+            projectId,
+            minecraftVersion,
+            {},
+            versionId,
+          ),
       });
     } catch {
       normalizedMods = lockMods as ManagedMod[];
@@ -363,15 +394,65 @@ export class AdminService implements OnModuleInit {
     const lockBranding = lockBrandingResult.success
       ? lockBrandingResult.data
       : null;
-    const draft = this.extractDraft(settings.publishDraft);
+    const rawDraft = this.extractDraft(settings.publishDraft);
 
-    const minecraftVersion = draft?.minecraftVersion || latest.minecraftVersion;
-    const loaderVersion = draft?.loaderVersion || latest.loaderVersion;
-    const mods = draft?.mods || normalizedMods;
-    const resources = draft?.resources || lock.resources || [];
-    const shaders = draft?.shaders || lock.shaders || [];
-    const fancyMenu = draft?.fancyMenu || activeFancyMenu;
-    const branding = draft?.branding || lockBranding;
+    const [publishedMods, publishedResources, publishedShaders] =
+      await Promise.all([
+        this.hydrateModrinthModMetadata(normalizedMods),
+        this.hydrateModrinthAssetMetadata(
+          (lock.resources || []) as BootstrapAsset[],
+        ),
+        this.hydrateModrinthAssetMetadata(
+          (lock.shaders || []) as BootstrapAsset[],
+        ),
+      ]);
+    const publishedFancyMenu = activeFancyMenu;
+    const publishedBranding = lockBranding;
+
+    const [draftMods, draftResources, draftShaders] = await Promise.all([
+      rawDraft?.mods
+        ? this.hydrateModrinthModMetadata(rawDraft.mods)
+        : Promise.resolve(null),
+      rawDraft?.resources
+        ? this.hydrateModrinthAssetMetadata(
+            rawDraft.resources as BootstrapAsset[],
+          )
+        : Promise.resolve(null),
+      rawDraft?.shaders
+        ? this.hydrateModrinthAssetMetadata(
+            rawDraft.shaders as BootstrapAsset[],
+          )
+        : Promise.resolve(null),
+    ]);
+    const draft =
+      rawDraft === null
+        ? null
+        : {
+            ...rawDraft,
+            mods: draftMods,
+            resources: draftResources,
+            shaders: draftShaders,
+          };
+
+    const selectedMinecraftVersion =
+      draft?.minecraftVersion || latest.minecraftVersion;
+    const publishedFancyDependencyProjectIds =
+      publishedFancyMenu?.enabled === true
+        ? await this.resolveCoreDependencyProjectIds(
+            FANCY_MENU_PROJECT_ID,
+            latest.minecraftVersion,
+            normalizedMods.find(
+              (mod) => mod.projectId === FANCY_MENU_PROJECT_ID,
+            )?.versionId,
+          ).catch(() => [])
+        : [];
+    const publishedModMenuDependencyProjectIds =
+      await this.resolveCoreDependencyProjectIds(
+        MOD_MENU_PROJECT_ID,
+        latest.minecraftVersion,
+        normalizedMods.find((mod) => mod.projectId === MOD_MENU_PROJECT_ID)
+          ?.versionId,
+      ).catch(() => []);
 
     const payload = {
       server: {
@@ -389,17 +470,19 @@ export class AdminService implements OnModuleInit {
             minor: settings.releaseMinor,
             patch: settings.releasePatch,
           }),
-        minecraftVersion,
+        minecraftVersion: latest.minecraftVersion,
         loader: latest.loader,
-        loaderVersion,
-        mods,
-        resources,
-        shaders,
-        fancyMenu,
+        loaderVersion: latest.loaderVersion,
+        mods: publishedMods,
+        resources: publishedResources,
+        shaders: publishedShaders,
+        fancyMenu: publishedFancyMenu,
         coreModPolicy: this.coreModPolicy.buildMetadata(
-          fancyMenu?.enabled === true,
+          publishedFancyMenu?.enabled === true,
+          publishedFancyDependencyProjectIds,
+          publishedModMenuDependencyProjectIds,
         ),
-        branding,
+        branding: publishedBranding,
       },
       appSettings: settings,
       draft,
@@ -407,13 +490,13 @@ export class AdminService implements OnModuleInit {
       exaroton,
     };
 
-    if (!includeLoaders || !minecraftVersion.trim()) {
+    if (!includeLoaders || !selectedMinecraftVersion.trim()) {
       return payload;
     }
 
-    const fabricVersions = await this.getFabricVersions(minecraftVersion).catch(
-      () => null,
-    );
+    const fabricVersions = await this.getFabricVersions(
+      selectedMinecraftVersion,
+    ).catch(() => null);
     return {
       ...payload,
       fabricVersions,
@@ -1119,8 +1202,6 @@ export class AdminService implements OnModuleInit {
       : 12;
     const url = `${this.modrinthApiBase}/search?query=${encodeURIComponent(searchQuery)}&index=${searchIndex}&limit=${safeLimit}&facets=${encodeURIComponent(facets)}`;
 
-    console.log(`Modrinth API request: ${url}`);
-
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'mvl-admin-mvp/0.2.0',
@@ -1152,6 +1233,8 @@ export class AdminService implements OnModuleInit {
       author: hit.author,
       categories: hit.categories,
       latestVersion: hit.latest_version,
+      clientSide: hit.client_side,
+      serverSide: hit.server_side,
     }));
 
     if (cleanQuery && cleanVersion) {
@@ -2586,6 +2669,55 @@ export class AdminService implements OnModuleInit {
     }
   }
 
+  private async resolveCoreDependencyProjectIds(
+    rootProjectId: string,
+    minecraftVersion: string,
+    versionId?: string,
+  ): Promise<string[]> {
+    const cleanVersion = minecraftVersion.trim();
+    if (!cleanVersion) {
+      return [];
+    }
+
+    const dependencyProjectIds = new Set<string>();
+    const visited = new Set<string>();
+
+    const walk = async (projectId: string, projectVersionId?: string) => {
+      const normalized = projectId.trim();
+      if (!normalized || visited.has(normalized)) {
+        return;
+      }
+      visited.add(normalized);
+
+      const resolved = await this.resolveCompatibleModWithDependencies(
+        normalized,
+        cleanVersion,
+        {},
+        projectVersionId,
+      );
+
+      for (const dependencyIdRaw of resolved.requiredDependencies) {
+        const dependencyId = dependencyIdRaw.trim();
+        if (!dependencyId) {
+          continue;
+        }
+        if (
+          dependencyId === FABRIC_API_PROJECT_ID ||
+          dependencyId === FANCY_MENU_PROJECT_ID ||
+          dependencyId === MOD_MENU_PROJECT_ID
+        ) {
+          continue;
+        }
+
+        dependencyProjectIds.add(dependencyId);
+        await walk(dependencyId);
+      }
+    };
+
+    await walk(rootProjectId, versionId);
+    return Array.from(dependencyProjectIds);
+  }
+
   private normalizeAssetType(type?: string): AssetType {
     if (type === 'resourcepack' || type === 'shaderpack') {
       return type;
@@ -2601,6 +2733,41 @@ export class AdminService implements OnModuleInit {
       return 'shader';
     }
     return 'mod';
+  }
+
+  private normalizeModrinthSideSupport(
+    value: unknown,
+  ): ModrinthSideSupport | undefined {
+    if (
+      value === 'required' ||
+      value === 'optional' ||
+      value === 'unsupported'
+    ) {
+      return value;
+    }
+    return undefined;
+  }
+
+  private defaultInstallSideFromSupport(input: {
+    clientSide?: ModrinthSideSupport;
+    serverSide?: ModrinthSideSupport;
+  }): 'client' | 'server' | 'both' {
+    const clientSide = input.clientSide ?? 'optional';
+    const serverSide = input.serverSide ?? 'optional';
+
+    if (clientSide === 'unsupported') {
+      return 'server';
+    }
+
+    if (serverSide === 'unsupported') {
+      return 'client';
+    }
+
+    if (clientSide === 'required' || serverSide === 'required') {
+      return 'both';
+    }
+
+    return 'client';
   }
 
   private async resolveCompatibleModWithDependencies(
@@ -2634,6 +2801,8 @@ export class AdminService implements OnModuleInit {
     }
 
     const sha256 = await this.computeSha256FromUrl(file.url);
+    const clientSide = this.normalizeModrinthSideSupport(project.client_side);
+    const serverSide = this.normalizeModrinthSideSupport(project.server_side);
     const requiredDependencies = Array.from(
       new Set(
         (selected.dependencies ?? [])
@@ -2648,7 +2817,9 @@ export class AdminService implements OnModuleInit {
         kind: 'mod',
         name: project.title,
         provider: 'modrinth',
-        side: 'client',
+        side: this.defaultInstallSideFromSupport({ clientSide, serverSide }),
+        clientSide,
+        serverSide,
         projectId: project.id,
         versionId: selected.id,
         url: file.url,
@@ -2763,6 +2934,8 @@ export class AdminService implements OnModuleInit {
     author: string;
     categories: string[] | undefined;
     latestVersion: string | undefined;
+    clientSide: ModrinthSideSupport | undefined;
+    serverSide: ModrinthSideSupport | undefined;
   } | null> {
     try {
       const project = await this.fetchProject(query, {});
@@ -2807,6 +2980,8 @@ export class AdminService implements OnModuleInit {
         author: 'Modrinth',
         categories: [],
         latestVersion: latest.name?.trim() || latest.id || undefined,
+        clientSide: project.client_side,
+        serverSide: project.server_side,
       };
     } catch {
       return null;
@@ -3066,6 +3241,8 @@ export class AdminService implements OnModuleInit {
       name: string;
       provider: 'modrinth' | 'direct';
       side: 'client' | 'server' | 'both';
+      clientSide?: 'required' | 'optional' | 'unsupported';
+      serverSide?: 'required' | 'optional' | 'unsupported';
       projectId?: string;
       versionId?: string;
       url: string;
@@ -3115,6 +3292,13 @@ export class AdminService implements OnModuleInit {
       fancyMenuEnabled: includeFancyMenu,
       resolveMod: (projectId, minecraftVersion, versionId) =>
         this.resolveCompatibleMod(projectId, minecraftVersion, versionId),
+      resolveModWithDependencies: (projectId, minecraftVersion, versionId) =>
+        this.resolveCompatibleModWithDependencies(
+          projectId,
+          minecraftVersion,
+          {},
+          versionId,
+        ),
     });
 
     const configs = [];
@@ -3328,6 +3512,150 @@ export class AdminService implements OnModuleInit {
   private extractFancyMenu(value: unknown) {
     const parsed = FancyMenuSettingsSchema.safeParse(value);
     return parsed.success ? parsed.data : null;
+  }
+
+  private parseModrinthIdsFromUrl(url: string): {
+    projectId?: string;
+    versionId?: string;
+  } {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (host !== 'cdn.modrinth.com' && !host.endsWith('.cdn.modrinth.com')) {
+        return {};
+      }
+
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      if (segments[0] !== 'data') {
+        return {};
+      }
+
+      const projectId = segments[1]?.trim() || undefined;
+      const versionsIndex = segments.findIndex(
+        (segment) => segment === 'versions',
+      );
+      const versionId =
+        versionsIndex >= 0
+          ? segments[versionsIndex + 1]?.trim() || undefined
+          : undefined;
+
+      return { projectId, versionId };
+    } catch {
+      return {};
+    }
+  }
+
+  private normalizeModrinthProvider(
+    provider: unknown,
+    projectId?: string,
+  ): 'modrinth' | 'direct' {
+    if (provider === 'modrinth' || provider === 'direct') {
+      return provider;
+    }
+    return projectId ? 'modrinth' : 'direct';
+  }
+
+  private async hydrateModrinthModMetadata(
+    mods: ManagedMod[],
+  ): Promise<ManagedMod[]> {
+    if (mods.length === 0) {
+      return mods;
+    }
+
+    const projectCache: Record<string, ModrinthProject> = {};
+
+    return Promise.all(
+      mods.map(async (mod) => {
+        const idsFromUrl = this.parseModrinthIdsFromUrl(mod.url);
+        const projectId = mod.projectId?.trim() || idsFromUrl.projectId;
+        const versionId = mod.versionId?.trim() || idsFromUrl.versionId;
+        const provider = this.normalizeModrinthProvider(
+          mod.provider,
+          projectId,
+        );
+        let iconUrl = mod.iconUrl?.trim() || undefined;
+        let slug = mod.slug?.trim() || undefined;
+        let clientSide =
+          this.normalizeModrinthSideSupport(mod.clientSide) ?? undefined;
+        let serverSide =
+          this.normalizeModrinthSideSupport(mod.serverSide) ?? undefined;
+
+        if (
+          provider === 'modrinth' &&
+          projectId &&
+          (!iconUrl || !slug || !clientSide || !serverSide)
+        ) {
+          try {
+            const project = await this.fetchProject(projectId, projectCache);
+            iconUrl = iconUrl || project.icon_url;
+            slug = slug || project.slug;
+            clientSide =
+              clientSide ??
+              this.normalizeModrinthSideSupport(project.client_side);
+            serverSide =
+              serverSide ??
+              this.normalizeModrinthSideSupport(project.server_side);
+          } catch {
+            // Best-effort metadata hydration.
+          }
+        }
+
+        return {
+          ...mod,
+          provider,
+          projectId,
+          versionId,
+          iconUrl,
+          slug,
+          clientSide,
+          serverSide,
+        };
+      }),
+    );
+  }
+
+  private async hydrateModrinthAssetMetadata(
+    items: BootstrapAsset[],
+  ): Promise<BootstrapAsset[]> {
+    if (items.length === 0) {
+      return items;
+    }
+
+    const projectCache: Record<string, ModrinthProject> = {};
+
+    return Promise.all(
+      items.map(async (item) => {
+        const idsFromUrl = this.parseModrinthIdsFromUrl(item.url);
+        const projectId = item.projectId?.trim() || idsFromUrl.projectId;
+        const versionId = item.versionId?.trim() || idsFromUrl.versionId;
+        const provider = this.normalizeModrinthProvider(
+          item.provider,
+          projectId,
+        );
+
+        let iconUrl = item.iconUrl?.trim() || undefined;
+        let slug = item.slug?.trim() || undefined;
+
+        if (provider === 'modrinth' && projectId && (!iconUrl || !slug)) {
+          try {
+            const project = await this.fetchProject(projectId, projectCache);
+            iconUrl = iconUrl || project.icon_url;
+            slug = slug || project.slug;
+          } catch {
+            // Best-effort metadata hydration; keep existing asset data if lookup fails.
+          }
+        }
+
+        return {
+          ...item,
+          provider,
+          projectId,
+          versionId,
+          iconUrl,
+          slug,
+        };
+      }),
+    );
   }
 
   private extractDraft(value: unknown) {

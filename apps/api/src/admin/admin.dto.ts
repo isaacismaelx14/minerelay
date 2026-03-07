@@ -28,6 +28,16 @@ export class ResolvedModDto {
   side!: 'client' | 'server' | 'both';
 
   @IsString()
+  @IsIn(['required', 'optional', 'unsupported'])
+  @IsOptional()
+  clientSide?: 'required' | 'optional' | 'unsupported';
+
+  @IsString()
+  @IsIn(['required', 'optional', 'unsupported'])
+  @IsOptional()
+  serverSide?: 'required' | 'optional' | 'unsupported';
+
+  @IsString()
   @IsOptional()
   projectId?: string;
 
@@ -41,6 +51,14 @@ export class ResolvedModDto {
   @IsString()
   @Matches(/^[A-Fa-f0-9]{64}$/)
   sha256!: string;
+
+  @IsString()
+  @IsOptional()
+  iconUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  slug?: string;
 }
 
 export class ResolvedResourcePackDto {
