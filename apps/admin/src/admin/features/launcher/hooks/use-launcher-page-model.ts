@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { requestJson } from "@/admin/client/http";
+import { getAdminApiOrigin, requestJson } from "@/admin/client/http";
 import type {
   LauncherPairingClaimIssuePayload,
   LauncherPairingClaimListItem,
@@ -30,9 +30,17 @@ export function formatDateTime(value: string | null): string {
 
 export function useLauncherPageModel() {
   const [apiBaseUrl, setApiBaseUrl] = useState(() =>
-    typeof window === "undefined"
-      ? ""
-      : toIsoLocalInputValue(window.location.origin),
+    (() => {
+      if (typeof window === "undefined") {
+        return "";
+      }
+
+      try {
+        return toIsoLocalInputValue(getAdminApiOrigin());
+      } catch {
+        return "";
+      }
+    })(),
   );
   const [claims, setClaims] = useState<LauncherPairingClaimListItem[]>([]);
   const [latestClaim, setLatestClaim] =
@@ -75,6 +83,22 @@ export function useLauncherPageModel() {
         "POST",
         { apiBaseUrl: apiBaseUrl.trim() || undefined },
       );
+
+      // Keep new claims visible even if the follow-up list refresh fails.
+      setClaims((prev) => {
+        const nextEntry: LauncherPairingClaimListItem = {
+          id: payload.claimId,
+          expiresAt: payload.expiresAt,
+          issuedAt: new Date().toISOString(),
+          issuedBy: "admin",
+          consumedAt: null,
+          revokedAt: null,
+          consumedByInstallationId: null,
+        };
+        const remaining = prev.filter((entry) => entry.id !== payload.claimId);
+        return [nextEntry, ...remaining];
+      });
+
       setLatestClaim(payload);
       setMessage("Pairing claim generated.");
       await refreshClaims();
