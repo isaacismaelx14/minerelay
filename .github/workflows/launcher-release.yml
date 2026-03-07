@@ -390,6 +390,43 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
+      - name: Resolve existing release tag for verification
+        id: verify_release_lookup
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          RESOLVED_RELEASE_TAG="$(
+            gh api "repos/${{ github.repository }}/releases?per_page=100" \
+              | node -e '
+                const fs = require("fs");
+                const releases = JSON.parse(fs.readFileSync(0, "utf8"));
+                const inputTag = process.env.RELEASE_TAG || "";
+                const swaps = [
+                  ["@minerelay/launcher/v", "@mss/launcher/v"],
+                  ["@mss/launcher/v", "@minerelay/launcher/v"],
+                ];
+
+                const candidateTags = [inputTag];
+                for (const [from, to] of swaps) {
+                  if (inputTag.startsWith(from)) {
+                    candidateTags.push(inputTag.replace(from, to));
+                  }
+                }
+
+                const match = releases.find((release) => candidateTags.includes(release.tag_name));
+                if (match) {
+                  process.stdout.write(match.tag_name);
+                }
+              '
+          )"
+          if [ -z "$RESOLVED_RELEASE_TAG" ]; then
+            echo "No GitHub release exists for tag ${RELEASE_TAG} in ${{ github.repository }}." >&2
+            echo "If the release is a draft, ensure it was created in this repository with the exact same tag." >&2
+            exit 1
+          fi
+          echo "resolved_tag=${RESOLVED_RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Verify release updater assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -397,5 +434,5 @@ jobs:
           pnpm --filter @minerelay/infra-scripts updater:verify -- \
             --owner "${{ github.repository_owner }}" \
             --repo "${{ github.event.repository.name }}" \
-            --tag "${{ env.RELEASE_TAG }}" \
+            --tag "${{ steps.verify_release_lookup.outputs.resolved_tag }}" \
             --required windows,macos
