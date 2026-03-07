@@ -52,6 +52,9 @@ pub fn run() {
 
   let app = tauri::Builder::default()
     .manage(state)
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+      show_primary_window(app);
+    }))
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
