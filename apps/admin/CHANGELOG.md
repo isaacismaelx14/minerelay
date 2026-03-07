@@ -2,6 +2,14 @@
 
 All notable changes to this package will be documented in this file.
 
+## [@minerelay/admin/v0.1.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.2) (2026-03-07)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.1...%40minerelay%2Fadmin%2Fv0.1.2)
+
+## Bug Fixes
+
+- **admin:** default launcher pairing API origin and preserve new active claims ([a441a0a](https://github.com/isaacismaelx14/minerelay/commit/a441a0a7934ddc2b36816573f25cef3a33bf2c9a))
+
 ## [@minerelay/admin/v0.1.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.1) (2026-03-07)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.0...%40minerelay%2Fadmin%2Fv0.1.1)
