@@ -9,9 +9,8 @@ import {
   type ReactElement,
 } from "react";
 
-import { Button } from "@/admin/shared/ui/button";
+import { Button, ui } from "@minerelay/ui";
 import { MineRelayLogo } from "@/admin/shared/ui/minerelay-logo";
-import { ui } from "@/admin/shared/ui/styles";
 
 import { buildAdminApiUrl, readError, writeAdminSession } from "./http";
 import type { AdminAuthPayload } from "./types";

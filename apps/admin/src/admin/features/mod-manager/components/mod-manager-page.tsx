@@ -14,11 +14,8 @@ import type {
   ModVersionsPayload,
 } from "@/admin/client/types";
 import { requestJson } from "@/admin/client/http";
-import { Button } from "@/admin/shared/ui/button";
-import { DiscoverModal } from "@/admin/shared/ui/discover-modal";
-import { ModalShell } from "@/admin/shared/ui/modal-shell";
+import { Button, DiscoverModal, Modal, Tooltip } from "@minerelay/ui";
 import { statusClass } from "@/admin/shared/ui/status";
-import { Tooltip } from "@/admin/shared/ui/tooltip";
 
 import { useModManagerPageModel } from "../hooks/use-mod-manager-page-model";
 import { useTopBarModel } from "@/admin/features/shell/hooks/use-top-bar-model";
@@ -1630,7 +1627,7 @@ export function ModManagerPage() {
       ) : null}
 
       {showBulkRemove && selectedBulkEntries.length > 0 ? (
-        <ModalShell onClose={() => setShowBulkRemove(false)}>
+        <Modal onClose={() => setShowBulkRemove(false)}>
           <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
             <h3 className="m-0 text-lg">
               Remove {selectedBulkEntries.length} mod
@@ -1703,11 +1700,11 @@ export function ModManagerPage() {
               Confirm Remove
             </Button>
           </div>
-        </ModalShell>
+        </Modal>
       ) : null}
 
       {removeTarget ? (
-        <ModalShell onClose={() => setRemoveTarget(null)}>
+        <Modal onClose={() => setRemoveTarget(null)}>
           <div className="flex items-center justify-between border-b border-[var(--color-line)] p-[16px_20px] shrink-0">
             <h3 className="m-0 text-lg">Remove {removeTarget.name}?</h3>
             <button
@@ -1746,7 +1743,7 @@ export function ModManagerPage() {
               Confirm Remove
             </Button>
           </div>
-        </ModalShell>
+        </Modal>
       ) : null}
     </div>
   );

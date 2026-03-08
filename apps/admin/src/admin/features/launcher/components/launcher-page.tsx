@@ -1,8 +1,6 @@
 "use client";
 
-import { DataItem } from "@/admin/shared/ui/data-list";
-import { TextInput } from "@/admin/shared/ui/form-controls";
-import { ui } from "@/admin/shared/ui/styles";
+import { DataItem, TextInput, ui } from "@minerelay/ui";
 
 import {
   formatDateTime,

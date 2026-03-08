@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import "../src/admin/ui/globals.css";
+import "@minerelay/ui/globals.css";
 
 export const metadata: Metadata = {
   title: "MineRelay Admin",

@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
-import { Button } from "@/admin/shared/ui/button";
-import { DataItem, DataList } from "@/admin/shared/ui/data-list";
-import { TextInput } from "@/admin/shared/ui/form-controls";
-import { ModalHeader } from "@/admin/shared/ui/modal-header";
-import { SectionHeader } from "@/admin/shared/ui/section-header";
-import { ModalShell } from "@/admin/shared/ui/modal-shell";
+import {
+  Button,
+  DataItem,
+  DataList,
+  Modal,
+  ModalHeader,
+  SectionHeader,
+  TextInput,
+  ui,
+} from "@minerelay/ui";
 import { statusClass } from "@/admin/shared/ui/status";
-import { ui } from "@/admin/shared/ui/styles";
 
 import { useIdentityPageModel } from "../hooks/use-identity-page-model";
 
@@ -30,7 +34,7 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
     form.loaderVersion.trim() !== baselineRuntime.loaderVersion.trim();
 
   return (
-    <ModalShell onClose={onClose}>
+    <Modal onClose={onClose}>
       <ModalHeader
         title="Support Matrix"
         subtitle="Internal Runtime Settings"
@@ -124,7 +128,7 @@ function SupportMatrixModal({ onClose }: { onClose: () => void }) {
       <div className={statusClass(statuses.settings.tone)}>
         {statuses.settings.text}
       </div>
-    </ModalShell>
+    </Modal>
   );
 }
 
@@ -151,9 +155,12 @@ function BrandingUploadCard({
         className={`shrink-0 ${wide ? "w-[120px] h-[68px]" : "w-[72px] h-[72px]"} rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/40 overflow-hidden grid place-items-center text-[var(--color-text-muted)] text-xs`}
       >
         {imageUrl ? (
-          <img
+          <Image
             src={imageUrl}
             alt={altText}
+            width={wide ? 120 : 72}
+            height={wide ? 68 : 72}
+            unoptimized
             className="w-full h-full object-cover"
           />
         ) : (

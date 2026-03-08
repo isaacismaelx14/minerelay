@@ -10,7 +10,7 @@ import {
 
 import type { BootstrapPayload } from "@/admin/client/types";
 import { AdminShell } from "@/admin/features/shell/components/admin-shell";
-import { ToastProvider } from "@/admin/shared/ui/toast";
+import { ToastProvider } from "@minerelay/ui";
 import {
   AdminProvider,
   getAdminViewForPath,

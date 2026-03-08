@@ -1,4 +1,4 @@
-import { ui } from "./styles";
+import { ui } from "@minerelay/ui";
 
 export function statusClass(tone: "idle" | "ok" | "error"): string {
   if (tone === "ok") return `${ui.statusBase} ${ui.statusOk}`;

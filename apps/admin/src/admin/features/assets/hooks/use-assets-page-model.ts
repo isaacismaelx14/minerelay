@@ -106,6 +106,24 @@ export function useAssetsPageModel() {
       return;
     }
 
+    const normalizedProjectId = projectId.trim();
+    const installedModProjectIds = new Set(
+      store.selectedMods
+        .map((entry) => entry.projectId?.trim())
+        .filter((entry): entry is string => Boolean(entry)),
+    );
+    if (
+      normalizedProjectId &&
+      installedModProjectIds.has(normalizedProjectId)
+    ) {
+      store.setStatus(
+        "mods",
+        "This project is already installed as a mod. Remove it from Mods Manager before adding it as an asset.",
+        "error",
+      );
+      return;
+    }
+
     const minecraftVersion = store.form.minecraftVersion.trim();
     if (!minecraftVersion) {
       store.setStatus("mods", "Set Minecraft version first.", "error");
@@ -178,6 +196,11 @@ export function useAssetsPageModel() {
     baselineResources: store.baselineResources,
     baselineShaders: store.baselineShaders,
     openModsManager: () => router.push("/assets/mods"),
+    installedModProjectIds: new Set(
+      store.selectedMods
+        .map((entry) => entry.projectId?.trim())
+        .filter((entry): entry is string => Boolean(entry)),
+    ),
     modalType,
     popular,
     loadingPopular,

@@ -52,4 +52,41 @@ describe("useAssetsPageModel", () => {
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("blocks resourcepack install when the project is already installed as a mod", async () => {
+    const setStatus = vi.fn();
+    useAdminStoreMock.mockReturnValue({
+      form: { minecraftVersion: "1.20.1" },
+      statuses: { mods: { text: "", tone: "idle" } },
+      selectedMods: [{ projectId: "already-mod" }],
+      selectedResources: [],
+      selectedShaders: [],
+      setSelectedResources: vi.fn(),
+      setSelectedShaders: vi.fn(),
+      setStatus,
+    });
+
+    requestJsonMock.mockResolvedValueOnce([]);
+    const { result } = renderHook(() => useAssetsPageModel());
+
+    await act(async () => {
+      result.current.openPopularModal("resourcepack");
+    });
+
+    requestJsonMock.mockClear();
+
+    await act(async () => {
+      await result.current.installFromPopular("already-mod");
+    });
+
+    expect(requestJsonMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("/v1/admin/assets/resolve"),
+      "GET",
+    );
+    expect(setStatus).toHaveBeenCalledWith(
+      "mods",
+      "This project is already installed as a mod. Remove it from Mods Manager before adding it as an asset.",
+      "error",
+    );
+  });
 });

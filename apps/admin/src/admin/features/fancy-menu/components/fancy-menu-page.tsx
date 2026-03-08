@@ -2,12 +2,18 @@
 
 import { useRef } from "react";
 
-import { Button } from "@/admin/shared/ui/button";
-import { SelectInput, TextInput } from "@/admin/shared/ui/form-controls";
-import { SectionHeader } from "@/admin/shared/ui/section-header";
+import {
+  Alert,
+  Button,
+  Card,
+  Select,
+  SectionHeader,
+  SelectableCard,
+  SettingRow,
+  TextInput,
+  ToggleSwitch,
+} from "@minerelay/ui";
 import { statusClass } from "@/admin/shared/ui/status";
-import { ui } from "@/admin/shared/ui/styles";
-import { ToggleSwitch } from "@/admin/shared/ui/toggle-switch";
 
 import { useFancyMenuPageModel } from "../hooks/use-fancy-menu-page-model";
 
@@ -28,7 +34,7 @@ export function FancyMenuPage() {
     <div className="flex flex-col gap-5 max-w-7xl mx-auto w-full">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* ── Activation Card ─────────────────────────────── */}
-        <article className={ui.panel}>
+        <Card>
           <SectionHeader
             icon={
               <span className="material-symbols-outlined text-[18px]">
@@ -39,32 +45,28 @@ export function FancyMenuPage() {
             description="Override the default Minecraft main menu with a premium brand experience."
           />
 
-          <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/20 p-4 mt-1">
-            <div className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-[var(--color-text-primary)]">
-                {isEnabled ? "Enabled" : "Disabled"}
-              </span>
-              <span className="text-xs text-[var(--color-text-muted)]">
-                {isEnabled
-                  ? "Core mods and config files included in profile."
-                  : "Standard Minecraft menu will be used."}
-              </span>
-            </div>
-            <ToggleSwitch
-              enabled={isEnabled}
-              onChange={(next) => setFancyMenuEnabled(next)}
-            />
-          </div>
+          <SettingRow
+            title={isEnabled ? "Enabled" : "Disabled"}
+            description={
+              isEnabled
+                ? "Core mods and config files included in profile."
+                : "Standard Minecraft menu will be used."
+            }
+            control={
+              <ToggleSwitch
+                enabled={isEnabled}
+                onChange={(next) => setFancyMenuEnabled(next)}
+              />
+            }
+          />
 
           <div className={`${statusClass(statuses.fancy.tone)} mt-auto`}>
             {statuses.fancy.text}
           </div>
-        </article>
+        </Card>
 
         {/* ── Mode Selection Card ─────────────────────────── */}
-        <article
-          className={`${ui.panel} ${!isEnabled ? "opacity-40 pointer-events-none" : ""}`}
-        >
+        <Card className={!isEnabled ? "opacity-40 pointer-events-none" : ""}>
           <SectionHeader
             icon={
               <span className="material-symbols-outlined text-[18px]">
@@ -76,55 +78,35 @@ export function FancyMenuPage() {
           />
 
           <div className="grid grid-cols-2 gap-3 mt-1">
-            <button
-              type="button"
+            <SelectableCard
+              selected={form.fancyMenuMode === "simple"}
               onClick={() => setFancyMenuMode("simple")}
-              className={`rounded-[var(--radius-md)] border p-4 text-left cursor-pointer transition-all duration-200 flex flex-col gap-2 ${
-                form.fancyMenuMode === "simple"
-                  ? "border-[var(--color-brand-primary)] bg-[var(--color-brand-primary)]/5 shadow-[0_0_0_1px_rgba(99,102,241,0.2)]"
-                  : "border-[var(--color-line)] bg-black/20 hover:bg-black/30 hover:border-[var(--color-line-strong)]"
-              }`}
-            >
-              <div className="flex items-center gap-2">
+              icon={
                 <span className="material-symbols-outlined text-[20px] text-[var(--color-brand-primary)]">
                   bolt
                 </span>
-                <span className="text-sm font-semibold text-white">
-                  Simple Form
-                </span>
-              </div>
-              <p className="m-0 text-xs text-[var(--color-text-muted)] leading-relaxed">
-                Set logo, background, and button labels via quick fields.
-              </p>
-            </button>
+              }
+              title="Simple Form"
+              description="Set logo, background, and button labels via quick fields."
+            />
 
-            <button
-              type="button"
+            <SelectableCard
+              selected={form.fancyMenuMode === "custom"}
               onClick={() => setFancyMenuMode("custom")}
-              className={`rounded-[var(--radius-md)] border p-4 text-left cursor-pointer transition-all duration-200 flex flex-col gap-2 ${
-                form.fancyMenuMode === "custom"
-                  ? "border-[var(--color-brand-primary)] bg-[var(--color-brand-primary)]/5 shadow-[0_0_0_1px_rgba(99,102,241,0.2)]"
-                  : "border-[var(--color-line)] bg-black/20 hover:bg-black/30 hover:border-[var(--color-line-strong)]"
-              }`}
-            >
-              <div className="flex items-center gap-2">
+              icon={
                 <span className="material-symbols-outlined text-[20px] text-[var(--color-brand-primary)]">
                   inventory_2
                 </span>
-                <span className="text-sm font-semibold text-white">
-                  Custom Bundle
-                </span>
-              </div>
-              <p className="m-0 text-xs text-[var(--color-text-muted)] leading-relaxed">
-                Upload a full FancyMenu .zip with layouts and animations.
-              </p>
-            </button>
+              }
+              title="Custom Bundle"
+              description="Upload a full FancyMenu .zip with layouts and animations."
+            />
           </div>
-        </article>
+        </Card>
 
         {/* ── Configuration Card (full width) ─────────────── */}
         {isEnabled ? (
-          <article className={`${ui.panel} md:col-span-2`}>
+          <Card className="md:col-span-2">
             <SectionHeader
               icon={
                 <span className="material-symbols-outlined text-[18px]">
@@ -167,7 +149,7 @@ export function FancyMenuPage() {
                   onChange={setTextFieldFromEvent}
                 />
                 <div />
-                <SelectInput
+                <Select
                   name="hideSingleplayer"
                   label="Hide Singleplayer"
                   value={form.hideSingleplayer}
@@ -177,7 +159,7 @@ export function FancyMenuPage() {
                     { value: "false", label: "No" },
                   ]}
                 />
-                <SelectInput
+                <Select
                   name="hideMultiplayer"
                   label="Hide Multiplayer"
                   value={form.hideMultiplayer}
@@ -190,15 +172,17 @@ export function FancyMenuPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4 mt-1">
-                <div className="p-3 rounded-[var(--radius-sm)] bg-amber-500/5 border border-amber-500/15 text-xs text-amber-300/90 leading-relaxed">
-                  <strong className="text-amber-400">Note:</strong> Your .zip
-                  must contain a valid FancyMenu export structure (usually
-                  including a{" "}
+                <Alert
+                  tone="info"
+                  className="bg-amber-500/5 border-amber-500/15 text-amber-300/90 [&_strong]:text-amber-400"
+                >
+                  <strong>Note:</strong> Your .zip must contain a valid
+                  FancyMenu export structure (usually including a{" "}
                   <code className="bg-white/5 px-1 py-0.5 rounded text-[0.7rem]">
                     customization
                   </code>{" "}
                   folder).
-                </div>
+                </Alert>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <TextInput
                     name="fancyMenuCustomLayoutUrl"
@@ -244,7 +228,7 @@ export function FancyMenuPage() {
                 </div>
               </div>
             )}
-          </article>
+          </Card>
         ) : null}
       </div>
     </div>

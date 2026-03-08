@@ -3,58 +3,21 @@
 import { useState } from "react";
 
 import type { ExarotonServerPayload } from "@/admin/client/types";
-import { Button } from "@/admin/shared/ui/button";
+import {
+  Button,
+  Card,
+  Modal,
+  SectionHeader,
+  SelectableCard,
+  SettingRow,
+  TextInput,
+  ToggleSwitch,
+  ui,
+} from "@minerelay/ui";
 import { ExarotonLogo } from "@/admin/shared/ui/exaroton-logo";
-import { TextInput } from "@/admin/shared/ui/form-controls";
-import { ModalShell } from "@/admin/shared/ui/modal-shell";
-import { SectionHeader } from "@/admin/shared/ui/section-header";
 import { exarotonStatusClass, statusClass } from "@/admin/shared/ui/status";
-import { ui } from "@/admin/shared/ui/styles";
-import { ToggleSwitch } from "@/admin/shared/ui/toggle-switch";
 
 import { useServersPageModel } from "../hooks/use-servers-page-model";
-
-/* ------------------------------------------------------------------ */
-/*  Setting toggle row                                                */
-/* ------------------------------------------------------------------ */
-
-function SettingRow({
-  label,
-  description,
-  enabled,
-  onChange,
-  disabled,
-  locked,
-}: {
-  label: string;
-  description?: string;
-  enabled: boolean;
-  onChange: (next: boolean) => void;
-  disabled?: boolean;
-  locked?: boolean;
-}) {
-  return (
-    <div
-      className={`flex items-center justify-between gap-4 rounded-[var(--radius-sm)] px-3 py-2.5 transition-colors ${locked ? "opacity-60" : "hover:bg-white/[0.03]"}`}
-    >
-      <div className="min-w-0">
-        <span className="text-sm text-[var(--color-text-primary)]">
-          {label}
-        </span>
-        {description ? (
-          <p className="m-0 text-xs text-[var(--color-text-muted)] mt-0.5">
-            {description}
-          </p>
-        ) : null}
-      </div>
-      <ToggleSwitch
-        enabled={enabled}
-        onChange={onChange}
-        disabled={disabled ?? locked}
-      />
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /*  Integration Landing                                               */
@@ -78,38 +41,31 @@ function IntegrationLanding({
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <button
-          className={`group rounded-[var(--radius-md)] border p-5 text-left cursor-pointer transition-all duration-200 flex flex-col gap-4 ${
-            connectedIntegration === "exaroton"
-              ? "border-[var(--color-brand-primary)] bg-[var(--color-brand-primary)]/5 shadow-[0_0_0_1px_rgba(99,102,241,0.2)]"
-              : "border-[var(--color-line)] bg-black/20 hover:bg-black/30 hover:border-[var(--color-line-strong)]"
-          }`}
+        <SelectableCard
+          selected={connectedIntegration === "exaroton"}
           onClick={() => onSelect("exaroton")}
-          type="button"
-        >
-          <div className="flex items-center justify-between w-full">
-            <div className="w-10 h-10 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/30 grid place-items-center">
+          icon={
+            <div className="w-10 h-10 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/30 grid place-items-center shrink-0">
               <ExarotonLogo iconOnly style={{ height: 22, width: 22 }} />
             </div>
-            {connectedIntegration === "exaroton" ? (
+          }
+          headerRight={
+            connectedIntegration === "exaroton" ? (
               <span className="text-[0.7rem] uppercase tracking-widest font-bold bg-emerald-500/10 text-emerald-400 py-1 px-2.5 rounded-full border border-emerald-500/20">
                 Connected
               </span>
-            ) : null}
-          </div>
-          <div>
-            <h4 className="m-0 text-sm font-semibold text-white mb-1">
-              Exaroton
-            </h4>
-            <p className="m-0 text-xs text-[var(--color-text-muted)] leading-relaxed">
-              {connectedIntegration === "exaroton"
-                ? "Account connected. Click to manage."
-                : "Connect your Exaroton account to manage servers directly."}
-            </p>
-          </div>
-        </button>
+            ) : null
+          }
+          title="Exaroton"
+          description={
+            connectedIntegration === "exaroton"
+              ? "Account connected. Click to manage."
+              : "Connect your Exaroton account to manage servers directly."
+          }
+          className="gap-4 p-5"
+        />
 
-        <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-black/20 p-5 flex flex-col gap-4 opacity-40 cursor-not-allowed">
+        <Card className="rounded-[var(--radius-md)] p-5 gap-4 opacity-40 cursor-not-allowed">
           <div className="w-10 h-10 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/30 grid place-items-center">
             <span className="material-symbols-outlined text-[20px] text-[var(--color-text-muted)]">
               more_horiz
@@ -123,7 +79,7 @@ function IntegrationLanding({
               More integrations are on the way.
             </p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -164,7 +120,7 @@ function ExarotonSetupFlow({
   const steps = ["API Key", "Select Server", "Connected"];
 
   return (
-    <article className={ui.panel}>
+    <Card>
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-2">
         {steps.map((label, i) => (
@@ -273,33 +229,25 @@ function ExarotonSetupFlow({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {exaroton.servers.map((server: ExarotonServerPayload) => (
-              <button
+              <SelectableCard
                 key={server.id}
-                className={`rounded-[var(--radius-md)] border p-4 text-left cursor-pointer transition-all duration-200 flex flex-col gap-2 ${
-                  exaroton.selectedServer?.id === server.id
-                    ? "border-[var(--color-brand-primary)] bg-[var(--color-brand-primary)]/5 shadow-[0_0_0_1px_rgba(99,102,241,0.2)]"
-                    : "border-[var(--color-line)] bg-black/20 hover:bg-black/30 hover:border-[var(--color-line-strong)]"
-                }`}
+                selected={exaroton.selectedServer?.id === server.id}
                 onClick={() => void selectExarotonServer(server.id)}
                 disabled={exaroton.busy}
-                type="button"
-              >
-                <div className="flex justify-between items-center gap-3 w-full">
-                  <strong className="text-sm font-semibold text-white truncate">
-                    {server.name}
-                  </strong>
+                title={server.name}
+                description={server.address}
+                headerRight={
                   <span className={exarotonStatusClass(server.status)}>
                     {server.statusLabel}
                   </span>
-                </div>
-                <p className="m-0 font-mono text-xs text-[var(--color-text-muted)]">
-                  {server.address}
-                </p>
+                }
+                className="font-mono"
+              >
                 <span className="text-xs text-[var(--color-text-muted)] flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand-accent)] shadow-[0_0_6px_var(--color-brand-accent-glow)]" />
                   {server.players.count}/{server.players.max} players
                 </span>
-              </button>
+              </SelectableCard>
             ))}
           </div>
 
@@ -363,7 +311,7 @@ function ExarotonSetupFlow({
           </Button>
         </div>
       ) : null}
-    </article>
+    </Card>
   );
 }
 
@@ -391,7 +339,7 @@ function ConnectedDashboard({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
       {/* ── Account Card ─────────────────────────── */}
-      <article className={ui.panel}>
+      <Card>
         <SectionHeader
           icon={
             <span className="material-symbols-outlined text-[18px]">
@@ -419,11 +367,11 @@ function ConnectedDashboard({
             Disconnect
           </Button>
         </div>
-      </article>
+      </Card>
 
       {/* ── Selected Server Card ─────────────────── */}
       {exaroton.selectedServer ? (
-        <article className={ui.panel}>
+        <Card>
           <div className="flex items-start justify-between gap-2">
             <SectionHeader
               icon={
@@ -460,11 +408,11 @@ function ConnectedDashboard({
               {exaroton.selectedServer.statusLabel}
             </span>
           </div>
-        </article>
+        </Card>
       ) : null}
 
       {/* ── Server Controls Card (full width) ────── */}
-      <article className={`${ui.panel} md:col-span-2`}>
+      <Card className="md:col-span-2">
         <SectionHeader
           icon={
             <span className="material-symbols-outlined text-[18px]">tune</span>
@@ -530,18 +478,22 @@ function ConnectedDashboard({
                 Core
               </h4>
               <SettingRow
-                label="Server status"
+                title="Server status"
                 description="Required, cannot be disabled."
-                enabled
-                onChange={() => {}}
-                locked
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                control={<ToggleSwitch enabled disabled onChange={() => {}} />}
               />
               <SettingRow
-                label="Mods sync"
+                title="Mods sync"
                 description="Auto-sync mods to Exaroton."
-                enabled={exaroton.settings.modsSyncEnabled}
-                onChange={(next) =>
-                  void updateExarotonSettings({ modsSyncEnabled: next })
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                control={
+                  <ToggleSwitch
+                    enabled={exaroton.settings.modsSyncEnabled}
+                    onChange={(next) =>
+                      void updateExarotonSettings({ modsSyncEnabled: next })
+                    }
+                  />
                 }
               />
             </div>
@@ -552,48 +504,80 @@ function ConnectedDashboard({
                 Player Access
               </h4>
               <SettingRow
-                label="View status"
-                enabled={exaroton.settings.playerCanViewStatus}
-                disabled={
-                  exaroton.settings.playerCanStartServer ||
-                  exaroton.settings.playerCanStopServer ||
-                  exaroton.settings.playerCanRestartServer
-                }
-                onChange={(next) =>
-                  void updateExarotonSettings({ playerCanViewStatus: next })
-                }
-              />
-              <SettingRow
-                label="View online players"
-                enabled={exaroton.settings.playerCanViewOnlinePlayers}
-                disabled={!exaroton.settings.playerCanViewStatus}
-                onChange={(next) =>
-                  void updateExarotonSettings({
-                    playerCanViewOnlinePlayers: next,
-                  })
+                title="View status"
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                description=""
+                control={
+                  <ToggleSwitch
+                    enabled={exaroton.settings.playerCanViewStatus}
+                    disabled={
+                      exaroton.settings.playerCanStartServer ||
+                      exaroton.settings.playerCanStopServer ||
+                      exaroton.settings.playerCanRestartServer
+                    }
+                    onChange={(next) =>
+                      void updateExarotonSettings({ playerCanViewStatus: next })
+                    }
+                  />
                 }
               />
               <SettingRow
-                label="Start server"
-                enabled={exaroton.settings.playerCanStartServer}
-                onChange={(next) =>
-                  void updateExarotonSettings({ playerCanStartServer: next })
+                title="View online players"
+                description=""
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                control={
+                  <ToggleSwitch
+                    enabled={exaroton.settings.playerCanViewOnlinePlayers}
+                    disabled={!exaroton.settings.playerCanViewStatus}
+                    onChange={(next) =>
+                      void updateExarotonSettings({
+                        playerCanViewOnlinePlayers: next,
+                      })
+                    }
+                  />
                 }
               />
               <SettingRow
-                label="Stop server"
-                enabled={exaroton.settings.playerCanStopServer}
-                onChange={(next) =>
-                  void updateExarotonSettings({ playerCanStopServer: next })
+                title="Start server"
+                description=""
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                control={
+                  <ToggleSwitch
+                    enabled={exaroton.settings.playerCanStartServer}
+                    onChange={(next) =>
+                      void updateExarotonSettings({
+                        playerCanStartServer: next,
+                      })
+                    }
+                  />
                 }
               />
               <SettingRow
-                label="Restart server"
-                enabled={exaroton.settings.playerCanRestartServer}
-                onChange={(next) =>
-                  void updateExarotonSettings({
-                    playerCanRestartServer: next,
-                  })
+                title="Stop server"
+                description=""
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                control={
+                  <ToggleSwitch
+                    enabled={exaroton.settings.playerCanStopServer}
+                    onChange={(next) =>
+                      void updateExarotonSettings({ playerCanStopServer: next })
+                    }
+                  />
+                }
+              />
+              <SettingRow
+                title="Restart server"
+                description=""
+                className="border-0 bg-transparent px-3 py-2.5 rounded-[var(--radius-sm)] hover:bg-white/[0.03]"
+                control={
+                  <ToggleSwitch
+                    enabled={exaroton.settings.playerCanRestartServer}
+                    onChange={(next) =>
+                      void updateExarotonSettings({
+                        playerCanRestartServer: next,
+                      })
+                    }
+                  />
                 }
               />
             </div>
@@ -603,7 +587,7 @@ function ConnectedDashboard({
         <div className={`${statusClass(statuses.exaroton.tone)} mt-auto`}>
           {statuses.exaroton.text}
         </div>
-      </article>
+      </Card>
     </div>
   );
 }
@@ -645,7 +629,7 @@ export function ServersPage() {
   /* Not configured error */
   if (!exaroton.configured) {
     return (
-      <article className={`${ui.panel} max-w-7xl mx-auto w-full`}>
+      <Card className="max-w-7xl mx-auto w-full">
         <SectionHeader
           icon={
             <span className="material-symbols-outlined text-[18px] text-red-400">
@@ -662,7 +646,7 @@ export function ServersPage() {
           </code>{" "}
           on the API server to enable this feature.
         </div>
-      </article>
+      </Card>
     );
   }
 
@@ -727,7 +711,7 @@ export function ServersPage() {
         />
 
         {confirmDisconnect ? (
-          <ModalShell onClose={() => setConfirmDisconnect("")}>
+          <Modal onClose={() => setConfirmDisconnect("")}>
             <div className="flex flex-col gap-5">
               <div>
                 <h3 className="m-0 text-lg font-semibold text-white mb-2">
@@ -771,7 +755,7 @@ export function ServersPage() {
                 </Button>
               </div>
             </div>
-          </ModalShell>
+          </Modal>
         ) : null}
 
         {exaroton.error ? (

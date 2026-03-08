@@ -2,14 +2,11 @@
 
 import { memo, useState } from "react";
 
-import { Button } from "@/admin/shared/ui/button";
-import { ModalHeader } from "@/admin/shared/ui/modal-header";
-import { ModalShell } from "@/admin/shared/ui/modal-shell";
+import { Button, Modal, ModalHeader, useToast } from "@minerelay/ui";
 import {
   exarotonStatusClass,
   getExarotonStatusTone,
 } from "@/admin/shared/ui/status";
-import { useToast } from "@/admin/shared/ui/toast";
 
 import { useTopBarModel } from "../hooks/use-top-bar-model";
 
@@ -246,7 +243,7 @@ export const TopBar = memo(function TopBar() {
 
       {/* Discard Draft Confirmation */}
       {showDiscardConfirm ? (
-        <ModalShell onClose={() => setShowDiscardConfirm(false)}>
+        <Modal onClose={() => setShowDiscardConfirm(false)}>
           <ModalHeader
             title="Discard Draft?"
             onClose={() => setShowDiscardConfirm(false)}
@@ -281,12 +278,12 @@ export const TopBar = memo(function TopBar() {
               Discard Changes
             </Button>
           </div>
-        </ModalShell>
+        </Modal>
       ) : null}
 
       {/* Exaroton Publish Warning */}
       {showExarotonPublishWarning ? (
-        <ModalShell onClose={() => setShowExarotonPublishWarning(false)}>
+        <Modal onClose={() => setShowExarotonPublishWarning(false)}>
           <ModalHeader
             title="Before first Exaroton mod sync"
             onClose={() => setShowExarotonPublishWarning(false)}
@@ -317,7 +314,7 @@ export const TopBar = memo(function TopBar() {
               I Understand
             </Button>
           </div>
-        </ModalShell>
+        </Modal>
       ) : null}
     </header>
   );
