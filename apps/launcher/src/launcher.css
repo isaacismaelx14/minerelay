@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/*  Launcher-specific utilities                                       */
+/* ------------------------------------------------------------------ */
+
+/* Context menu — positioned absolutely via JS inline style */
+@layer utilities {
+  .launcher-context-menu {
+    position: fixed;
+    z-index: 9999;
+  }
+}

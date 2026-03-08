@@ -17,10 +17,13 @@
   },
   "dependencies": {
     "@minerelay/shared": "workspace:*",
+    "@minerelay/ui": "workspace:*",
+    "@tailwindcss/vite": "4.2.1",
     "@tauri-apps/api": "2.10.1",
     "clsx": "2.1.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwindcss": "4.2.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.10.1",

@@ -1,6 +1,7 @@
 import type { useAppCore } from "../hooks/useAppCore";
 import { bytesToHuman, formatEta, formatTime, formatDateTime } from "../utils";
 import { ServerControlBar } from "./ServerControlBar";
+import "../App.css"; // Migrating to Tailwind gradually, so using some existing styles here.
 
 export function DesktopWorkspace({
   core,
