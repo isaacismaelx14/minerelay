@@ -196,7 +196,7 @@ export class ExarotonApiClient {
     };
 
     socket.on('message', (raw) => {
-      let message: ExarotonWebSocketMessage | null = null;
+      let message: ExarotonWebSocketMessage;
       try {
         const payload = decodeWsPayload(raw);
         if (!payload) {
@@ -208,7 +208,7 @@ export class ExarotonApiClient {
       }
 
       if (
-        message?.stream === 'status' &&
+        message.stream === 'status' &&
         message.type === 'status' &&
         message.data &&
         typeof message.data === 'object'
@@ -217,7 +217,7 @@ export class ExarotonApiClient {
         return;
       }
 
-      if (message?.type === 'disconnected') {
+      if (message.type === 'disconnected') {
         const reason =
           typeof message.data === 'string' && message.data.trim().length > 0
             ? message.data.trim()
@@ -341,7 +341,7 @@ export class ExarotonApiClient {
       upstreamName: 'exaroton',
     });
 
-    let body: ExarotonEnvelope<T> | null = null;
+    let body: ExarotonEnvelope<T> | null;
     try {
       body = (await response.json()) as ExarotonEnvelope<T>;
     } catch {

@@ -218,7 +218,7 @@ export class ExarotonCredentialService {
     }
 
     const integrationSettings = this.readSettings(integration);
-    let apiKey = '';
+    let apiKey: string;
     try {
       apiKey = decryptExarotonApiKey(
         {

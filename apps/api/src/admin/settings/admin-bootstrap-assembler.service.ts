@@ -55,9 +55,8 @@ export class AdminBootstrapAssemblerService {
     const activeFancyMenu =
       profileFancyMenu ?? serverFancyMenu ?? lockFancyMenu;
 
-    let normalizedMods: ManagedMod[] = lockMods;
-    try {
-      normalizedMods = await this.coreModPolicy.normalizeMods({
+    const normalizedMods: ManagedMod[] = await this.coreModPolicy
+      .normalizeMods({
         mods: lockMods,
         minecraftVersion: latest.minecraftVersion,
         fancyMenuEnabled: activeFancyMenu?.enabled === true,
@@ -74,10 +73,8 @@ export class AdminBootstrapAssemblerService {
             {},
             versionId,
           ),
-      });
-    } catch {
-      normalizedMods = lockMods;
-    }
+      })
+      .catch(() => lockMods);
 
     const lockBrandingResult = BrandingSchema.safeParse(lock.branding);
     const lockBranding = lockBrandingResult.success
