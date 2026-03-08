@@ -17,7 +17,12 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-import { authFetch, clearAdminSession, requestJson } from "@/admin/client/http";
+import {
+  authFetch,
+  clearAdminSession,
+  createAdminEventSource,
+  requestJson,
+} from "@/admin/client/http";
 import type {
   BootstrapPayload,
   AdminMod,
@@ -25,6 +30,7 @@ import type {
   AdminShaderPack,
   CoreModPolicy,
   DependencyAnalysis,
+  ExarotonStreamStatusPayload,
   FabricVersionsPayload,
   InstallModsPayload,
   SearchResult,
@@ -398,6 +404,62 @@ export function AdminStoreProvider({
   const setBusy = useCallback((name: keyof BusyState, value: boolean) => {
     setBusyState((current) => ({ ...current, [name]: value }));
   }, []);
+
+  useEffect(() => {
+    if (!exaroton.connected || !exaroton.selectedServer?.id) {
+      return;
+    }
+
+    const stream = createAdminEventSource("/v1/admin/exaroton/server/stream");
+
+    const onStatus = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      try {
+        const payload = JSON.parse(message.data) as ExarotonStreamStatusPayload;
+        const next = payload.selectedServer;
+        if (!next?.id) {
+          return;
+        }
+        setExaroton((current) => ({
+          ...current,
+          selectedServer: next,
+          servers: current.servers.map((server) =>
+            server.id === next.id ? next : server,
+          ),
+          error: "",
+        }));
+      } catch {
+        // ignore malformed stream payloads
+      }
+    };
+
+    const onStreamError = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      let text = "Exaroton stream error.";
+      try {
+        const payload = JSON.parse(message.data) as { message?: string };
+        if (payload?.message?.trim()) {
+          text = payload.message.trim();
+        }
+      } catch {
+        // fallback
+      }
+      setExaroton((current) => ({ ...current, error: text }));
+      setStatus("exaroton", text, "error");
+    };
+
+    stream.addEventListener("status", onStatus as EventListener);
+    stream.addEventListener("stream-error", onStreamError as EventListener);
+
+    return () => {
+      stream.removeEventListener("status", onStatus as EventListener);
+      stream.removeEventListener(
+        "stream-error",
+        onStreamError as EventListener,
+      );
+      stream.close();
+    };
+  }, [exaroton.connected, exaroton.selectedServer?.id, setStatus]);
 
   const setSearchQuery = useCallback((query: string) => {
     setForm((current) => ({ ...current, searchQuery: query }));

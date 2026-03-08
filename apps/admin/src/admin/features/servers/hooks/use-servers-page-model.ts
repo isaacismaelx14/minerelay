@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
-
-import { createAdminEventSource, requestJson } from "@/admin/client/http";
+import { requestJson } from "@/admin/client/http";
 import type {
   ConnectExarotonPayload,
   ExarotonSelectPayload,
   ExarotonServersPayload,
   ExarotonSettingsUpdatePayload,
-  ExarotonStreamStatusPayload,
   ExarotonStatusPayload,
   ExarotonSyncModsPayload,
 } from "@/admin/client/types";
@@ -17,10 +14,6 @@ import { executeExarotonServerAction } from "./exaroton-actions";
 
 export function useServersPageModel() {
   const store = useAdminStore();
-  const connected = store.exaroton.connected;
-  const selectedServerId = store.exaroton.selectedServer?.id;
-  const setExaroton = store.setExaroton;
-  const setStatus = store.setStatus;
 
   const refreshExarotonStatus = async () => {
     store.setExaroton((current) => ({ ...current, busy: true }));
@@ -285,62 +278,6 @@ export function useServersPageModel() {
       );
     }
   };
-
-  useEffect(() => {
-    if (!connected || !selectedServerId) {
-      return;
-    }
-
-    const stream = createAdminEventSource("/v1/admin/exaroton/server/stream");
-
-    const onStatus = (event: Event) => {
-      const message = event as MessageEvent<string>;
-      try {
-        const payload = JSON.parse(message.data) as ExarotonStreamStatusPayload;
-        const next = payload.selectedServer;
-        if (!next?.id) {
-          return;
-        }
-        setExaroton((current) => ({
-          ...current,
-          selectedServer: next,
-          servers: current.servers.map((server) =>
-            server.id === next.id ? next : server,
-          ),
-          error: "",
-        }));
-      } catch {
-        // ignore malformed stream payloads
-      }
-    };
-
-    const onStreamError = (event: Event) => {
-      const message = event as MessageEvent<string>;
-      let text = "Exaroton stream error.";
-      try {
-        const payload = JSON.parse(message.data) as { message?: string };
-        if (payload?.message?.trim()) {
-          text = payload.message.trim();
-        }
-      } catch {
-        // fallback
-      }
-      setExaroton((current) => ({ ...current, error: text }));
-      setStatus("exaroton", text, "error");
-    };
-
-    stream.addEventListener("status", onStatus as EventListener);
-    stream.addEventListener("stream-error", onStreamError as EventListener);
-
-    return () => {
-      stream.removeEventListener("status", onStatus as EventListener);
-      stream.removeEventListener(
-        "stream-error",
-        onStreamError as EventListener,
-      );
-      stream.close();
-    };
-  }, [connected, selectedServerId, setExaroton, setStatus]);
 
   return {
     exaroton: store.exaroton,
