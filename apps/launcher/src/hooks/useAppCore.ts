@@ -944,17 +944,21 @@ export function useAppCore() {
     setWizardProgress(0);
     setWizardDetection(null);
 
+    const detectionTimeoutMs = /Windows/.test(navigator.userAgent)
+      ? 2_000
+      : 5_000;
+
     const started = Date.now();
     const timer = window.setInterval(() => {
       const elapsed = Date.now() - started;
-      const pct = Math.min(95, Math.round((elapsed / 5000) * 95));
+      const pct = Math.min(95, Math.round((elapsed / detectionTimeoutMs) * 95));
       setWizardProgress(pct);
     }, 120);
 
     try {
       const [detected, rootStatus] = await Promise.all([
         invoke<LauncherDetectionResult>("launcher_detect_with_timeout", {
-          timeoutMs: 5000,
+          timeoutMs: detectionTimeoutMs,
         }),
         invoke<MinecraftRootStatus>("minecraft_root_detect"),
       ]);

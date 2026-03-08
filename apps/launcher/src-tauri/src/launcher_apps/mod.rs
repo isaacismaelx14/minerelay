@@ -11,12 +11,18 @@ use std::{
 };
 
 #[cfg(target_os = "windows")]
+use std::{
+  sync::{Mutex, OnceLock},
+  time::Duration as StdDuration,
+};
+
+#[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 use serde::Deserialize;
 use serde_json::json;
 use sysinfo::System;
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration as TokioDuration, timeout};
 
 use crate::{
   error::{LauncherError, LauncherResult},
@@ -132,6 +138,44 @@ fn windows_launcher_specs() -> &'static [WindowsLauncherSpec] {
   SPECS
 }
 
+#[cfg(target_os = "windows")]
+const WINDOWS_DETECTION_CACHE_TTL: StdDuration = StdDuration::from_secs(30);
+
+#[cfg(target_os = "windows")]
+const WINDOWS_STORE_APP_CACHE_TTL: StdDuration = StdDuration::from_secs(120);
+
+#[cfg(target_os = "windows")]
+const WINDOWS_UNINSTALL_SCAN_BUDGET: StdDuration = StdDuration::from_millis(900);
+
+#[cfg(target_os = "windows")]
+const WINDOWS_STORE_LOOKUP_MAX_ELAPSED: StdDuration = StdDuration::from_millis(1200);
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct WindowsDetectionCacheEntry {
+  captured_at: Instant,
+  candidates: Vec<DetectedLauncher>,
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone)]
+struct WindowsStoreAppCacheEntry {
+  captured_at: Instant,
+  app_id: Option<String>,
+}
+
+#[cfg(target_os = "windows")]
+fn windows_detection_cache() -> &'static Mutex<Option<WindowsDetectionCacheEntry>> {
+  static CACHE: OnceLock<Mutex<Option<WindowsDetectionCacheEntry>>> = OnceLock::new();
+  CACHE.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_store_app_cache() -> &'static Mutex<Option<WindowsStoreAppCacheEntry>> {
+  static CACHE: OnceLock<Mutex<Option<WindowsStoreAppCacheEntry>>> = OnceLock::new();
+  CACHE.get_or_init(|| Mutex::new(None))
+}
+
 fn detect_installed_launchers_detailed() -> Vec<DetectedLauncher> {
   #[cfg(target_os = "windows")]
   {
@@ -180,7 +224,7 @@ pub async fn detect_with_timeout(timeout_ms: u64) -> LauncherResult<LauncherDete
 
   let task = tokio::task::spawn_blocking(detect_installed_launchers);
 
-  let result = timeout(Duration::from_millis(timeout_ms), task).await;
+  let result = timeout(TokioDuration::from_millis(timeout_ms), task).await;
 
   let (candidates, timed_out) = match result {
     Ok(joined) => {
@@ -614,14 +658,26 @@ fn normalize_windows_executable_candidate(raw: &str) -> Option<PathBuf> {
 
 #[cfg(target_os = "windows")]
 fn detect_windows_launchers() -> Vec<DetectedLauncher> {
+  {
+    let cache = windows_detection_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(entry) = cache.as_ref() {
+      if entry.captured_at.elapsed() < WINDOWS_DETECTION_CACHE_TTL {
+        return entry.candidates.clone();
+      }
+    }
+  }
+
+  let detection_start = Instant::now();
   let mut candidates = Vec::new();
 
   probe_registry_app_paths(&mut candidates);
-  probe_registry_uninstall_entries(&mut candidates);
+  probe_registry_uninstall_entries(&mut candidates, WINDOWS_UNINSTALL_SCAN_BUDGET);
   probe_windows_filesystem_fallbacks(&mut candidates);
 
-  if !candidates.iter().any(|candidate| candidate.id == "official") {
-    if let Some(app_id) = resolve_official_store_app_id() {
+  if !candidates.iter().any(|candidate| candidate.id == "official")
+    && detection_start.elapsed() < WINDOWS_STORE_LOOKUP_MAX_ELAPSED
+  {
+    if let Some(app_id) = resolve_official_store_app_id_cached() {
       upsert_detected_launcher(
         &mut candidates,
         DetectedLauncher {
@@ -636,6 +692,15 @@ fn detect_windows_launchers() -> Vec<DetectedLauncher> {
   }
 
   candidates.sort_by_key(|candidate| windows_launcher_sort_key(&candidate.id));
+
+  {
+    let mut cache = windows_detection_cache().lock().unwrap_or_else(|e| e.into_inner());
+    *cache = Some(WindowsDetectionCacheEntry {
+      captured_at: Instant::now(),
+      candidates: candidates.clone(),
+    });
+  }
+
   candidates
 }
 
@@ -695,7 +760,10 @@ fn probe_registry_app_paths(candidates: &mut Vec<DetectedLauncher>) {
 }
 
 #[cfg(target_os = "windows")]
-fn probe_registry_uninstall_entries(candidates: &mut Vec<DetectedLauncher>) {
+fn probe_registry_uninstall_entries(
+  candidates: &mut Vec<DetectedLauncher>,
+  scan_budget: StdDuration,
+) {
   const UNINSTALL_KEYS: &[(HKEY, &str)] = &[
     (HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
     (HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
@@ -705,13 +773,22 @@ fn probe_registry_uninstall_entries(candidates: &mut Vec<DetectedLauncher>) {
     ),
   ];
 
+  let started = Instant::now();
   for (hive, key_path) in UNINSTALL_KEYS {
+    if started.elapsed() >= scan_budget {
+      break;
+    }
+
     let root = RegKey::predef(*hive);
     let Ok(uninstall_root) = root.open_subkey(key_path) else {
       continue;
     };
 
     for subkey_name in uninstall_root.enum_keys().flatten() {
+      if started.elapsed() >= scan_budget {
+        break;
+      }
+
       let Ok(subkey) = uninstall_root.open_subkey(&subkey_name) else {
         continue;
       };
@@ -958,6 +1035,26 @@ fn resolve_official_store_app_id() -> Option<String> {
 
   let payload = String::from_utf8_lossy(&output.stdout);
   official_store_app_id_from_json(&payload)
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_official_store_app_id_cached() -> Option<String> {
+  {
+    let cache = windows_store_app_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(entry) = cache.as_ref() {
+      if entry.captured_at.elapsed() < WINDOWS_STORE_APP_CACHE_TTL {
+        return entry.app_id.clone();
+      }
+    }
+  }
+
+  let resolved = resolve_official_store_app_id();
+  let mut cache = windows_store_app_cache().lock().unwrap_or_else(|e| e.into_inner());
+  *cache = Some(WindowsStoreAppCacheEntry {
+    captured_at: Instant::now(),
+    app_id: resolved.clone(),
+  });
+  resolved
 }
 
 #[cfg_attr(not(any(target_os = "windows", test)), allow(dead_code))]
