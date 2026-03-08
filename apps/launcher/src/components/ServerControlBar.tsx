@@ -1,5 +1,23 @@
+import clsx from "clsx";
 import { memo, useCallback } from "react";
 import type { LauncherServerControlsState } from "../types";
+
+type StatusTone =
+  | "online"
+  | "offline"
+  | "busy"
+  | "error"
+  | "disabled"
+  | "unknown";
+
+const defaultStatusBadgeToneClassNames: Record<StatusTone, string> = {
+  online: "is-online",
+  offline: "is-offline",
+  busy: "is-busy",
+  error: "is-error",
+  disabled: "is-disabled",
+  unknown: "is-unknown",
+};
 
 type Props = {
   launcherServerControls: LauncherServerControlsState;
@@ -10,6 +28,9 @@ type Props = {
   shellClassName?: string;
   labelClassName?: string;
   controlsClassName?: string;
+  statusBadgeClassName?: string;
+  statusBadgeToneClassNames?: Partial<Record<StatusTone, string>>;
+  statusTextClassName?: string;
   iconActionsClassName?: string;
   iconButtonClassName?: string;
 };
@@ -21,6 +42,9 @@ export const ServerControlBar = memo(function ServerControlBar({
   shellClassName = "compact-server-shell",
   labelClassName = "launcher-server-section-label compact-server-section-label",
   controlsClassName = "launcher-server-controls compact-server-controls",
+  statusBadgeClassName = "launcher-server-badge",
+  statusBadgeToneClassNames = defaultStatusBadgeToneClassNames,
+  statusTextClassName = "compact-server-online",
   iconActionsClassName = "compact-server-icon-actions",
   iconButtonClassName = "compact-server-icon-btn",
 }: Props) {
@@ -37,17 +61,17 @@ export const ServerControlBar = memo(function ServerControlBar({
     [runLauncherServerAction],
   );
 
-  const statusToneClass = (() => {
+  const statusTone: StatusTone = (() => {
     if (!launcherServerControls?.enabled) {
-      return "is-disabled";
+      return "disabled";
     }
 
     const status = launcherServerControls.selectedServer?.status;
-    if (status === 1) return "is-online";
-    if (status === 0) return "is-offline";
-    if (status === 7) return "is-error";
-    if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "is-busy";
-    return "is-unknown";
+    if (status === 1) return "online";
+    if (status === 0) return "offline";
+    if (status === 7) return "error";
+    if ([2, 3, 4, 5, 6, 8, 9, 10].includes(status ?? -1)) return "busy";
+    return "unknown";
   })();
 
   const launcherServerStatus = launcherServerControls?.selectedServer?.status;
@@ -65,18 +89,23 @@ export const ServerControlBar = memo(function ServerControlBar({
     <div className={shellClassName}>
       <span className={labelClassName}>Live Server Control</span>
       <section className={controlsClassName}>
-        <span className={`launcher-server-badge ${statusToneClass}`}>
+        <span
+          className={clsx(
+            statusBadgeClassName,
+            statusBadgeToneClassNames[statusTone],
+          )}
+        >
           {launcherServerControls.selectedServer?.statusLabel ??
             (launcherServerControls.enabled ? "Unknown" : "Unavailable")}
         </span>
 
         {launcherServerControls.reason ? (
-          <span className="compact-server-online">
+          <span className={statusTextClassName}>
             {launcherServerControls.reason}
           </span>
         ) : launcherServerControls.permissions.canViewOnlinePlayers &&
           launcherServerControls.selectedServer ? (
-          <span className="compact-server-online">
+          <span className={statusTextClassName}>
             {launcherServerControls.selectedServer.players.count}/
             {launcherServerControls.selectedServer.players.max} online
           </span>
