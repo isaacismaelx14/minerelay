@@ -1,5 +1,30 @@
 # Changelog
 
+## [@minerelay/launcher/v0.5.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.5.0) (2026-03-08)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.4.0...%40minerelay%2Flauncher%2Fv0.5.0)
+
+## Build
+
+- **launcher:** target node 24 for builds ([3d2826f](https://github.com/isaacismaelx14/minerelay/commit/3d2826f15ee45f686cc41e669fec1b01c5f80df5))
+
+## Chores
+
+- **launcher:** pin dependency versions ([ccc62dc](https://github.com/isaacismaelx14/minerelay/commit/ccc62dcba5b32d79541251697e196da84d141af7))
+
+## Bug Fixes
+
+- **launcher:** upgrade tauri dependencies ([0982c80](https://github.com/isaacismaelx14/minerelay/commit/0982c80a706d54209a06230cfdef2ad14c73acf9))
+
+## Features
+
+- **launcher:** enhance app performance profiling and download concurrency ([1ede484](https://github.com/isaacismaelx14/minerelay/commit/1ede4849ab2ccea756f12c110ceed61ae8cc0dce))
+- **launcher:** enhance launcher detection with telemetry and timeout adjustments for Windows ([66534a1](https://github.com/isaacismaelx14/minerelay/commit/66534a1ed4623489ba51c97431a07e8b1be15dd7))
+- **launcher:** enhance launcher detection timeout based on OS ([b48d42e](https://github.com/isaacismaelx14/minerelay/commit/b48d42ec28d94644e598b557dde0d8325e71edd9))
+- **launcher:** add custom context menu styles and item interactions ([a8f5ce5](https://github.com/isaacismaelx14/minerelay/commit/a8f5ce59709f3c2f218367f4a0b3c599fc1c91a9))
+- **launcher:** implement context menu with refresh option and related handlers ([44f9993](https://github.com/isaacismaelx14/minerelay/commit/44f999343a8ca5da1b181d456a079124b8b1bc76))
+- **launcher:** update minerelay-launcher to version 0.4.0 and add custom quit confirmation for app menu ([3e7fe1d](https://github.com/isaacismaelx14/minerelay/commit/3e7fe1dbd39cbfc4d78a63f605fa0512a4e24ff7))
+
 ## [@minerelay/launcher/v0.4.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.4.0) (2026-03-07)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.3.2...%40minerelay%2Flauncher%2Fv0.4.0)
