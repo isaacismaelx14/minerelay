@@ -1,5 +1,15 @@
 # Changelog
 
+## [@minerelay/shared/v0.2.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.2) (2026-03-08)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.1...%40minerelay%2Fshared%2Fv0.2.2)
+
+## Chores
+
+- **core:** sync workspace dependency lock updates ([78621ad](https://github.com/isaacismaelx14/minerelay/commit/78621ada49ad01e70505a7931ca3c3b8d539334e))
+- **shared:** pin dependency versions ([7e7d9d6](https://github.com/isaacismaelx14/minerelay/commit/7e7d9d6639adb012e1649d6ed66af7113af02732))
+- **core:** pin node and update prettier ignore ([92e695b](https://github.com/isaacismaelx14/minerelay/commit/92e695b00983d78479cd764bc3ab04c58109d0ac))
+
 ## [@minerelay/shared/v0.2.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.1) (2026-03-07)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.0...%40minerelay%2Fshared%2Fv0.2.1)
