@@ -9,7 +9,6 @@ import {
   type PropsWithChildren,
   type ReactElement,
 } from "react";
-import { createPortal } from "react-dom";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -72,30 +71,28 @@ export function ToastProvider({ children }: PropsWithChildren): ReactElement {
     <Ctx value={{ pushToast }}>
       {children}
 
-      {toasts.length > 0 &&
-        createPortal(
-          <div
-            className="fixed bottom-6 right-6 z-[9999] grid gap-2.5 w-[min(360px,calc(100vw-48px))] pointer-events-none"
-            aria-live="polite"
-          >
-            {toasts.map((t) => (
-              <div
-                key={t.id}
-                className={[
-                  "pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border border-white/[0.06] backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] text-sm font-medium animate-[slideUp_0.3s_cubic-bezier(0.34,1.56,0.64,1)]",
-                  toneStyles[t.tone],
-                ].join(" ")}
-                role="status"
-              >
-                <span className="material-symbols-outlined text-[18px] shrink-0">
-                  {toneIcon[t.tone]}
-                </span>
-                {t.text}
-              </div>
-            ))}
-          </div>,
-          document.body,
-        )}
+      {toasts.length > 0 && (
+        <div
+          className="fixed bottom-6 right-6 z-[9999] grid gap-2.5 w-[min(360px,calc(100vw-48px))] pointer-events-none"
+          aria-live="polite"
+        >
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={[
+                "pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-[var(--radius-md)] border border-white/[0.06] backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] text-sm font-medium animate-[slideUp_0.3s_cubic-bezier(0.34,1.56,0.64,1)]",
+                toneStyles[t.tone],
+              ].join(" ")}
+              role="status"
+            >
+              <span className="material-symbols-outlined text-[18px] shrink-0">
+                {toneIcon[t.tone]}
+              </span>
+              {t.text}
+            </div>
+          ))}
+        </div>
+      )}
     </Ctx>
   );
 }

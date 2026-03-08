@@ -56,3 +56,36 @@ export type { EmptyStateProps } from "./components/empty-state";
 
 export { ProgressBar } from "./components/progress-bar";
 export type { ProgressBarProps } from "./components/progress-bar";
+
+export { Avatar } from "./components/avatar";
+export type { AvatarProps, AvatarSize } from "./components/avatar";
+
+export { Tag } from "./components/tag";
+export type { TagProps } from "./components/tag";
+
+export { ListRow } from "./components/list-row";
+export type { ListRowProps } from "./components/list-row";
+
+export { DiscoverItemCard } from "./components/discover-item-card";
+export type { DiscoverItemCardProps } from "./components/discover-item-card";
+
+export { StatCard } from "./components/stat-card";
+export type { StatCardProps, StatCardTone } from "./components/stat-card";
+
+export { InfoPanel } from "./components/info-panel";
+export type { InfoPanelProps } from "./components/info-panel";
+
+export { InfoRow } from "./components/info-row";
+export type { InfoRowProps } from "./components/info-row";
+
+export { RecentModsPanel } from "./components/recent-mods-panel";
+export type {
+  RecentModItem,
+  RecentModsPanelProps,
+} from "./components/recent-mods-panel";
+
+export { SelectableCard } from "./components/selectable-card";
+export type { SelectableCardProps } from "./components/selectable-card";
+
+export { SettingRow } from "./components/setting-row";
+export type { SettingRowProps } from "./components/setting-row";

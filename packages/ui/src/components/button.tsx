@@ -22,12 +22,13 @@ const variantClasses = {
   success:
     "bg-indigo-500 text-white border-transparent shadow-lg shadow-indigo-500/20 hover:not-disabled:bg-indigo-400 hover:not-disabled:shadow-indigo-500/30",
   flat: "bg-transparent text-[var(--color-text-primary)] border-transparent hover:not-disabled:text-white",
+  link: "bg-transparent text-[var(--color-brand-primary)] border-transparent p-0 hover:not-disabled:underline",
 } as const;
 
 const sizeClasses = {
-  xs: "text-xs px-2.5 py-1 rounded-lg gap-1.5",
-  sm: "text-sm px-3 py-1.5 rounded-xl gap-1.5",
-  md: "text-sm px-4 py-2.5 rounded-xl gap-2",
+  xs: "text-xs px-2.5 py-1 rounded-[var(--radius-sm)] gap-1.5",
+  sm: "text-sm px-3 py-1.5 rounded-[var(--radius-sm)] gap-1.5",
+  md: "text-sm px-4 py-2.5 rounded-[var(--radius-md)] gap-2",
   lg: "text-[0.9rem] px-5 py-3 rounded-[var(--radius-md)] gap-2",
 } as const;
 
@@ -39,15 +40,7 @@ export type ButtonSize = keyof typeof sizeClasses;
 /* ------------------------------------------------------------------ */
 
 const base =
-  "inline-flex items-center justify-center font-semibold cursor-pointer border transition-all duration-200 ease-out disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.5] shrink-0 relative overflow-hidden";
-
-/*
- * Shimmer sweep effect from Launcher:
- * A skewed gradient pseudo-element that sweeps left→right on hover.
- * Implemented via Tailwind `after:` utilities.
- */
-const shimmer =
-  "after:content-[''] after:absolute after:top-0 after:left-[-100%] after:w-1/2 after:h-full after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] after:skew-x-[-20deg] after:transition-[left] after:duration-500 hover:not-disabled:after:left-[150%]";
+  "inline-flex items-center justify-center font-semibold cursor-pointer border transition-all duration-200 ease-out disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale-[0.5] shrink-0";
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -78,7 +71,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           base,
-          shimmer,
           variantClasses[variant],
           sizeClasses[size],
           className,

@@ -4,10 +4,10 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../cn";
 
 const sizeClasses = {
-  xs: "w-6 h-6 text-xs rounded-lg",
-  sm: "w-8 h-8 text-sm rounded-lg",
-  md: "w-9 h-9 text-sm rounded-xl",
-  lg: "w-10 h-10 text-base rounded-xl",
+  xs: "w-6 h-6 text-xs rounded-[var(--radius-sm)]",
+  sm: "w-8 h-8 text-sm rounded-[var(--radius-sm)]",
+  md: "w-9 h-9 text-sm rounded-[var(--radius-md)]",
+  lg: "w-10 h-10 text-base rounded-[var(--radius-md)]",
 } as const;
 
 export type IconButtonSize = keyof typeof sizeClasses;

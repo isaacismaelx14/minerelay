@@ -29,7 +29,7 @@ export function Alert({
     <div
       role="alert"
       className={cn(
-        "rounded-xl py-3.5 px-4 text-[0.9rem] flex items-start gap-3 leading-relaxed border backdrop-blur-[8px]",
+        "rounded-[var(--radius-md)] py-3.5 px-4 text-[0.9rem] flex items-start gap-3 leading-relaxed border backdrop-blur-[8px]",
         tones[tone],
         className,
       )}
