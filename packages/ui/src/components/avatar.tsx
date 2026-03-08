@@ -35,7 +35,7 @@ export function Avatar({
       {overlay}
       <div
         className={cn(
-          "bg-black/20 flex items-center justify-center text-[var(--color-text-muted)] border border-[var(--color-line)] shrink-0 overflow-hidden",
+          "bg-surface-deep-20 flex items-center justify-center text-text-muted border border-line shrink-0 overflow-hidden",
           sizeClasses[size],
         )}
       >

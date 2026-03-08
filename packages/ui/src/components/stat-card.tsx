@@ -5,28 +5,28 @@ import { cn } from "../cn";
 
 const toneClasses = {
   emerald: {
-    bg: "from-emerald-500/10 to-emerald-500/0",
-    text: "text-emerald-400",
-    border: "border-emerald-500/30",
-    glow: "shadow-emerald-500/10",
+    bg: "bg-[linear-gradient(135deg,var(--color-success-bg),transparent)]",
+    text: "text-success-bright",
+    border: "border-success-border-strong",
+    glow: "shadow-[0_10px_30px_var(--color-success-shadow-soft)]",
   },
   red: {
-    bg: "from-red-500/10 to-red-500/0",
-    text: "text-red-400",
-    border: "border-red-500/30",
-    glow: "shadow-red-500/10",
+    bg: "bg-[linear-gradient(135deg,var(--color-danger-bg),transparent)]",
+    text: "text-danger-bright",
+    border: "border-danger-border-strong",
+    glow: "shadow-[0_10px_30px_var(--color-danger-shadow-soft)]",
   },
   amber: {
-    bg: "from-amber-500/10 to-amber-500/0",
-    text: "text-amber-400",
-    border: "border-amber-500/30",
-    glow: "shadow-amber-500/10",
+    bg: "bg-[linear-gradient(135deg,var(--color-warning-bg),transparent)]",
+    text: "text-warning-bright",
+    border: "border-warning-border-strong",
+    glow: "shadow-[0_10px_30px_var(--color-warning-shadow-soft)]",
   },
   indigo: {
-    bg: "from-indigo-500/10 to-indigo-500/0",
-    text: "text-indigo-400",
-    border: "border-indigo-500/30",
-    glow: "shadow-indigo-500/10",
+    bg: "bg-[linear-gradient(135deg,var(--color-brand-indigo-bg),transparent)]",
+    text: "text-brand-indigo",
+    border: "border-brand-indigo-border",
+    glow: "shadow-[0_10px_30px_var(--color-brand-indigo-shadow)]",
   },
 } as const;
 
@@ -54,7 +54,7 @@ export function StatCard({
       className={cn(
         "relative group rounded-2xl border p-5 flex flex-col items-center gap-2 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg overflow-hidden",
         classes.border,
-        `bg-gradient-to-br ${classes.bg}`,
+        classes.bg,
         classes.glow,
         className,
       )}
@@ -62,7 +62,7 @@ export function StatCard({
       <div
         className={cn(
           "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-          `bg-gradient-to-br ${classes.bg}`,
+          classes.bg,
         )}
       />
       <div className="relative flex items-center gap-2">

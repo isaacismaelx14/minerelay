@@ -56,7 +56,7 @@ export const Modal = memo(function Modal({
   return createPortal(
     <div
       className={cn(
-        "fixed inset-0 w-screen h-screen bg-black/40 backdrop-blur-[4px] z-[1000] flex items-center justify-center animate-[fadeIn_0.2s_ease-out]",
+        "fixed inset-0 w-screen h-screen bg-surface-deep-40 backdrop-blur-[4px] z-[1000] flex items-center justify-center animate-[fadeIn_0.2s_ease-out]",
         className,
       )}
       role="presentation"
@@ -64,7 +64,7 @@ export const Modal = memo(function Modal({
       <div
         ref={cardRef}
         className={cn(
-          "bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] flex flex-col shadow-[0_12px_40px_rgba(0,0,0,0.5)] animate-[scaleIn_0.2s_ease-out] relative",
+          "bg-bg-card border border-line rounded-[var(--radius-lg)] flex flex-col shadow-[0_12px_40px_var(--color-shadow-xl)] animate-[scaleIn_0.2s_ease-out] relative",
           wide
             ? "w-[min(95vw,1150px)] max-h-[85vh] p-0 gap-0 overflow-hidden"
             : "min-w-[40vw] max-w-[90vw] max-h-[85vh] overflow-y-auto p-[24px] gap-[16px]",

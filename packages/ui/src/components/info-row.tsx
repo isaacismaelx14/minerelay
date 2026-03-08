@@ -14,17 +14,17 @@ export function InfoRow({
   highlight,
 }: InfoRowProps): ReactElement {
   return (
-    <div className="flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg bg-black/15 border border-white/[0.04]">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] shrink-0">
+    <div className="flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg bg-surface-deep-15 border border-line-subtle">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted shrink-0">
         {label}
       </span>
       <span
         className={`text-sm font-medium truncate text-right ${
           highlight === "success"
-            ? "text-emerald-400"
+            ? "text-success-bright"
             : highlight === "warning"
-              ? "text-amber-400"
-              : "text-[var(--color-text-primary)]"
+              ? "text-warning-bright"
+              : "text-text-primary"
         }`}
       >
         {value || "-"}

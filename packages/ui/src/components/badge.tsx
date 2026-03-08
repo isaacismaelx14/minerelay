@@ -4,15 +4,13 @@ import type { ReactElement, ReactNode } from "react";
 import { cn } from "../cn";
 
 const toneClasses = {
-  online: "text-[#34d399] bg-[#10b981]/10 border-[#10b981]/20",
-  busy: "text-[#fbbf24] bg-[#f59e0b]/10 border-[#f59e0b]/20",
-  offline:
-    "text-[var(--color-text-muted)] bg-white/5 border-[var(--color-line)]",
-  error: "text-[#fb7185] bg-[#e11d48]/10 border-[#e11d48]/20",
-  warning: "text-[#fbbf24] bg-[#f59e0b]/10 border-[#f59e0b]/20",
-  info: "text-[var(--color-brand-accent)] bg-[var(--color-brand-accent)]/10 border-[var(--color-brand-accent)]/20",
-  neutral:
-    "text-[var(--color-text-secondary)] bg-white/5 border-[var(--color-line)]",
+  online: "text-success-bright bg-success-bg border-success-border",
+  busy: "text-warning-bright bg-warning-bg border-warning-border",
+  offline: "text-text-muted bg-surface-subtle border-line",
+  error: "text-danger-bright bg-danger-bg border-danger-border",
+  warning: "text-warning-bright bg-warning-bg border-warning-border",
+  info: "text-brand-accent bg-brand-accent/10 border-brand-accent/20",
+  neutral: "text-text-secondary bg-surface-subtle border-line",
 } as const;
 
 export type BadgeTone = keyof typeof toneClasses;
@@ -42,12 +40,11 @@ export function Badge({
         <span
           className={cn(
             "w-1.5 h-1.5 rounded-full shrink-0 animate-pulse",
-            tone === "online" && "bg-[#10b981]",
-            (tone === "busy" || tone === "warning") && "bg-[#f59e0b]",
-            tone === "error" && "bg-[#e11d48]",
-            tone === "info" && "bg-[var(--color-brand-accent)]",
-            (tone === "offline" || tone === "neutral") &&
-              "bg-[var(--color-text-muted)]",
+            tone === "online" && "bg-success",
+            (tone === "busy" || tone === "warning") && "bg-warning",
+            tone === "error" && "bg-danger-accent",
+            tone === "info" && "bg-brand-accent",
+            (tone === "offline" || tone === "neutral") && "bg-text-muted",
           )}
         />
       )}

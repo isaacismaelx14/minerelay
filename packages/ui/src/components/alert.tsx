@@ -5,9 +5,9 @@ import { cn } from "../cn";
 
 const tones = {
   error:
-    "border-red-500/30 bg-[rgba(127,29,29,0.2)] text-red-300 shadow-[0_4px_15px_rgba(239,68,68,0.1)]",
-  hint: "border-emerald-500/30 bg-[rgba(6,78,59,0.2)] text-emerald-300",
-  info: "border-sky-500/30 bg-[rgba(12,74,110,0.2)] text-sky-300",
+    "border-danger-border-strong bg-danger-surface text-danger-soft-text shadow-[0_4px_15px_var(--color-danger-shadow-soft)]",
+  hint: "border-success-border-strong bg-success-surface text-success-soft-text",
+  info: "border-info-border bg-info-bg text-info-bright",
 } as const;
 
 export type AlertTone = keyof typeof tones;

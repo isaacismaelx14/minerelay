@@ -37,12 +37,12 @@ export function Tooltip({
                 maxWidth: 240,
                 padding: "8px 12px",
                 borderRadius: 8,
-                backgroundColor: "#1a1a2e",
-                border: "1px solid rgba(255,255,255,0.1)",
+                backgroundColor: "var(--color-surface-elevated)",
+                border: "1px solid var(--color-line-hover)",
                 fontSize: 11,
                 lineHeight: 1.5,
-                color: "var(--color-text-secondary, #ccc)",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                color: "var(--color-text-secondary)",
+                boxShadow: "0 8px 24px var(--color-shadow-lg)",
               }}
             >
               {content}
@@ -53,7 +53,10 @@ export function Tooltip({
                   viewBox="0 0 10 5"
                   style={{ display: "block" }}
                 >
-                  <path d="M0 0L5 5L10 0" fill="#1a1a2e" />
+                  <path
+                    d="M0 0L5 5L10 0"
+                    fill="var(--color-surface-elevated)"
+                  />
                 </svg>
               </BaseTooltip.Arrow>
             </BaseTooltip.Popup>

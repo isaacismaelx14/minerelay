@@ -26,7 +26,7 @@ export function InfoPanel({
   return (
     <article
       className={cn(
-        "group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 flex flex-col gap-5 transition-all duration-200 hover:bg-white/[0.04] hover:border-white/[0.1]",
+        "group rounded-2xl border border-line bg-surface-soft p-6 flex flex-col gap-5 transition-all duration-200 hover:bg-surface-soft-hover hover:border-line-hover",
         className,
       )}
     >

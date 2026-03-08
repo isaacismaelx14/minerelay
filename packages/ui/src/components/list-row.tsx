@@ -28,7 +28,7 @@ export function ListRow({
   return (
     <div
       className={cn(
-        "bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-xl p-4 flex items-center gap-4 hover:border-[var(--color-brand-primary)]/30 transition-colors",
+        "bg-bg-card border border-line rounded-xl p-4 flex items-center gap-4 hover:border-brand-primary/30 transition-colors",
         className,
       )}
     >
@@ -41,7 +41,7 @@ export function ListRow({
           {meta}
         </div>
         {description ? (
-          <p className="text-[13px] text-[var(--color-text-muted)] mt-1 truncate m-0">
+          <p className="text-[13px] text-text-muted mt-1 truncate m-0">
             {description}
           </p>
         ) : null}

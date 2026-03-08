@@ -7,7 +7,11 @@ export type { Size, BaseProps } from "./types";
 
 /* ── components ───────────────────────────── */
 export { Button } from "./components/button";
-export type { ButtonProps, ButtonVariant } from "./components/button";
+export type {
+  ButtonEffect,
+  ButtonProps,
+  ButtonVariant,
+} from "./components/button";
 
 export { IconButton } from "./components/icon-button";
 export type { IconButtonProps } from "./components/icon-button";

@@ -16,9 +16,9 @@ export function Card({
   return (
     <article
       className={cn(
-        "bg-[var(--color-bg-card)] border border-[var(--color-line)] rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150",
+        "bg-bg-card border border-line rounded-[var(--radius-lg)] p-[24px] flex flex-col gap-[16px] transition-all duration-150",
         hoverable &&
-          "hover:bg-[var(--color-bg-card-hover)] hover:border-[var(--color-line-strong)] hover:-translate-y-[2px] hover:shadow-[0_8px_20px_rgba(0,0,0,0.2)]",
+          "hover:bg-bg-card-hover hover:border-line-strong hover:-translate-y-[2px] hover:shadow-[0_8px_20px_var(--color-shadow-md)]",
         className,
       )}
     >

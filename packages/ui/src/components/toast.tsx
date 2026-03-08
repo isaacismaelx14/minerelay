@@ -44,9 +44,10 @@ const AUTO_DISMISS_MS = 3500;
 
 const toneStyles: Record<ToastTone, string> = {
   success:
-    "border-l-[3px] border-l-emerald-400 text-emerald-300 bg-emerald-500/[0.08]",
-  error: "border-l-[3px] border-l-red-400 text-red-300 bg-red-500/[0.08]",
-  info: "border-l-[3px] border-l-sky-400 text-sky-300 bg-sky-500/[0.08]",
+    "border-l-[3px] border-l-success-bright text-success-soft-text bg-success-bg",
+  error:
+    "border-l-[3px] border-l-danger-bright text-danger-soft-text bg-danger-bg",
+  info: "border-l-[3px] border-l-info-bright text-info-bright bg-info-tint",
 };
 
 const toneIcon: Record<ToastTone, string> = {
@@ -80,7 +81,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactElement {
             <div
               key={t.id}
               className={[
-                "pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-[var(--radius-md)] border border-white/[0.06] backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] text-sm font-medium animate-[slideUp_0.3s_cubic-bezier(0.34,1.56,0.64,1)]",
+                "pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-[var(--radius-md)] border border-line backdrop-blur-xl shadow-[0_12px_40px_var(--color-shadow-xl)] text-sm font-medium animate-[slideUp_0.3s_cubic-bezier(0.34,1.56,0.64,1)]",
                 toneStyles[t.tone],
               ].join(" ")}
               role="status"

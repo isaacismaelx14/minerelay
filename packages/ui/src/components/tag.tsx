@@ -12,7 +12,7 @@ export function Tag({ children, className }: TagProps): ReactElement {
   return (
     <span
       className={cn(
-        "text-[10px] bg-black/20 border border-[var(--color-line)] px-1.5 py-0.5 rounded text-[var(--color-text-muted)] uppercase font-semibold whitespace-nowrap",
+        "text-[10px] bg-surface-deep-20 border border-line px-1.5 py-0.5 rounded text-text-muted uppercase font-semibold whitespace-nowrap",
         className,
       )}
     >

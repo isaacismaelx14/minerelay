@@ -4,10 +4,10 @@ import { memo, type ChangeEventHandler } from "react";
 import { cn } from "../cn";
 
 const labelClass =
-  "font-mono text-[0.75rem] text-[var(--color-text-muted)] uppercase tracking-[0.12em] font-semibold";
+  "font-mono text-[0.75rem] text-text-muted uppercase tracking-[0.12em] font-semibold";
 
 const selectClass =
-  "border border-[var(--color-line)] rounded-[var(--radius-md)] bg-black/30 py-[13px] px-[16px] text-inherit text-[0.95rem] text-[var(--color-text-primary)] w-full transition-all duration-150 ease-out outline-none focus:border-[var(--color-brand-primary)] focus:bg-black/40 focus:shadow-[0_0_0_4px_rgba(16,185,129,0.12)]";
+  "border border-line rounded-[var(--radius-md)] bg-surface-deep-30 py-[13px] px-[16px] text-inherit text-[0.95rem] text-text-primary w-full transition-all duration-150 ease-out outline-none focus:border-brand-primary focus:bg-surface-deep-40 focus:shadow-[0_0_0_4px_var(--color-brand-primary-ring)]";
 
 export interface SelectOption {
   value: string;
@@ -35,7 +35,7 @@ export const Select = memo(function Select({
 }: SelectProps) {
   const selectStyles =
     variant === "compact"
-      ? "bg-transparent border border-[var(--color-line)] rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[0.65rem] text-[var(--color-text-muted)] outline-none focus:border-[var(--color-brand-primary)] cursor-pointer w-full transition-all duration-150 ease-out"
+      ? "bg-transparent border border-line rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[0.65rem] text-text-muted outline-none focus:border-brand-primary cursor-pointer w-full transition-all duration-150 ease-out"
       : selectClass;
 
   return (
