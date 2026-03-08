@@ -303,19 +303,7 @@ jobs:
                 const fs = require("fs");
                 const releases = JSON.parse(fs.readFileSync(0, "utf8"));
                 const inputTag = process.env.RELEASE_TAG || "";
-                const swaps = [
-                  ["@minerelay/launcher/v", "@mss/launcher/v"],
-                  ["@mss/launcher/v", "@minerelay/launcher/v"],
-                ];
-
-                const candidateTags = [inputTag];
-                for (const [from, to] of swaps) {
-                  if (inputTag.startsWith(from)) {
-                    candidateTags.push(inputTag.replace(from, to));
-                  }
-                }
-
-                const match = releases.find((release) => candidateTags.includes(release.tag_name));
+                const match = releases.find((release) => release.tag_name === inputTag);
                 if (match) {
                   process.stdout.write(`${match.id}\t${match.tag_name}`);
                 }
@@ -402,19 +390,7 @@ jobs:
                 const fs = require("fs");
                 const releases = JSON.parse(fs.readFileSync(0, "utf8"));
                 const inputTag = process.env.RELEASE_TAG || "";
-                const swaps = [
-                  ["@minerelay/launcher/v", "@mss/launcher/v"],
-                  ["@mss/launcher/v", "@minerelay/launcher/v"],
-                ];
-
-                const candidateTags = [inputTag];
-                for (const [from, to] of swaps) {
-                  if (inputTag.startsWith(from)) {
-                    candidateTags.push(inputTag.replace(from, to));
-                  }
-                }
-
-                const match = releases.find((release) => candidateTags.includes(release.tag_name));
+                const match = releases.find((release) => release.tag_name === inputTag);
                 if (match) {
                   process.stdout.write(match.tag_name);
                 }

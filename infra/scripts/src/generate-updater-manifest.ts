@@ -38,6 +38,10 @@ type MatchResult = {
 const USAGE =
   "Usage: pnpm --filter @minerelay/infra-scripts manifest:generate --owner <owner> --repo <repo> --tag <tag> --artifacts-dir <dir> --output <file> [--notes <notes>] [--required windows,macos]";
 
+const LAUNCHER_RELEASE_TAG_PREFIX = "@minerelay/launcher/v";
+const SEMVER_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+
 function parseArgs(argv: string[]): ParsedArgs {
   const values = new Map<string, string>();
   for (let i = 0; i < argv.length; i += 1) {
@@ -105,6 +109,23 @@ function walkFiles(root: string): string[] {
     }
   }
   return files;
+}
+
+function extractVersionFromLauncherTag(tag: string): string {
+  if (!tag.startsWith(LAUNCHER_RELEASE_TAG_PREFIX)) {
+    throw new Error(
+      `Unsupported release tag '${tag}'. Expected format '${LAUNCHER_RELEASE_TAG_PREFIX}<semver>'.`,
+    );
+  }
+
+  const version = tag.slice(LAUNCHER_RELEASE_TAG_PREFIX.length);
+  if (!SEMVER_PATTERN.test(version)) {
+    throw new Error(
+      `Release tag '${tag}' does not contain a valid semver after '${LAUNCHER_RELEASE_TAG_PREFIX}'.`,
+    );
+  }
+
+  return version;
 }
 
 function tokenize(input: string): string[] {
@@ -342,7 +363,7 @@ export function generateManifest(input: ParsedArgs): ManifestContent {
 
   const files = walkFiles(input.artifactsDir);
   const manifest: ManifestContent = {
-    version: input.tag.startsWith("v") ? input.tag.slice(1) : input.tag,
+    version: extractVersionFromLauncherTag(input.tag),
     notes: input.notes,
     pub_date: new Date().toISOString(),
     platforms: {},

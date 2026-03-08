@@ -22,6 +22,9 @@ type LatestJsonPlatform = {
   url: string;
 };
 
+const SEMVER_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+
 const USAGE =
   "Usage: pnpm --filter @minerelay/infra-scripts updater:verify --owner <owner> --repo <repo> --tag <tag> [--required windows,macos]";
 
@@ -229,8 +232,15 @@ async function main(): Promise<void> {
   }
 
   const latest = await fetchJson<{
+    version?: string;
     platforms?: Record<string, LatestJsonPlatform>;
   }>(latestJsonAsset.browser_download_url, args.token);
+
+  if (!latest.version || !SEMVER_PATTERN.test(latest.version)) {
+    throw new Error(
+      `latest.json version must be a valid semver string. Received: '${latest.version ?? ""}'.`,
+    );
+  }
 
   const platformKeys = Object.keys(latest.platforms ?? {});
   if (platformKeys.length === 0) {

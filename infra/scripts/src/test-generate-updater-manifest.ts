@@ -7,11 +7,12 @@ import { generateManifest, type ParsedArgs } from "./generate-updater-manifest";
 function buildArgs(
   root: string,
   required: Set<"windows" | "macos">,
+  tag = "@minerelay/launcher/v0.1.0-beta.999",
 ): ParsedArgs {
   return {
     owner: "isaacismaelx14",
     repo: "minerelay",
-    tag: "v0.1.0-beta.999",
+    tag,
     artifactsDir: root,
     output: join(root, "latest.json"),
     notes: "fixture test",
@@ -35,6 +36,7 @@ function runFixtures(): void {
     const windowsOnly = generateManifest(
       buildArgs(windowsDir, new Set(["windows"])),
     );
+    assert.equal(windowsOnly.version, "0.1.0-beta.999");
     assert.ok(windowsOnly.platforms["windows-x86_64"]);
     assert.equal(windowsOnly.platforms["windows-x86_64"]?.signature, "sig-win");
 
@@ -132,6 +134,30 @@ function runFixtures(): void {
     assert.equal(
       preferUploadDir.platforms["windows-x86_64"]?.signature,
       "sig-upload",
+    );
+
+    assert.throws(
+      () =>
+        generateManifest(
+          buildArgs(
+            windowsDir,
+            new Set(["windows"]),
+            "@mss/launcher/v0.1.0-beta.999",
+          ),
+        ),
+      /Unsupported release tag/u,
+    );
+
+    assert.throws(
+      () =>
+        generateManifest(
+          buildArgs(
+            windowsDir,
+            new Set(["windows"]),
+            "@minerelay/launcher/vbad-version",
+          ),
+        ),
+      /does not contain a valid semver/u,
     );
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
