@@ -1,14 +1,20 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 
 import { AdminConsolePage } from "@/admin/client/admin.client";
-import { readServerBootstrapPayload } from "@/admin/server/bootstrap.server";
+import { readServerBootstrapResult } from "@/admin/server/bootstrap.server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
-  const initialBootstrap = await readServerBootstrapPayload();
+  const { payload: initialBootstrap, isRscTransition } =
+    await readServerBootstrapResult();
+
+  if (!isRscTransition && !initialBootstrap) {
+    redirect("/login");
+  }
 
   return (
     <>

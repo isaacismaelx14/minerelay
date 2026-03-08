@@ -12,6 +12,11 @@ const bootstrapCache = new Map<
   { expiresAt: number; payload: BootstrapPayload | null }
 >();
 
+export type ServerBootstrapResult = {
+  payload: BootstrapPayload | null;
+  isRscTransition: boolean;
+};
+
 function normalizeApiOrigin(raw: string): string {
   const value = raw.trim();
   if (!value) {
@@ -57,13 +62,16 @@ function buildSessionCacheKey(cookie: string | null): string {
   return createHash("sha256").update(cookie).digest("base64url");
 }
 
-export async function readServerBootstrapPayload(): Promise<BootstrapPayload | null> {
+export async function readServerBootstrapResult(): Promise<ServerBootstrapResult> {
   const requestHeaders = await headers();
 
   // During in-app route transitions we keep existing client state and avoid
   // a blocking SSR bootstrap network hop for every navigation.
   if (isRscTransitionRequest(requestHeaders)) {
-    return null;
+    return {
+      payload: null,
+      isRscTransition: true,
+    };
   }
 
   const cookie = requestHeaders.get("cookie");
@@ -72,7 +80,10 @@ export async function readServerBootstrapPayload(): Promise<BootstrapPayload | n
   const now = Date.now();
 
   if (cached && cached.expiresAt > now) {
-    return cached.payload;
+    return {
+      payload: cached.payload,
+      isRscTransition: false,
+    };
   }
 
   try {
@@ -90,7 +101,10 @@ export async function readServerBootstrapPayload(): Promise<BootstrapPayload | n
         payload: null,
         expiresAt: now + BOOTSTRAP_FAILURE_CACHE_TTL_MS,
       });
-      return null;
+      return {
+        payload: null,
+        isRscTransition: false,
+      };
     }
 
     if (!response.ok) {
@@ -102,7 +116,10 @@ export async function readServerBootstrapPayload(): Promise<BootstrapPayload | n
         payload: null,
         expiresAt: now + BOOTSTRAP_FAILURE_CACHE_TTL_MS,
       });
-      return null;
+      return {
+        payload: null,
+        isRscTransition: false,
+      };
     }
 
     const payload = (await response.json()) as BootstrapPayload;
@@ -110,13 +127,24 @@ export async function readServerBootstrapPayload(): Promise<BootstrapPayload | n
       payload,
       expiresAt: now + BOOTSTRAP_CACHE_TTL_MS,
     });
-    return payload;
+    return {
+      payload,
+      isRscTransition: false,
+    };
   } catch (error) {
     console.error("[admin] bootstrap request threw:", error);
     bootstrapCache.set(cacheKey, {
       payload: null,
       expiresAt: now + BOOTSTRAP_FAILURE_CACHE_TTL_MS,
     });
-    return null;
+    return {
+      payload: null,
+      isRscTransition: false,
+    };
   }
+}
+
+export async function readServerBootstrapPayload(): Promise<BootstrapPayload | null> {
+  const result = await readServerBootstrapResult();
+  return result.payload;
 }
