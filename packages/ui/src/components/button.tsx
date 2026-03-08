@@ -9,7 +9,7 @@ import { cn } from "../cn";
 
 const variantClasses = {
   primary:
-    "bg-[var(--color-brand-primary)] text-white border-white/15 shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.12)] hover:not-disabled:brightness-110 hover:not-disabled:shadow-[0_2px_12px_rgba(99,102,241,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] hover:not-disabled:-translate-y-px active:not-disabled:translate-y-0 active:not-disabled:shadow-[0_0px_4px_rgba(99,102,241,0.2),inset_0_1px_3px_rgba(0,0,0,0.2)]",
+    "bg-[var(--color-brand-primary)] text-white border-white/15 shadow-[0_1px_2px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.12)] hover:not-disabled:brightness-110 hover:not-disabled:shadow-[0_2px_12px_rgba(16,185,129,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] hover:not-disabled:-translate-y-px active:not-disabled:translate-y-0 active:not-disabled:shadow-[0_0px_4px_rgba(16,185,129,0.2),inset_0_1px_3px_rgba(0,0,0,0.2)]",
   ghost:
     "bg-white/5 text-[var(--color-text-secondary)] border-white/[0.06] backdrop-blur-sm hover:not-disabled:bg-white/10 hover:not-disabled:border-white/[0.12] hover:not-disabled:text-white",
   outline:
@@ -20,7 +20,7 @@ const variantClasses = {
     "bg-red-500/5 text-red-400/80 border-red-500/10 hover:not-disabled:bg-red-500/10 hover:not-disabled:text-red-400 hover:not-disabled:border-red-500/20",
   warn: "bg-white/[0.03] text-[var(--color-text-muted)] border-white/[0.06] hover:not-disabled:text-amber-400 hover:not-disabled:bg-amber-500/10 hover:not-disabled:border-amber-500/20",
   success:
-    "bg-indigo-500 text-white border-transparent shadow-lg shadow-indigo-500/20 hover:not-disabled:bg-indigo-400 hover:not-disabled:shadow-indigo-500/30",
+    "bg-emerald-500 text-white border-transparent shadow-lg shadow-emerald-500/20 hover:not-disabled:bg-emerald-400 hover:not-disabled:shadow-emerald-500/30",
   flat: "bg-transparent text-[var(--color-text-primary)] border-transparent hover:not-disabled:text-white",
   link: "bg-transparent text-[var(--color-brand-primary)] border-transparent p-0 hover:not-disabled:underline",
 } as const;

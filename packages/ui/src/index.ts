@@ -34,7 +34,7 @@ export { TextInput } from "./components/text-input";
 export type { TextInputProps } from "./components/text-input";
 
 export { Select } from "./components/select";
-export type { SelectProps } from "./components/select";
+export type { SelectProps, SelectOption } from "./components/select";
 
 export { Badge } from "./components/badge";
 export type { BadgeTone, BadgeProps } from "./components/badge";
@@ -71,6 +71,12 @@ export type { DiscoverItemCardProps } from "./components/discover-item-card";
 
 export { StatCard } from "./components/stat-card";
 export type { StatCardProps, StatCardTone } from "./components/stat-card";
+
+export { CompactStat } from "./components/compact-stat";
+export type {
+  CompactStatProps,
+  CompactStatTone,
+} from "./components/compact-stat";
 
 export { InfoPanel } from "./components/info-panel";
 export type { InfoPanelProps } from "./components/info-panel";

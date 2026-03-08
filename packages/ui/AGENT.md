@@ -23,18 +23,28 @@ packages/ui/
 │   ├── index.ts             ← barrel export (all components, utils, types)
 │   └── components/
 │       ├── alert.tsx         ← Alert (error / hint / info)
+│       ├── avatar.tsx        ← Avatar image/fallback with optional overlay
 │       ├── badge.tsx         ← Badge tone chips
 │       ├── button.tsx        ← Button (8 variants, 4 sizes, shimmer)
 │       ├── card.tsx          ← Glass card panel
 │       ├── data-list.tsx     ← Key-value data display
+│       ├── discover-item-card.tsx ← Discover catalog card shell
 │       ├── discover-modal.tsx← Compound search modal with sidebar
 │       ├── empty-state.tsx   ← Icon + title + description placeholder
 │       ├── icon-button.tsx   ← Compact icon-only button
+│       ├── info-panel.tsx    ← Panel container with icon + optional action
+│       ├── info-row.tsx      ← Label/value row for compact metadata
+│       ├── list-row.tsx      ← Generic list row (leading/content/trailing)
 │       ├── modal.tsx         ← Portal modal with focus trap
 │       ├── modal-header.tsx  ← Modal title bar + close button
 │       ├── progress-bar.tsx  ← Animated meter (determinate / indeterminate)
+│       ├── recent-mods-panel.tsx ← Recent mods summary panel
 │       ├── section-header.tsx← Section icon + heading + subtitle
 │       ├── select.tsx        ← Labeled dropdown
+│       ├── selectable-card.tsx ← Clickable selectable card option
+│       ├── setting-row.tsx   ← Settings row with trailing control
+│       ├── stat-card.tsx     ← Toned stats card with icon and value
+│       ├── tag.tsx           ← Compact uppercase label chip
 │       ├── text-input.tsx    ← Labeled text field
 │       ├── toast.tsx         ← ToastProvider + useToast() hook
 │       ├── toggle-switch.tsx ← Accessible toggle switch
@@ -177,6 +187,86 @@ pushToast("success", "Saved!");
 ### EmptyState
 ```tsx
 <EmptyState icon="inbox" title="No items" description="Create your first item." />
+```
+
+### Avatar
+```tsx
+<Avatar src={profileUrl} fallback="A" size="md" />
+```
+**Sizes:** `sm` | `md` | `lg`
+**Features:** Supports `overlay` slot for status badges and fallback letter when image is missing.
+
+### Tag
+```tsx
+<Tag>beta</Tag>
+```
+Compact uppercase metadata chip; useful inside row/card `meta` areas.
+
+### ListRow
+```tsx
+<ListRow
+  leading={<Avatar fallback="M" size="sm" />}
+  title="Modrinth"
+  meta={<Tag>installed</Tag>}
+  description="Source integration"
+  trailing={<Button size="xs">Manage</Button>}
+/>
+```
+Generic list primitive with `leading`, `meta`, and `trailing` slots.
+
+### DiscoverItemCard
+```tsx
+<DiscoverItemCard
+  media={<Avatar fallback="P" />}
+  idLabel={<Tag>plugin</Tag>}
+  title="Performance Booster"
+  description="Optimize chunk loading and startup"
+  footerLabel="Author"
+  footerValue="MineRelay"
+  actionButton={<Button size="xs">Install</Button>}
+/>
+```
+
+### StatCard
+```tsx
+<StatCard label="Active" value={12} icon="rocket_launch" tone="emerald" />
+```
+**Tones:** `emerald` | `red` | `amber` | `indigo`
+
+### InfoPanel / InfoRow
+```tsx
+<InfoPanel icon="info" title="Server Details" actionLabel="Edit" onAction={openEdit}>
+  <InfoRow label="Version" value="1.21.1" />
+  <InfoRow label="Status" value="Healthy" highlight="success" />
+</InfoPanel>
+```
+`InfoRow.highlight`: `success` | `warning`
+
+### RecentModsPanel
+```tsx
+<RecentModsPanel items={mods.slice(0, 5)} totalCount={mods.length} onViewAll={openMods} />
+```
+Purpose-built summary panel for recent mod entries with quick "View All" action.
+
+### SelectableCard
+```tsx
+<SelectableCard
+  selected={mode === "auto"}
+  onClick={() => setMode("auto")}
+  title="Automatic"
+  description="Recommended defaults"
+  headerRight={<Tag>recommended</Tag>}
+/>
+```
+Interactive option card for selection flows.
+
+### SettingRow
+```tsx
+<SettingRow
+  title="Auto update"
+  description="Download updates in the background"
+  control={<ToggleSwitch enabled={enabled} onChange={setEnabled} />}
+/>
 ```
 
 ---

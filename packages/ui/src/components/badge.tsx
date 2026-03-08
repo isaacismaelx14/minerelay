@@ -19,23 +19,38 @@ export type BadgeTone = keyof typeof toneClasses;
 
 export interface BadgeProps {
   tone?: BadgeTone;
+  pulse?: boolean;
   children: ReactNode;
   className?: string;
 }
 
 export function Badge({
   tone = "neutral",
+  pulse = false,
   children,
   className,
 }: BadgeProps): ReactElement {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-[10px] py-[4px] text-[0.75rem] font-semibold border",
+        "inline-flex items-center gap-1.5 rounded-full px-[10px] py-[4px] text-[0.75rem] font-semibold border",
         toneClasses[tone],
         className,
       )}
     >
+      {pulse && (
+        <span
+          className={cn(
+            "w-1.5 h-1.5 rounded-full shrink-0 animate-pulse",
+            tone === "online" && "bg-[#10b981]",
+            (tone === "busy" || tone === "warning") && "bg-[#f59e0b]",
+            tone === "error" && "bg-[#e11d48]",
+            tone === "info" && "bg-[var(--color-brand-accent)]",
+            (tone === "offline" || tone === "neutral") &&
+              "bg-[var(--color-text-muted)]",
+          )}
+        />
+      )}
       {children}
     </span>
   );
