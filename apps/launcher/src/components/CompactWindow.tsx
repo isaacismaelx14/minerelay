@@ -88,36 +88,36 @@ export function CompactWindow({
     launcherServerControls !== null &&
     launcherServerControls.permissions.canViewStatus;
   const compactCoreClassName = clsx(
-    "relative flex min-h-0 flex-1 flex-col items-center justify-start gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-line bg-surface-deep-20 px-4 pb-[92px] pt-4 text-center",
+    "border-line bg-surface-deep-20 relative flex min-h-0 flex-1 flex-col items-center justify-start gap-3 overflow-hidden rounded-[var(--radius-lg)] border px-4 pt-4 pb-[92px] text-center",
     compactPlaying &&
-      "border-success-border-strong bg-success-bg shadow-[inset_0_0_30px_var(--color-success-shadow-soft)] after:pointer-events-none after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_top,var(--color-success-shadow-soft),transparent_72%)] after:content-[''] after:animate-[pulseGlow_3s_infinite]",
+      "border-success-border-strong bg-success-bg shadow-[inset_0_0_30px_var(--color-success-shadow-soft)] after:pointer-events-none after:absolute after:inset-0 after:animate-[pulseGlow_3s_infinite] after:bg-[radial-gradient(circle_at_top,var(--color-success-shadow-soft),transparent_72%)] after:content-['']",
     isAwaiting &&
-      "border-info-border bg-info-tint shadow-[inset_0_0_30px_var(--color-info-tint)] after:pointer-events-none after:absolute after:inset-0 after:bg-[radial-gradient(circle_at_top,var(--color-info-tint),transparent_72%)] after:content-[''] after:animate-[pulseGlow_1.5s_infinite]",
+      "border-info-border bg-info-tint shadow-[inset_0_0_30px_var(--color-info-tint)] after:pointer-events-none after:absolute after:inset-0 after:animate-[pulseGlow_1.5s_infinite] after:bg-[radial-gradient(circle_at_top,var(--color-info-tint),transparent_72%)] after:content-['']",
     compactNeedsConnect && "border-warning-border bg-warning-bg",
   );
 
   return (
     <main className="flex h-screen flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,var(--color-brand-primary-ring),transparent_48%),radial-gradient(circle_at_bottom_right,var(--color-info-tint),transparent_55%),var(--color-bg-base)] p-2.5">
-      <div className="flex h-full max-h-full w-full max-w-[406px] flex-col gap-3.5 rounded-[var(--radius-xl)] border border-line-strong bg-bg-surface p-4 shadow-[0_24px_60px_var(--color-shadow-xl),inset_0_1px_1px_var(--color-line-strong)] backdrop-blur-[20px]">
+      <div className="border-line-strong bg-bg-surface flex h-full max-h-full w-full max-w-[406px] flex-col gap-3.5 rounded-[var(--radius-xl)] border p-4 shadow-[0_24px_60px_var(--color-shadow-xl),inset_0_1px_1px_var(--color-line-strong)] backdrop-blur-[20px]">
         <header className="flex shrink-0 flex-col items-stretch gap-3">
           <div className="flex min-w-0 items-center gap-3">
             {canRenderLogo ? (
               <img
-                className="h-[52px] w-[52px] shrink-0 rounded-[12px] border border-line-strong bg-bg-card object-cover shadow-[0_4px_12px_var(--color-shadow-lg)]"
+                className="border-line-strong bg-bg-card h-[52px] w-[52px] shrink-0 rounded-[12px] border object-cover shadow-[0_4px_12px_var(--color-shadow-lg)]"
                 src={catalog?.logoUrl}
                 alt={`${catalog?.serverName ?? SERVER_ID} logo`}
                 onError={() => markLogoAsBroken(catalog?.logoUrl)}
               />
             ) : (
               <img
-                className="h-[52px] w-[52px] shrink-0 rounded-[12px] border border-line-strong bg-bg-card object-cover shadow-[0_4px_12px_var(--color-shadow-lg)]"
+                className="border-line-strong bg-bg-card h-[52px] w-[52px] shrink-0 rounded-[12px] border object-cover shadow-[0_4px_12px_var(--color-shadow-lg)]"
                 src="/minerelay-logo.svg"
                 alt={`${APP_NAME} logo`}
               />
             )}
             <div className="flex min-w-0 flex-1 flex-col text-left">
               <div className="mb-1 flex items-center justify-between gap-2">
-                <p className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.1em] text-brand-accent">
+                <p className="text-brand-accent font-mono text-[0.65rem] font-semibold tracking-[0.1em] uppercase">
                   {APP_NAME}
                 </p>
                 {settings && launchers.length > 0 && (
@@ -132,13 +132,13 @@ export function CompactWindow({
                 )}
               </div>
               <p
-                className="overflow-hidden text-ellipsis whitespace-nowrap text-[1.15rem] leading-[1.1] font-bold text-white"
+                className="truncate text-[1.15rem] leading-[1.1] font-bold text-white"
                 title={catalog?.serverName ?? `Server ${SERVER_ID}`}
               >
                 {catalog?.serverName ?? `Server ${SERVER_ID}`}
               </p>
               <p
-                className="mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[0.75rem] text-text-muted"
+                className="text-text-muted mt-0.5 truncate text-[0.75rem]"
                 title={`App v${launcherAppVersion ?? "--"} · MC ${catalog?.minecraftVersion ?? "--"} · ${catalog?.loader ?? "fabric"} ${catalog?.loaderVersion ?? "--"}`}
               >
                 App v{launcherAppVersion ?? "--"} · MC{" "}
@@ -156,11 +156,11 @@ export function CompactWindow({
                 className={clsx(
                   "relative h-2.5 w-2.5 rounded-full",
                   compactPlaying &&
-                    "bg-success shadow-[0_0_8px_var(--color-success)] animate-[pulseGlow_2s_infinite]",
+                    "bg-success animate-[pulseGlow_2s_infinite] shadow-[0_0_8px_var(--color-success)]",
                   isAwaiting &&
-                    "bg-brand-accent shadow-[0_0_8px_var(--color-brand-accent-glow)] animate-[pulseGlow_1.5s_infinite]",
+                    "bg-brand-accent animate-[pulseGlow_1.5s_infinite] shadow-[0_0_8px_var(--color-brand-accent-glow)]",
                   compactNeedsConnect &&
-                    "bg-warning shadow-[0_0_8px_var(--color-warning)] animate-[pulseGlow_3s_infinite]",
+                    "bg-warning animate-[pulseGlow_3s_infinite] shadow-[0_0_8px_var(--color-warning)]",
                   !compactPlaying &&
                     !isAwaiting &&
                     !compactNeedsConnect &&
@@ -169,7 +169,7 @@ export function CompactWindow({
               ></span>
               <h2>{statusTitle}</h2>
             </div>
-            <p className="m-0 text-[0.8rem] leading-[1.3] text-text-secondary">
+            <p className="text-text-secondary m-0 text-[0.8rem] leading-[1.3]">
               {statusSubtitle}
             </p>
             <div className="mt-1 flex w-full flex-col items-center justify-center gap-2">
@@ -257,7 +257,7 @@ export function CompactWindow({
           />
         </section>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 font-mono text-[0.75rem] text-text-muted">
+        <footer className="text-text-muted flex shrink-0 items-center justify-between gap-2 font-mono text-[0.75rem]">
           <p>Session: {sessionStatus.phase.replaceAll("_", " ")}</p>
           <p>Last check: {formatTime(lastCheckAt)}</p>
         </footer>

@@ -64,7 +64,7 @@ export function ActivityPage({
         <Card className={panelCardClass}>
           <h3 className={h3Class}>Schedule</h3>
           <div className={dataListClass}>
-            <div className="rounded-[12px] border-l-[3px] border-l-[var(--color-brand-indigo)] bg-[rgba(255,255,255,0.03)] p-3">
+            <div className="border-l-brand-indigo rounded-md border-l-[3px] bg-[rgba(255,255,255,0.03)] p-3">
               <p
                 className={subtitleClass}
                 style={{ margin: 0, fontSize: "0.8rem" }}
@@ -178,9 +178,9 @@ export function ActivityPage({
             }
           >
             <div
-              className={`relative h-full rounded-[999px] bg-[linear-gradient(90deg,var(--color-brand-indigo),var(--color-brand-accent))] shadow-[0_0_10px_var(--color-brand-indigo-shadow)] transition-[width] duration-[400ms] [transition-timing-function:cubic-bezier(0.1,0.8,0.2,1)] after:absolute after:inset-0 after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] after:animate-[meterShine_2s_infinite_linear]${
+              className={`relative h-full rounded-[999px] bg-[linear-gradient(90deg,var(--color-brand-indigo),var(--color-brand-accent))] shadow-[0_0_10px_var(--color-brand-indigo-shadow)] transition-[width] duration-400 ease-[cubic-bezier(0.1,0.8,0.2,1)] after:absolute after:inset-0 after:animate-[meterShine_2s_infinite_linear] after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]${
                 syncHasUnknownTotal
-                  ? " !w-1/2 animate-[meterIndeterminate_1.5s_ease-in-out_infinite]"
+                  ? " w-1/2! animate-[meterIndeterminate_1.5s_ease-in-out_infinite]"
                   : ""
               }`}
               style={{

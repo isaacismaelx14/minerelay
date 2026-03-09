@@ -11,6 +11,7 @@
     "tauri:dev": "tauri dev --features devtools",
     "tauri:build": "tauri build",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

@@ -61,7 +61,7 @@ export function SetupSyncStep({ core }: SetupStepProps) {
         </div>
       </div>
 
-      <p className="m-0 text-[0.85rem] leading-normal text-text-secondary">
+      <p className="text-text-secondary m-0 text-[0.85rem] leading-normal">
         Profile contains <strong>{catalog?.mods.length ?? 0}</strong> mods and{" "}
         <strong>{catalog?.configs.length ?? 0}</strong> configs.
       </p>

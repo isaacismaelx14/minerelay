@@ -86,7 +86,7 @@ export function OverviewPage({
           }
         >
           <div
-            className={`relative h-full rounded-[999px] bg-[linear-gradient(90deg,var(--color-brand-indigo),var(--color-brand-accent))] shadow-[0_0_10px_var(--color-brand-indigo-shadow)] transition-[width] duration-[400ms] [transition-timing-function:cubic-bezier(0.1,0.8,0.2,1)] after:absolute after:inset-0 after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] after:animate-[meterShine_2s_infinite_linear]${
+            className={`relative h-full rounded-[999px] bg-[linear-gradient(90deg,var(--color-brand-indigo),var(--color-brand-accent))] shadow-[0_0_10px_var(--color-brand-indigo-shadow)] transition-[width] duration-[400ms] [transition-timing-function:cubic-bezier(0.1,0.8,0.2,1)] after:absolute after:inset-0 after:animate-[meterShine_2s_infinite_linear] after:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]${
               syncHasUnknownTotal
                 ? " !w-1/2 animate-[meterIndeterminate_1.5s_ease-in-out_infinite]"
                 : ""

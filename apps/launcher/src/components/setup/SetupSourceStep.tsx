@@ -91,7 +91,7 @@ export function SetupSourceStep({ core }: SetupStepProps) {
           Log In
           <Badge
             tone="warning"
-            className="text-[0.7rem] uppercase tracking-[0.05em]"
+            className="text-[0.7rem] tracking-[0.05em] uppercase"
           >
             Coming Soon
           </Badge>

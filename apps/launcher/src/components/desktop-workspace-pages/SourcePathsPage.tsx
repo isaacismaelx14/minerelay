@@ -229,7 +229,7 @@ export function SourcePathsPage({
                 </div>
               </div>
             ) : (
-              <div className="rounded-[12px] border-l-[3px] border-l-[var(--color-brand-indigo)] bg-[rgba(255,255,255,0.03)] p-3">
+              <div className="border-l-brand-indigo rounded-md border-l-[3px] bg-[rgba(255,255,255,0.03)] p-3">
                 <p
                   className={subtitleClass}
                   style={{ margin: 0, fontSize: "0.8rem" }}
