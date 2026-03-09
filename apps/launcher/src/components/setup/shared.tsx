@@ -11,8 +11,7 @@ export const wizardSteps = ["source", "paths", "runtime", "sync"] as const;
 export const wizardShellClassName =
   "grid w-full content-start gap-[var(--space-4)] rounded-[var(--radius-xl)] border border-line bg-surface-deep-20 p-4 shadow-[0_24px_80px_var(--color-shadow-xl)] animate-[fadeIn_var(--transition-smooth)_0.1s_both] sm:p-6";
 
-export const wizardShellInnerScrollClassName =
-  "overflow-y-auto";
+export const wizardShellInnerScrollClassName = "overflow-y-auto";
 
 export const wizardShellOuterScrollClassName = "shrink-0";
 
@@ -22,7 +21,8 @@ export const wizardStepsClassName =
 export const wizardStepClassName =
   "relative h-1 overflow-hidden rounded-full bg-white/10 transition-all duration-300";
 
-export const wizardStepActiveClassName = "!bg-brand-primary shadow-[0_0_10px_var(--color-brand-primary)]";
+export const wizardStepActiveClassName =
+  "!bg-brand-primary shadow-[0_0_10px_var(--color-brand-primary)]";
 
 export const wizardStepCompleteClassName = "!bg-brand-primary-glow";
 
@@ -47,7 +47,8 @@ export const metricsRowClassName =
 export const summaryGridCompactClassName =
   "grid list-none grid-cols-4 gap-[var(--space-2)] p-0";
 
-export const syncHeaderClassName = "mb-2 flex items-center gap-[var(--space-3)]";
+export const syncHeaderClassName =
+  "mb-2 flex items-center gap-[var(--space-3)]";
 
 export const syncLogoClassName =
   "m-0 h-12 w-12 rounded-[12px] border border-line-strong bg-bg-card object-cover shadow-[0_8px_24px_var(--color-shadow-lg)]";
@@ -70,10 +71,7 @@ type SetupStepIntroProps = {
   description: ReactNode;
 };
 
-export function SetupStepIntro({
-  title,
-  description,
-}: SetupStepIntroProps) {
+export function SetupStepIntro({ title, description }: SetupStepIntroProps) {
   return (
     <>
       <h2 className={wizardTitleClassName}>{title}</h2>

@@ -68,16 +68,32 @@ export function SetupSyncStep({ core }: SetupStepProps) {
 
       <ul className={summaryGridCompactClassName}>
         <li>
-          <CompactStat label="Add" value={catalog?.summary.add ?? 0} className={wizardStatClassName} />
+          <CompactStat
+            label="Add"
+            value={catalog?.summary.add ?? 0}
+            className={wizardStatClassName}
+          />
         </li>
         <li>
-          <CompactStat label="Remove" value={catalog?.summary.remove ?? 0} className={wizardStatClassName} />
+          <CompactStat
+            label="Remove"
+            value={catalog?.summary.remove ?? 0}
+            className={wizardStatClassName}
+          />
         </li>
         <li>
-          <CompactStat label="Update" value={catalog?.summary.update ?? 0} className={wizardStatClassName} />
+          <CompactStat
+            label="Update"
+            value={catalog?.summary.update ?? 0}
+            className={wizardStatClassName}
+          />
         </li>
         <li>
-          <CompactStat label="Keep" value={catalog?.summary.keep ?? 0} className={wizardStatClassName} />
+          <CompactStat
+            label="Keep"
+            value={catalog?.summary.keep ?? 0}
+            className={wizardStatClassName}
+          />
         </li>
       </ul>
 
@@ -87,11 +103,14 @@ export function SetupSyncStep({ core }: SetupStepProps) {
             value={progressPercent}
             indeterminate={syncHasUnknownTotal}
             ariaValueText={
-              syncHasUnknownTotal ? "Download progress total unknown" : undefined
+              syncHasUnknownTotal
+                ? "Download progress total unknown"
+                : undefined
             }
           />
           <p className={clsx(wizardMetaClassName, "mt-1")}>
-            {sync.currentFile ?? "Applying sync..."} {hasSyncTotal ? `(${progressPercent}%)` : ""}
+            {sync.currentFile ?? "Applying sync..."}{" "}
+            {hasSyncTotal ? `(${progressPercent}%)` : ""}
           </p>
           <div className={metricsRowClassName}>
             <span>{syncBytesLabel}</span>

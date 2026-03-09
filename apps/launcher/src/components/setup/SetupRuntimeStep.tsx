@@ -31,8 +31,8 @@ export function SetupRuntimeStep({ core }: SetupStepProps) {
         title="Step 3: Fabric Runtime Readiness"
         description={
           <>
-            Target: {versionReadiness?.minecraftVersion ?? "--"} / {" "}
-            {versionReadiness?.loader ?? "--"} {" "}
+            Target: {versionReadiness?.minecraftVersion ?? "--"} /{" "}
+            {versionReadiness?.loader ?? "--"}{" "}
             {versionReadiness?.loaderVersion ?? "--"}
           </>
         }
@@ -50,13 +50,17 @@ export function SetupRuntimeStep({ core }: SetupStepProps) {
             Managed sync dir: {versionReadiness?.managedMinecraftDir ?? "--"}
           </p>
           <p className={wizardMetaClassName}>
-            Allowlisted versions: {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
+            Allowlisted versions:{" "}
+            {versionReadiness?.allowedMinecraftVersions.join(", ") || "--"}
           </p>
           <p className={wizardMetaClassName}>
-            Fabric target id: {versionReadiness?.expectedFabricVersionId ?? "--"}
+            Fabric target id:{" "}
+            {versionReadiness?.expectedFabricVersionId ?? "--"}
           </p>
           <p className={wizardMetaClassName}>
-            Managed version target: {versionReadiness?.expectedManagedVersionId ?? "--"} ({versionReadiness?.managedVersionPresent ? "present" : "missing"})
+            Managed version target:{" "}
+            {versionReadiness?.expectedManagedVersionId ?? "--"} (
+            {versionReadiness?.managedVersionPresent ? "present" : "missing"})
           </p>
         </div>
       </Details>
@@ -72,7 +76,10 @@ export function SetupRuntimeStep({ core }: SetupStepProps) {
         </Alert>
       ) : null}
 
-      {catalog?.fancyMenuEnabled && hasFancyMenuMod && fancyMenuMode === "custom" && !hasFancyMenuCustomBundle ? (
+      {catalog?.fancyMenuEnabled &&
+      hasFancyMenuMod &&
+      fancyMenuMode === "custom" &&
+      !hasFancyMenuCustomBundle ? (
         <Alert tone="error" className={wizardAlertClassName}>
           FancyMenu is in custom mode, but the custom bundle is missing in
           profile configs.
@@ -90,7 +97,9 @@ export function SetupRuntimeStep({ core }: SetupStepProps) {
           <p className={wizardMetaClassName}>
             Managed version ensured: {wizardRuntimeStatus.managedVersionId}
           </p>
-          <p className={wizardMetaClassName}>{wizardRuntimeStatus.managedMessage}</p>
+          <p className={wizardMetaClassName}>
+            {wizardRuntimeStatus.managedMessage}
+          </p>
         </Card>
       ) : null}
 

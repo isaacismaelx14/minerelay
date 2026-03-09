@@ -1,5 +1,12 @@
 import clsx from "clsx";
-import { Button, Card, Details, ProgressBar, Select, TextInput } from "@minerelay/ui";
+import {
+  Button,
+  Card,
+  Details,
+  ProgressBar,
+  Select,
+  TextInput,
+} from "@minerelay/ui";
 import {
   actionsRowClassName,
   advancedDetailsClassName,
@@ -54,7 +61,9 @@ export function SetupPathsStep({ core }: SetupStepProps) {
       />
 
       <ProgressBar value={wizardProgress} />
-      <p className={wizardMetaClassName}>Detection progress: {wizardProgress}%</p>
+      <p className={wizardMetaClassName}>
+        Detection progress: {wizardProgress}%
+      </p>
 
       <Card className={wizardCardClassName}>
         <p className={wizardMetaClassName}>Detected launchers</p>
@@ -73,7 +82,9 @@ export function SetupPathsStep({ core }: SetupStepProps) {
               className={wizardFieldClassName}
               value={wizardManualLauncherPath}
               placeholder="/Applications/Prism Launcher.app or C:\\...\\MinecraftLauncher.exe"
-              onChange={(event) => setWizardManualLauncherPath(event.target.value)}
+              onChange={(event) =>
+                setWizardManualLauncherPath(event.target.value)
+              }
             />
             <Button
               variant="ghost"
@@ -82,7 +93,9 @@ export function SetupPathsStep({ core }: SetupStepProps) {
               onClick={() => void pickWizardManualLauncherPath()}
               disabled={isActionBusy("wizard:pickLauncherPath")}
             >
-              {isActionBusy("wizard:pickLauncherPath") ? "Picking..." : "Pick Launcher Path"}
+              {isActionBusy("wizard:pickLauncherPath")
+                ? "Picking..."
+                : "Pick Launcher Path"}
             </Button>
           </>
         ) : null}
@@ -116,7 +129,9 @@ export function SetupPathsStep({ core }: SetupStepProps) {
               onClick={() => void pickWizardMinecraftRootPath()}
               disabled={isActionBusy("wizard:pickMinecraftPath")}
             >
-              {isActionBusy("wizard:pickMinecraftPath") ? "Picking..." : "Pick Minecraft Dir"}
+              {isActionBusy("wizard:pickMinecraftPath")
+                ? "Picking..."
+                : "Pick Minecraft Dir"}
             </Button>
             <Button
               variant="ghost"
