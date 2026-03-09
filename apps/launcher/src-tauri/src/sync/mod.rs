@@ -42,10 +42,10 @@ use crate::{
   },
 };
 
-const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
+pub(crate) const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
 const FANCYMENU_TITLE_SCREEN_IDENTIFIER: &str = "net.minecraft.class_442";
 const FANCYMENU_CUSTOM_BUNDLE_CONFIG_NAME: &str = "FancyMenu Custom Bundle";
-const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
+pub(crate) const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
 const FANCYMENU_CUSTOMIZATION_ROOT_LAYOUT_PATH: &str = "config/fancymenu/customization.txt";
 const FANCYMENU_CUSTOMIZATION_MAIN_LAYOUT_PATH: &str = "config/fancymenu/customization/main.txt";
 const FANCYMENU_SERVER_URL_TOKEN: &str = "{{server_url}}";
@@ -54,13 +54,13 @@ const FANCYMENU_CUSTOMIZATION_DIR_PREFIX: &str = "config/fancymenu/customization
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct FancyMenuBundleManifest {
-  bundle_sha256: String,
-  files: Vec<String>,
+pub(crate) struct FancyMenuBundleManifest {
+  pub(crate) bundle_sha256: String,
+  pub(crate) files: Vec<String>,
   #[serde(default)]
-  has_server_url_template: bool,
+  pub(crate) has_server_url_template: bool,
   #[serde(default)]
-  last_injected_server_url: Option<String>,
+  pub(crate) last_injected_server_url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +85,33 @@ struct PlanContext {
   plan: SyncPlan,
   remote_lock: ProfileLock,
   desired: HashMap<String, DesiredFile>,
+}
+
+/// A common interface over asset types that share url/name/sha256 fields,
+/// allowing a single generic `extend_assets` to replace the three separate
+/// `extend_resources` / `extend_shaders` / `extend_configs` functions.
+trait SyncableAsset {
+  fn asset_url(&self) -> &str;
+  fn asset_name(&self) -> &str;
+  fn asset_sha256(&self) -> &str;
+}
+
+impl SyncableAsset for ResourcePack {
+  fn asset_url(&self) -> &str { &self.url }
+  fn asset_name(&self) -> &str { &self.name }
+  fn asset_sha256(&self) -> &str { &self.sha256 }
+}
+
+impl SyncableAsset for ShaderPack {
+  fn asset_url(&self) -> &str { &self.url }
+  fn asset_name(&self) -> &str { &self.name }
+  fn asset_sha256(&self) -> &str { &self.sha256 }
+}
+
+impl SyncableAsset for ConfigTemplate {
+  fn asset_url(&self) -> &str { &self.url }
+  fn asset_name(&self) -> &str { &self.name }
+  fn asset_sha256(&self) -> &str { &self.sha256 }
 }
 
 pub fn cancel_sync(state: &AppState) {
@@ -157,17 +184,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
     context.plan.summary.keep -= phantom_count;
   }
 
-  emit_sync_progress(
-    app,
-    &SyncProgressEvent {
-      phase: "planning".to_string(),
-      completed_bytes: 0,
-      total_bytes: 0,
-      current_file: None,
-      speed_bps: 0,
-      eta_sec: None,
-    },
-  );
+  emit_sync_progress(app, &progress_planning());
 
   if !context.plan.summary.has_work() {
     write_manifest_lock(&paths, &context.remote_lock)?;
@@ -176,14 +193,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "done".to_string(),
-        completed_bytes: 0,
-        total_bytes: 0,
-        current_file: None,
-        speed_bps: 0,
-        eta_sec: Some(0),
-      },
+      &progress_done(0, 0, 0),
     );
 
     return Ok(SyncApplyResponse {
@@ -217,14 +227,7 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "downloading".to_string(),
-        completed_bytes: 0,
-        total_bytes,
-        current_file: None,
-        speed_bps: 0,
-        eta_sec: None,
-      },
+      &progress_downloading_start(total_bytes),
     );
 
     download_with_concurrency(
@@ -240,14 +243,11 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "committing".to_string(),
-        completed_bytes: completed_bytes.load(Ordering::SeqCst),
+      &progress_committing(
+        completed_bytes.load(Ordering::SeqCst),
         total_bytes,
-        current_file: None,
-        speed_bps: compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
-        eta_sec: Some(0),
-      },
+        compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
+      ),
     );
 
     commit_plan(state, &context, &paths, &staging_root, &backup_root).await?;
@@ -258,14 +258,11 @@ pub async fn sync_apply(app: &AppHandle, state: &AppState, server_id: &str) -> L
 
     emit_sync_progress(
       app,
-      &SyncProgressEvent {
-        phase: "done".to_string(),
-        completed_bytes: total_bytes,
+      &progress_done(
         total_bytes,
-        current_file: None,
-        speed_bps: compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
-        eta_sec: Some(0),
-      },
+        total_bytes,
+        compute_speed(start, completed_bytes.load(Ordering::SeqCst)),
+      ),
     );
 
     Ok::<(), LauncherError>(())
@@ -1061,29 +1058,26 @@ fn flatten_remote(lock: &ProfileLock) -> LauncherResult<HashMap<String, DesiredF
     );
   }
 
-  extend_resources(&mut map, "resourcepack", &lock.resources, "resourcepacks")?;
-  extend_shaders(&mut map, &lock.shaders)?;
-  extend_configs(&mut map, &lock.configs)?;
+  extend_assets(&mut map, "resourcepack", &lock.resources, "resourcepacks")?;
+  extend_assets(&mut map, "shaderpack", &lock.shaders, "shaderpacks")?;
+  extend_assets(&mut map, "config", &lock.configs, "config")?;
 
   Ok(map)
 }
 
 fn should_sync_mod_to_client(item: &LockItem) -> bool {
-  match item.side.as_deref() {
-    Some("server") => false,
-    _ => true,
-  }
+  item.side.as_deref() != Some("server")
 }
 
-fn extend_resources(
+fn extend_assets<T: SyncableAsset>(
   map: &mut HashMap<String, DesiredFile>,
   kind: &str,
-  resources: &[ResourcePack],
+  assets: &[T],
   target_dir: &str,
 ) -> LauncherResult<()> {
-  for entry in resources {
-    validate_download_url("direct", &entry.url)?;
-    let filename = extract_filename(&entry.url)?;
+  for entry in assets {
+    validate_download_url("direct", entry.asset_url())?;
+    let filename = extract_filename(entry.asset_url())?;
     let path = format!("{target_dir}/{filename}");
 
     map.insert(
@@ -1091,54 +1085,10 @@ fn extend_resources(
       DesiredFile {
         path,
         kind: kind.to_string(),
-        name: entry.name.clone(),
+        name: entry.asset_name().to_string(),
         provider: "direct".to_string(),
-        url: entry.url.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
-  }
-
-  Ok(())
-}
-
-fn extend_shaders(map: &mut HashMap<String, DesiredFile>, shaders: &[ShaderPack]) -> LauncherResult<()> {
-  for entry in shaders {
-    validate_download_url("direct", &entry.url)?;
-    let filename = extract_filename(&entry.url)?;
-    let path = format!("shaderpacks/{filename}");
-
-    map.insert(
-      path.clone(),
-      DesiredFile {
-        path,
-        kind: "shaderpack".to_string(),
-        name: entry.name.clone(),
-        provider: "direct".to_string(),
-        url: entry.url.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
-  }
-
-  Ok(())
-}
-
-fn extend_configs(map: &mut HashMap<String, DesiredFile>, configs: &[ConfigTemplate]) -> LauncherResult<()> {
-  for entry in configs {
-    validate_download_url("direct", &entry.url)?;
-    let filename = extract_filename(&entry.url)?;
-    let path = format!("config/{filename}");
-
-    map.insert(
-      path.clone(),
-      DesiredFile {
-        path,
-        kind: "config".to_string(),
-        name: entry.name.clone(),
-        provider: "direct".to_string(),
-        url: entry.url.clone(),
-        sha256: entry.sha256.clone(),
+        url: entry.asset_url().to_string(),
+        sha256: entry.asset_sha256().to_string(),
       },
     );
   }
@@ -1149,51 +1099,27 @@ fn extend_configs(map: &mut HashMap<String, DesiredFile>, configs: &[ConfigTempl
 fn flatten_local(lock: &ProfileLock) -> LauncherResult<HashMap<String, LocalFile>> {
   let mut map = HashMap::new();
 
+  // Collect (dir_prefix, kind, url, name, sha256) tuples for all asset types to
+  // avoid repeating the same insert pattern four times (DRY).
+  let mut raw: Vec<(&str, &str, &str, &str, &str)> = Vec::new();
   for item in &lock.items {
-    let filename = extract_filename(&item.url)?;
-    map.insert(
-      format!("mods/{filename}"),
-      LocalFile {
-        kind: "mod".to_string(),
-        name: item.name.clone(),
-        sha256: item.sha256.clone(),
-      },
-    );
+    raw.push(("mods", "mod", &item.url, &item.name, &item.sha256));
   }
-
   for entry in &lock.resources {
-    let filename = extract_filename(&entry.url)?;
-    map.insert(
-      format!("resourcepacks/{filename}"),
-      LocalFile {
-        kind: "resourcepack".to_string(),
-        name: entry.name.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
+    raw.push(("resourcepacks", "resourcepack", &entry.url, &entry.name, &entry.sha256));
   }
-
   for entry in &lock.shaders {
-    let filename = extract_filename(&entry.url)?;
-    map.insert(
-      format!("shaderpacks/{filename}"),
-      LocalFile {
-        kind: "shaderpack".to_string(),
-        name: entry.name.clone(),
-        sha256: entry.sha256.clone(),
-      },
-    );
+    raw.push(("shaderpacks", "shaderpack", &entry.url, &entry.name, &entry.sha256));
+  }
+  for entry in &lock.configs {
+    raw.push(("config", "config", &entry.url, &entry.name, &entry.sha256));
   }
 
-  for entry in &lock.configs {
-    let filename = extract_filename(&entry.url)?;
+  for (dir, kind, url, name, sha256) in raw {
+    let filename = extract_filename(url)?;
     map.insert(
-      format!("config/{filename}"),
-      LocalFile {
-        kind: "config".to_string(),
-        name: entry.name.clone(),
-        sha256: entry.sha256.clone(),
-      },
+      format!("{dir}/{filename}"),
+      LocalFile { kind: kind.to_string(), name: name.to_string(), sha256: sha256.to_string() },
     );
   }
 
@@ -1336,23 +1262,22 @@ fn is_reserved_windows_name(value: &str) -> bool {
   )
 }
 
+/// Returns `(directory, url)` pairs for every asset in the lock, in the order
+/// mods → resourcepacks → shaderpacks → configs. Used by migration helpers to
+/// avoid repeating the same four-collection iteration pattern.
+fn lock_asset_dirs_and_urls<'a>(paths: &'a InstancePaths, lock: &'a ProfileLock) -> Vec<(&'a Path, &'a str)> {
+  let mut pairs: Vec<(&'a Path, &'a str)> = Vec::new();
+  for item in &lock.items { pairs.push((paths.mods.as_path(), item.url.as_str())); }
+  for entry in &lock.resources { pairs.push((paths.resourcepacks.as_path(), entry.url.as_str())); }
+  for entry in &lock.shaders { pairs.push((paths.shaderpacks.as_path(), entry.url.as_str())); }
+  for entry in &lock.configs { pairs.push((paths.config.as_path(), entry.url.as_str())); }
+  pairs
+}
+
 async fn migrate_legacy_encoded_filenames(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
-  for item in &lock.items {
-    migrate_legacy_encoded_filename(&paths.mods, &item.url).await?;
+  for (dir, url) in lock_asset_dirs_and_urls(paths, lock) {
+    migrate_legacy_encoded_filename(dir, url).await?;
   }
-
-  for entry in &lock.resources {
-    migrate_legacy_encoded_filename(&paths.resourcepacks, &entry.url).await?;
-  }
-
-  for entry in &lock.shaders {
-    migrate_legacy_encoded_filename(&paths.shaderpacks, &entry.url).await?;
-  }
-
-  for entry in &lock.configs {
-    migrate_legacy_encoded_filename(&paths.config, &entry.url).await?;
-  }
-
   Ok(())
 }
 
@@ -1418,22 +1343,9 @@ async fn migrate_underscore_mangled_filename(directory: &Path, url: &str) -> Lau
 }
 
 async fn migrate_underscore_mangled_filenames(paths: &InstancePaths, lock: &ProfileLock) -> LauncherResult<()> {
-  for item in &lock.items {
-    migrate_underscore_mangled_filename(&paths.mods, &item.url).await?;
+  for (dir, url) in lock_asset_dirs_and_urls(paths, lock) {
+    migrate_underscore_mangled_filename(dir, url).await?;
   }
-
-  for entry in &lock.resources {
-    migrate_underscore_mangled_filename(&paths.resourcepacks, &entry.url).await?;
-  }
-
-  for entry in &lock.shaders {
-    migrate_underscore_mangled_filename(&paths.shaderpacks, &entry.url).await?;
-  }
-
-  for entry in &lock.configs {
-    migrate_underscore_mangled_filename(&paths.config, &entry.url).await?;
-  }
-
   Ok(())
 }
 
@@ -1855,6 +1767,54 @@ fn compute_speed(start: Instant, completed: u64) -> u64 {
   }
 
   completed / elapsed
+}
+
+// ── SyncProgressEvent builders ────────────────────────────────────────────────
+// Centralised constructors so that sync_apply does not repeat the same struct
+// literal with five different field combinations (DRY).
+
+fn progress_planning() -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "planning".to_string(),
+    completed_bytes: 0,
+    total_bytes: 0,
+    current_file: None,
+    speed_bps: 0,
+    eta_sec: None,
+  }
+}
+
+fn progress_downloading_start(total_bytes: u64) -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "downloading".to_string(),
+    completed_bytes: 0,
+    total_bytes,
+    current_file: None,
+    speed_bps: 0,
+    eta_sec: None,
+  }
+}
+
+fn progress_committing(completed_bytes: u64, total_bytes: u64, speed_bps: u64) -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "committing".to_string(),
+    completed_bytes,
+    total_bytes,
+    current_file: None,
+    speed_bps,
+    eta_sec: Some(0),
+  }
+}
+
+fn progress_done(completed_bytes: u64, total_bytes: u64, speed_bps: u64) -> SyncProgressEvent {
+  SyncProgressEvent {
+    phase: "done".to_string(),
+    completed_bytes,
+    total_bytes,
+    current_file: None,
+    speed_bps,
+    eta_sec: Some(0),
+  }
 }
 
 #[cfg(test)]

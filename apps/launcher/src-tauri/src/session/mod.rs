@@ -21,26 +21,13 @@ use crate::{
   events::emit_session_status,
   instance::{ensure_layout, load_local_lock, InstancePaths},
   state::AppState,
+  sync::{FancyMenuBundleManifest, FANCYMENU_CUSTOM_MANIFEST_FILENAME, FANCYMENU_MANAGED_LAYOUT_FILENAME},
   types::{AppSettings, GameSessionPhase, GameSessionStatus, ProfileLock},
 };
 
 const SESSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const RESTORE_GRACE: Duration = Duration::from_secs(10);
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
-const FANCYMENU_MANAGED_LAYOUT_FILENAME: &str = "mvl_managed_title_screen_layout.txt";
-const FANCYMENU_CUSTOM_MANIFEST_FILENAME: &str = ".mvl_custom_bundle_manifest.json";
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-struct FancyMenuBundleManifest {
-  bundle_sha256: String,
-  files: Vec<String>,
-  #[serde(default)]
-  has_server_url_template: bool,
-  #[serde(default)]
-  last_injected_server_url: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SessionEntry {
   relative_path: String,
@@ -665,7 +652,7 @@ async fn managed_instance_paths(state: &AppState, server_id: &str, settings: &Ap
   if selected.as_deref() == Some("prism") {
     let lock_for_prism = load_local_lock(&paths).unwrap_or(None)
       .or(crate::profile::fetch_remote_lock(state, &effective_server).await.ok());
-    
+
     if let Some(ref lock) = lock_for_prism {
       let _ = paths.apply_prism(lock);
     }

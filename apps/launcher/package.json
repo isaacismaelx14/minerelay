@@ -10,9 +10,10 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev --features devtools",
     "tauri:build": "tauri build",
+    "tauri:test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests && npm run tauri:test",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
