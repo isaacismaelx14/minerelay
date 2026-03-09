@@ -28,6 +28,9 @@ export type { ModalHeaderProps } from "./components/modal-header";
 export { DiscoverModal } from "./components/discover-modal";
 export type { DiscoverModalProps } from "./components/discover-modal";
 
+export { Details } from "./components/details";
+export type { DetailsProps } from "./components/details";
+
 export { Tooltip } from "./components/tooltip";
 export type { TooltipProps } from "./components/tooltip";
 

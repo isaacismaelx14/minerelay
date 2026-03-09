@@ -11,7 +11,7 @@ const inputClass =
 
 export interface TextInputProps {
   name: string;
-  label: string;
+  label?: string;
   value: string;
   placeholder?: string;
   readOnly?: boolean;
@@ -29,8 +29,8 @@ export const TextInput = memo(function TextInput({
   className,
 }: TextInputProps) {
   return (
-    <label className={cn("grid gap-[8px]", className)}>
-      <span className={labelClass}>{label}</span>
+    <label className={cn(label ? "grid gap-[8px]" : "block", className)}>
+      {label ? <span className={labelClass}>{label}</span> : null}
       <input
         id={name}
         name={name}

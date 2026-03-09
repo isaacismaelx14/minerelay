@@ -7,12 +7,14 @@ export interface ProgressBarProps {
   /** 0 – 100 */
   value?: number;
   indeterminate?: boolean;
+  ariaValueText?: string;
   className?: string;
 }
 
 export function ProgressBar({
   value = 0,
   indeterminate = false,
+  ariaValueText,
   className,
 }: ProgressBarProps): ReactElement {
   return (
@@ -21,6 +23,7 @@ export function ProgressBar({
       aria-valuenow={indeterminate ? undefined : value}
       aria-valuemin={0}
       aria-valuemax={100}
+      aria-valuetext={ariaValueText}
       className={cn(
         "h-2 rounded-full bg-surface-deep-40 overflow-hidden relative shadow-[inset_0_1px_2px_var(--color-shadow-xl)]",
         className,

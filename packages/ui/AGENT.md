@@ -28,6 +28,7 @@ packages/ui/
 │       ├── button.tsx        ← Button (8 variants, 4 sizes, shimmer)
 │       ├── card.tsx          ← Glass card panel
 │       ├── data-list.tsx     ← Key-value data display
+│       ├── details.tsx       ← Native disclosure / expandable details panel
 │       ├── discover-item-card.tsx ← Discover catalog card shell
 │       ├── discover-modal.tsx← Compound search modal with sidebar
 │       ├── empty-state.tsx   ← Icon + title + description placeholder
@@ -142,6 +143,16 @@ Wraps Base UI Tooltip. Dark chrome.
 <TextInput label="Name" value={v} onChange={setV} />
 <Select label="Region" value={r} onChange={setR} options={regions} />
 ```
+
+### Details
+```tsx
+<Details summary="Advanced options">
+  <TextInput label="Token" value={token} onChange={handleChange} />
+</Details>
+```
+Native disclosure component styled with UI token colors from `globals.css`.
+Use for expandable advanced settings, technical details, and optional sections.
+Supports native `open` and `onToggle`, plus `summaryClassName`, `contentClassName`, and `iconClassName` overrides.
 
 ### Badge
 ```tsx
