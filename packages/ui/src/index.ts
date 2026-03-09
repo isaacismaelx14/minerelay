@@ -102,3 +102,10 @@ export type { SelectableCardProps } from "./components/selectable-card";
 
 export { SettingRow } from "./components/setting-row";
 export type { SettingRowProps } from "./components/setting-row";
+
+export { ServerControlBar } from "./components/server-control-bar";
+export type {
+  ServerControlBarProps,
+  ServerControlBarVariant,
+  ServerControlTone,
+} from "./components/server-control-bar";

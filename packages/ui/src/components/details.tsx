@@ -28,7 +28,7 @@ export function Details({
   return (
     <details
       className={cn(
-        "group w-full overflow-hidden rounded-[var(--radius-md)] border border-line bg-bg-card transition-all duration-200 open:border-brand-primary-shadow open:bg-brand-primary-ring open:shadow-[0_4px_20px_var(--color-brand-primary-shadow-soft)]",
+        "group w-full overflow-hidden rounded-md border border-line bg-bg-card transition-all duration-200 open:border-brand-primary-shadow open:bg-brand-primary-ring open:shadow-[0_4px_20px_var(--color-brand-primary-shadow-soft)]",
         className,
       )}
       {...rest}
@@ -52,7 +52,7 @@ export function Details({
       </summary>
       <div
         className={cn(
-          "grid gap-(--space-3) border-t border-line px-4 py-3 animate-[fadeIn_0.2s_ease-out]",
+          "grid gap-3 border-t border-line px-4 py-3 animate-[fadeIn_0.2s_ease-out]",
           contentClassName,
         )}
       >
