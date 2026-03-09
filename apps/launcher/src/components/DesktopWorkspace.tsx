@@ -85,6 +85,7 @@ export function DesktopWorkspace({
     versionReadiness,
     launcherUpdate,
     launcherAppVersion,
+    launcherStreamStatus,
     canRenderLogo,
     markLogoAsBroken,
     returnToMainWindow,
@@ -136,10 +137,10 @@ export function DesktopWorkspace({
   };
 
   return (
-    <main className="grid h-screen grid-cols-[280px_minmax(0,1fr)] gap-6 overflow-hidden p-6 animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)] max-[1280px]:grid-cols-[240px_minmax(0,1fr)] max-[1080px]:grid-cols-[80px_minmax(0,1fr)] max-[1080px]:gap-[18px] max-[1080px]:p-[18px]">
-      <aside className="relative grid grid-rows-[auto_1fr_auto] gap-6 overflow-hidden rounded-xl border border-line bg-bg-surface p-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[16px] before:absolute before:left-0 before:right-0 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)] max-[1080px]:items-center max-[1080px]:px-3 max-[1080px]:py-[18px]">
-        <div className="grid gap-1.5 border-b border-b-line pb-4.5 max-[1080px]:flex max-[1080px]:h-12 max-[1080px]:items-center max-[1080px]:justify-center max-[1080px]:border-none max-[1080px]:p-0">
-          <p className="font-mono text-xs font-medium uppercase tracking-widest text-brand-accent max-[1080px]:hidden">
+    <main className="grid h-screen animate-[fadeIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)] grid-cols-[280px_minmax(0,1fr)] gap-6 overflow-hidden p-6 max-[1280px]:grid-cols-[240px_minmax(0,1fr)] max-[1080px]:grid-cols-[80px_minmax(0,1fr)] max-[1080px]:gap-4.5 max-[1080px]:p-4.5">
+      <aside className="border-line bg-bg-surface relative grid grid-rows-[auto_1fr_auto] gap-6 overflow-hidden rounded-xl border p-6 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[16px] before:absolute before:top-0 before:right-0 before:left-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)] max-[1080px]:items-center max-[1080px]:px-3 max-[1080px]:py-4.5">
+        <div className="border-b-line grid gap-1.5 border-b pb-4.5 max-[1080px]:flex max-[1080px]:h-12 max-[1080px]:items-center max-[1080px]:justify-center max-[1080px]:border-none max-[1080px]:p-0">
+          <p className="text-brand-accent font-mono text-xs font-medium tracking-widest uppercase max-[1080px]:hidden">
             Desktop Sync Console
           </p>
           <h1 className="bg-[linear-gradient(135deg,#fff,#a5b4fc)] bg-clip-text text-[1.4rem] font-bold tracking-[-0.02em] text-transparent max-[1080px]:hidden">
@@ -160,13 +161,13 @@ export function DesktopWorkspace({
           <button
             className={
               activeView === "overview"
-                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                ? `${navButtonBaseClass} border-brand-indigo-border bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
                 : navButtonBaseClass
             }
             onClick={() => setActiveView("overview")}
           >
             <svg
-              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
+              className="group-hover:text-brand-accent size-4.5 shrink-0 opacity-70 transition-all duration-150 ease-in-out group-hover:scale-110 group-hover:opacity-100 max-[1080px]:h-5.5 max-[1080px]:w-5.5 max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -184,13 +185,13 @@ export function DesktopWorkspace({
           <button
             className={
               activeView === "sourcePaths"
-                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                ? `${navButtonBaseClass} border-brand-indigo-border bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
                 : navButtonBaseClass
             }
             onClick={() => setActiveView("sourcePaths")}
           >
             <svg
-              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
+              className="group-hover:text-brand-accent size-4.5 shrink-0 opacity-70 transition-all duration-150 ease-in-out group-hover:scale-110 group-hover:opacity-100 max-[1080px]:h-5.5 max-[1080px]:w-5.5 max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -207,13 +208,13 @@ export function DesktopWorkspace({
           <button
             className={
               activeView === "catalog"
-                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                ? `${navButtonBaseClass} border-brand-indigo-border bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
                 : navButtonBaseClass
             }
             onClick={() => setActiveView("catalog")}
           >
             <svg
-              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
+              className="group-hover:text-brand-accent size-4.5 shrink-0 opacity-70 transition-all duration-150 ease-in-out group-hover:scale-110 group-hover:opacity-100 max-[1080px]:h-5.5 max-[1080px]:w-5.5 max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -230,13 +231,13 @@ export function DesktopWorkspace({
           <button
             className={
               activeView === "activity"
-                ? `${navButtonBaseClass} border-[var(--color-brand-indigo-border)] bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
+                ? `${navButtonBaseClass} border-brand-indigo-border bg-[linear-gradient(90deg,var(--color-brand-indigo-bg),rgba(99,102,241,0.02))] font-semibold text-white before:scale-y-100`
                 : navButtonBaseClass
             }
             onClick={() => setActiveView("activity")}
           >
             <svg
-              className="h-[18px] w-[18px] shrink-0 opacity-70 transition-all duration-150 [transition-timing-function:cubic-bezier(0.4,0,0.2,1)] group-hover:scale-110 group-hover:text-[var(--color-brand-accent)] group-hover:opacity-100 max-[1080px]:h-[22px] max-[1080px]:w-[22px] max-[1080px]:opacity-90"
+              className="group-hover:text-brand-accent size-4.5 shrink-0 opacity-70 transition-all duration-150 ease-in-out group-hover:scale-110 group-hover:opacity-100 max-[1080px]:h-5.5 max-[1080px]:w-5.5 max-[1080px]:opacity-90"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -250,7 +251,7 @@ export function DesktopWorkspace({
           </button>
         </nav>
 
-        <section className="grid gap-2 border-t border-t-[var(--color-line)] pt-6 text-[0.85rem] max-[1080px]:hidden">
+        <section className="border-t-line grid gap-2 border-t pt-6 text-[0.85rem] max-[1080px]:hidden">
           <p className={subtitleClass}>Last check: {formatTime(lastCheckAt)}</p>
           <p className={subtitleClass}>Next check: {formatTime(nextCheckAt)}</p>
           <p className={subtitleClass}>
@@ -282,54 +283,101 @@ export function DesktopWorkspace({
         </section>
       </aside>
 
-      <section className="relative grid h-full grid-rows-[auto_1fr_auto] gap-6 overflow-x-hidden overflow-y-auto rounded-[28px] border border-[var(--color-line)] bg-[var(--color-bg-surface)] p-8 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[16px] [scrollbar-color:var(--color-line-strong)_transparent] [scrollbar-width:thin] before:pointer-events-none before:absolute before:right-0 before:top-0 before:h-[300px] before:w-[300px] before:bg-[radial-gradient(circle,var(--color-brand-indigo-shadow),transparent_70%)] before:opacity-20 before:blur-[40px] [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-track]:my-4 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-[10px] [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--color-line-strong)] [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[var(--color-text-muted)] max-[1280px]:p-6 max-[1080px]:p-[18px] max-[920px]:p-3">
-        <header className="flex items-start justify-between gap-6 border-b border-b-[var(--color-line)] pb-6 animate-[slideIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)] max-[1080px]:flex-col max-[1080px]:items-stretch">
-          <div className="flex items-center gap-4">
-            {canRenderLogo ? (
-              <img
-                className="h-[54px] w-[54px] rounded-[14px] border border-[var(--color-line-strong)] bg-[var(--color-bg-card)] object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] hover:rotate-[-2deg] hover:scale-105 max-[1080px]:h-10 max-[1080px]:w-10 max-[1080px]:rounded-[10px]"
-                src={catalog?.logoUrl}
-                alt={`${catalog?.serverName ?? SERVER_ID} logo`}
-                onError={() => markLogoAsBroken(catalog?.logoUrl)}
-              />
-            ) : (
-              <img
-                className="h-[54px] w-[54px] rounded-[14px] border border-[var(--color-line-strong)] bg-[var(--color-bg-card)] object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)] hover:rotate-[-2deg] hover:scale-105 max-[1080px]:h-10 max-[1080px]:w-10 max-[1080px]:rounded-[10px]"
-                src="/minerelay-logo.svg"
-                alt={`${APP_NAME} logo`}
-              />
-            )}
-            <div>
-              <span className="font-mono text-xs font-medium uppercase tracking-[0.1em] text-[var(--color-brand-accent)]">
-                MineRelay
-              </span>
-              <h2 className="bg-[linear-gradient(to_right,#fff,#e2e8f0)] bg-clip-text text-[1.8rem] font-bold leading-[1.2] text-transparent max-[1080px]:text-[1.4rem]">
+      <section className="border-line bg-bg-surface [&::-webkit-scrollbar-thumb:hover]:bg-text-muted relative grid h-full grid-rows-[auto_1fr_auto] gap-6 overflow-x-hidden overflow-y-auto rounded-xl border p-8 shadow-[0_4px_30px_rgba(0,0,0,0.1)] backdrop-blur-[16px] [scrollbar-color:var(--color-line-strong)_transparent] [scrollbar-width:thin] before:pointer-events-none before:absolute before:top-0 before:right-0 before:h-75 before:w-75 before:bg-[radial-gradient(circle,var(--color-brand-indigo-shadow),transparent_70%)] before:opacity-20 before:blur-2xl max-[1280px]:p-6 max-[1080px]:p-4.5 max-[920px]:p-3 [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar-thumb]:rounded-[10px] [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-(--color-line-strong) [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:my-4 [&::-webkit-scrollbar-track]:bg-transparent">
+        <header className="border-b-line flex animate-[slideIn_0.3s_cubic-bezier(0.34,1.56,0.64,1)] items-center justify-between gap-6 border-b pb-6 max-[1080px]:flex-col max-[1080px]:items-stretch">
+          <div className="flex items-center gap-5">
+            <div className="relative">
+              {canRenderLogo ? (
+                <img
+                  className="bg-bg-card relative z-10 h-14 w-14 rounded-2xl border border-(--color-line-strong) object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:scale-105 hover:-rotate-2 max-[1080px]:h-10 max-[1080px]:w-10 max-[1080px]:rounded-xl"
+                  src={catalog?.logoUrl}
+                  alt={`${catalog?.serverName ?? SERVER_ID} logo`}
+                  onError={() => markLogoAsBroken(catalog?.logoUrl)}
+                />
+              ) : (
+                <img
+                  className="bg-bg-card relative z-10 h-14 w-14 rounded-2xl border border-(--color-line-strong) object-cover shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:scale-105 hover:-rotate-2 max-[1080px]:h-10 max-[1080px]:w-10 max-[1080px]:rounded-xl"
+                  src="/minerelay-logo.svg"
+                  alt={`${APP_NAME} logo`}
+                />
+              )}
+              <div className="bg-brand-indigo absolute -inset-1 z-0 rounded-lg opacity-20 blur-md" />
+            </div>
+            <div className="grid gap-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-brand-accent font-mono text-[0.65rem] font-semibold tracking-[0.15em] uppercase">
+                  MineRelay
+                </span>
+                <span className="bg-text-muted h-1 w-1 rounded-full" />
+                <span
+                  className={`inline-flex items-center gap-1.5 text-[0.65rem] font-medium ${
+                    launcherStreamStatus === "connected"
+                      ? "text-(--color-success)"
+                      : launcherStreamStatus === "retrying"
+                        ? "text-warning"
+                        : "text-text-muted"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${
+                      launcherStreamStatus === "connected"
+                        ? "bg-(--color-success) shadow-[0_0_6px_var(--color-success)]"
+                        : launcherStreamStatus === "retrying"
+                          ? "bg-warning animate-pulse"
+                          : "bg-text-muted"
+                    }`}
+                  />
+                  {launcherStreamStatus === "connected"
+                    ? "Connected"
+                    : launcherStreamStatus === "retrying"
+                      ? "Reconnecting"
+                      : "Disconnected"}
+                </span>
+              </div>
+              <h2 className="bg-[linear-gradient(to_right,#fff_30%,#a5b4fc)] bg-clip-text text-[1.7rem] leading-[1.2] font-bold tracking-[-0.01em] text-transparent max-[1080px]:text-[1.3rem]">
                 {catalog?.serverName ?? `Server ${SERVER_ID}`}
               </h2>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="border-line text-text-secondary rounded-full border bg-[rgba(255,255,255,0.04)] px-2.5 py-0.5 font-mono text-[0.7rem]">
+                  v{launcherAppVersion ?? "--"}
+                </span>
+                <span className="border-line text-text-secondary rounded-full border bg-[rgba(255,255,255,0.04)] px-2.5 py-0.5 font-mono text-[0.7rem]">
+                  {catalog?.loader ?? "fabric"} {catalog?.loaderVersion ?? "--"}
+                </span>
+                <span className="border-line text-text-secondary rounded-full border bg-[rgba(255,255,255,0.04)] px-2.5 py-0.5 font-mono text-[0.7rem]">
+                  MC {catalog?.minecraftVersion ?? "--"}
+                </span>
+              </div>
               {sessionStatus.phase === "playing" ? (
-                <p className="mt-1.5 flex items-center gap-1.5 text-[0.9rem] font-medium text-[var(--color-success)] before:block before:h-2 before:w-2 before:rounded-full before:bg-[var(--color-success)] before:shadow-[0_0_8px_var(--color-success)] before:animate-[pulseGlow_2s_infinite]">
+                <p className="mt-1 flex items-center gap-1.5 text-[0.85rem] font-medium text-(--color-success)">
+                  <span className="inline-block h-2 w-2 animate-[pulseGlow_2s_infinite] rounded-full bg-(--color-success) shadow-[0_0_8px_var(--color-success)]" />
                   Playing in{" "}
                   {sessionStatus.liveMinecraftDir ?? "Minecraft directory"}
                 </p>
               ) : null}
             </div>
           </div>
-          <div className="mt-0 flex flex-wrap items-center gap-[18px] max-[1080px]:mt-3 max-[1080px]:justify-between">
-            <div className="rounded-[28px] border border-[var(--color-info-border)] bg-[var(--color-info-tint)] px-[14px] py-1.5 font-mono text-[0.8rem] text-[var(--color-brand-accent)] shadow-[inset_0_0_10px_rgba(14,165,233,0.05)] backdrop-blur-[4px]">
-              v{launcherAppVersion ?? "--"} | {catalog?.loader ?? "fabric"}{" "}
-              {catalog?.loaderVersion ?? "--"} | MC{" "}
-              {catalog?.minecraftVersion ?? "--"}
-            </div>
-            <Button
-              className={ghostButtonClass}
-              onClick={() => void returnToMainWindow()}
-              disabled={isActionBusy("window:returnMain")}
+          <Button
+            className={`${ghostButtonClass} gap-2`}
+            onClick={() => void returnToMainWindow()}
+            disabled={isActionBusy("window:returnMain")}
+          >
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {isActionBusy("window:returnMain")
-                ? "Opening..."
-                : "Back to Launcher"}
-            </Button>
-          </div>
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            {isActionBusy("window:returnMain")
+              ? "Opening..."
+              : "Back to Launcher"}
+          </Button>
         </header>
 
         <Suspense
