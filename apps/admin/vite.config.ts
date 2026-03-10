@@ -6,11 +6,20 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@minerelay/ui": fileURLToPath(
-        new URL("../../packages/ui/src/index.ts", import.meta.url),
-      ),
-    },
+    alias: [
+      {
+        find: "@minerelay/ui/globals.css",
+        replacement: fileURLToPath(
+          new URL("../../packages/ui/src/globals.css", import.meta.url),
+        ),
+      },
+      {
+        find: "@minerelay/ui",
+        replacement: fileURLToPath(
+          new URL("../../packages/ui/src/index.ts", import.meta.url),
+        ),
+      },
+    ],
   },
   server: {
     hmr: {
