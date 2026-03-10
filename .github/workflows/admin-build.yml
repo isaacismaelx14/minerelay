@@ -97,8 +97,7 @@ jobs:
           BEFORE_DEPLOY_ID="$(railway service status -s admin --json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{const j=JSON.parse(s);process.stdout.write(j.deploymentId||'')}catch{process.stdout.write('')}})")"
           echo "Previous deployment ID: ${BEFORE_DEPLOY_ID:-<none>}"
 
-          DEPLOY_OUTPUT="$(railway up apps/admin \
-            --path-as-root \
+          DEPLOY_OUTPUT="$(railway up \
             --service admin \
             --environment production \
             --project "$PROJECT_ID" \
