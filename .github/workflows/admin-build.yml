@@ -2,18 +2,12 @@ name: admin-build
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "@minerelay/admin/v*"
-    paths:
-      - "apps/admin/**"
-      - "packages/ui/**"
-      - ".github/workflows/admin-build.yml"
   workflow_dispatch:
     inputs:
       run_from_main:
-        description: Build from the current main branch instead of checking out a tag
+        description: Build and deploy from the current main branch instead of checking out a tag
         required: false
         default: false
         type: boolean
@@ -28,7 +22,6 @@ jobs:
     env:
       RUN_FROM_MAIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
-      VALIDATION_ONLY: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && github.event.inputs.tag == '' }}
       NEXT_PUBLIC_ADMIN_API_ORIGIN: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN || 'https://api.example.com' }}
 
     steps:
@@ -45,12 +38,6 @@ jobs:
             echo "Provide an admin tag or enable 'run_from_main'." >&2
             exit 1
           fi
-
-      - name: Warn for main validation runs
-        if: env.VALIDATION_ONLY == 'true'
-        shell: bash
-        run: |
-          echo "::warning::This 'run from main' mode is for admin workflow validation only. It skips deploy and should not be used to represent a tagged release build."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -78,7 +65,7 @@ jobs:
         run: pnpm --filter @minerelay/admin build
 
   deploy-admin:
-    if: startsWith(github.ref, 'refs/tags/@minerelay/admin/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main != 'true' && github.event.inputs.tag != '')
+    if: startsWith(github.ref, 'refs/tags/@minerelay/admin/v') || github.event_name == 'workflow_dispatch'
     needs: build-admin
     runs-on: ubuntu-latest
     permissions:
