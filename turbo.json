@@ -5,9 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": [
         "dist/**",
-        "build/**",
-        "src-tauri/target/release/**",
-        "src-tauri/target/debug/**"
+        "build/**"
       ]
     },
     "dev": {
