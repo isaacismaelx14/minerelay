@@ -49,6 +49,11 @@ const releaseableManifests: TargetManifest[] = [
     dependencies: [],
   },
   {
+    target: "ui",
+    packageName: "@minerelay/ui",
+    dependencies: [],
+  },
+  {
     target: "api",
     packageName: "@minerelay/api",
     dependencies: ["@minerelay/shared"],
@@ -56,21 +61,22 @@ const releaseableManifests: TargetManifest[] = [
   {
     target: "admin",
     packageName: "@minerelay/admin",
-    dependencies: ["@minerelay/shared"],
+    dependencies: ["@minerelay/shared", "@minerelay/ui"],
   },
   {
     target: "launcher",
     packageName: "@minerelay/launcher",
-    dependencies: ["@minerelay/shared"],
+    dependencies: ["@minerelay/shared", "@minerelay/ui"],
   },
 ];
 
-const releaseTargetOrder = ["shared", "api", "admin", "launcher"];
+const releaseTargetOrder = ["shared", "ui", "api", "admin", "launcher"];
 const dependencyRootTargets = ["shared", "ui"];
 
 function baseAnalyses(overrides?: Partial<Record<string, ChangeItem[]>>) {
   return {
     shared: analysis("shared", overrides?.shared ?? []),
+    ui: analysis("ui", overrides?.ui ?? []),
     api: analysis("api", overrides?.api ?? []),
     admin: analysis("admin", overrides?.admin ?? []),
     launcher: analysis("launcher", overrides?.launcher ?? []),
@@ -80,7 +86,7 @@ function baseAnalyses(overrides?: Partial<Record<string, ChangeItem[]>>) {
 describe("release-plan", () => {
   // Scope boundary: this suite validates release-plan decisions only.
   // Workflow/tag-dispatch behavior is integration-level and tested elsewhere.
-  it("treats feat/fix/perf and any breaking change as release relevant", () => {
+  it("treats all configured change types and any breaking change as release relevant", () => {
     expect(isReleaseRelevantChange(change("feat"))).toBe(true);
     expect(isReleaseRelevantChange(change("fix"))).toBe(true);
     expect(isReleaseRelevantChange(change("perf"))).toBe(true);
@@ -88,19 +94,52 @@ describe("release-plan", () => {
     expect(isReleaseRelevantChange(change("docs", true))).toBe(true);
     expect(isReleaseRelevantChange(change("refactor", true))).toBe(true);
 
-    expect(isReleaseRelevantChange(change("docs"))).toBe(false);
-    expect(isReleaseRelevantChange(change("style"))).toBe(false);
-    expect(isReleaseRelevantChange(change("refactor"))).toBe(false);
-    expect(isReleaseRelevantChange(change("test"))).toBe(false);
-    expect(isReleaseRelevantChange(change("chore"))).toBe(false);
-    expect(isReleaseRelevantChange(change("build"))).toBe(false);
-    expect(isReleaseRelevantChange(change("ci"))).toBe(false);
+    expect(isReleaseRelevantChange(change("docs"))).toBe(true);
+    expect(isReleaseRelevantChange(change("style"))).toBe(true);
+    expect(isReleaseRelevantChange(change("refactor"))).toBe(true);
+    expect(isReleaseRelevantChange(change("test"))).toBe(true);
+    expect(isReleaseRelevantChange(change("chore"))).toBe(true);
+    expect(isReleaseRelevantChange(change("build"))).toBe(true);
+    expect(isReleaseRelevantChange(change("ci"))).toBe(true);
   });
 
   it("builds reverse dependency graph dynamically", () => {
     const graph = buildReverseDependencyGraph(releaseableManifests);
     expect(graph.get("shared")).toEqual(["admin", "api", "launcher"]);
+    expect(graph.get("ui")).toEqual(["admin", "launcher"]);
     expect(graph.get("api")).toBeUndefined();
+  });
+
+  it("fans out ui-only style changes to admin and launcher in auto mode", () => {
+    const plan = buildReleasePlan({
+      targetOrder: releaseTargetOrder,
+      analyses: baseAnalyses({ ui: [change("style")] }),
+      reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
+      requestedTargets: ["auto"],
+      autoTarget: "auto",
+      dependencyRootTargets,
+    });
+
+    expect(plan).toEqual([
+      {
+        target: "ui",
+        reason: "direct",
+        releaseNotesSourceTarget: "ui",
+      },
+      {
+        target: "admin",
+        reason: "dependency",
+        dependencySourceTarget: "ui",
+        releaseNotesSourceTarget: "ui",
+      },
+      {
+        target: "launcher",
+        reason: "dependency",
+        dependencySourceTarget: "ui",
+        releaseNotesSourceTarget: "ui",
+      },
+    ]);
+    expectUniqueTargets(plan);
   });
 
   it("fans out shared-only changes to configured dependents in auto mode", () => {
@@ -329,7 +368,7 @@ describe("release-plan", () => {
     expectUniqueTargets(plan);
   });
 
-  it("returns empty release plan when all changes are non-release and non-breaking", () => {
+  it("treats configured non-breaking patch change types as direct releases", () => {
     const plan = buildReleasePlan({
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({
@@ -346,6 +385,40 @@ describe("release-plan", () => {
         admin: [change("chore")],
         launcher: [change("refactor")],
       }),
+      reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
+      requestedTargets: ["auto"],
+      autoTarget: "auto",
+      dependencyRootTargets,
+    });
+
+    expect(plan).toEqual([
+      {
+        target: "shared",
+        reason: "direct",
+        releaseNotesSourceTarget: "shared",
+      },
+      {
+        target: "api",
+        reason: "direct",
+        releaseNotesSourceTarget: "api",
+      },
+      {
+        target: "admin",
+        reason: "direct",
+        releaseNotesSourceTarget: "admin",
+      },
+      {
+        target: "launcher",
+        reason: "direct",
+        releaseNotesSourceTarget: "launcher",
+      },
+    ]);
+  });
+
+  it("returns empty release plan when there are no changes", () => {
+    const plan = buildReleasePlan({
+      targetOrder: releaseTargetOrder,
+      analyses: baseAnalyses(),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
       requestedTargets: ["auto"],
       autoTarget: "auto",

@@ -1,8 +1,6 @@
 import type { ChangeItem } from "./changelog";
 import type { ReleaseLevel } from "./commit-parser";
 
-export const RELEASE_TRIGGER_TYPES = new Set(["feat", "fix", "perf"]);
-
 export type TargetManifest = {
   target: string;
   packageName: string;
@@ -24,7 +22,7 @@ export type PlannedRelease = {
 };
 
 export function isReleaseRelevantChange(change: ChangeItem): boolean {
-  return change.breaking || RELEASE_TRIGGER_TYPES.has(change.type);
+  return change.breaking || change.type.trim().length > 0;
 }
 
 export function determineDetectedBump(
