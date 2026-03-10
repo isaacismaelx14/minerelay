@@ -24,8 +24,6 @@ use winreg::{
 
 #[cfg(target_os = "windows")]
 use serde_json::json;
-#[cfg(target_os = "windows")]
-use std::time::Instant;
 
 use std::path::PathBuf;
 
