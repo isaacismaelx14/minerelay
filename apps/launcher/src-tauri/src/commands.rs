@@ -240,6 +240,7 @@ pub async fn app_request_close(
 
   let app_handle = app.clone();
   tauri::async_runtime::spawn(async move {
+    crate::background_runtime::shutdown(app_state.as_ref());
     let _ = session::restore_active_session(&app_handle, app_state).await;
     app_handle.exit(0);
   });
@@ -251,7 +252,10 @@ pub async fn app_request_close(
 }
 
 #[tauri::command]
-pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
+pub fn app_keep_running_in_background(
+  app: AppHandle,
+  state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
   let selected = app
     .get_webview_window("main")
     .filter(|window| window.is_visible().unwrap_or(false))
@@ -267,13 +271,13 @@ pub fn app_keep_running_in_background(app: AppHandle) -> Result<(), String> {
     return Err("No app window is available.".to_string());
   };
 
-  if window.hide().is_ok() {
-    return Ok(());
+  let hidden = window.hide().is_ok() || window.minimize().is_ok();
+
+  if !hidden {
+    return Err("Failed to keep app in background.".to_string());
   }
 
-  window
-    .minimize()
-    .map_err(|error| format!("Failed to keep app in background: {error}"))?;
+  crate::background_runtime::on_ui_closed(&app, Arc::clone(state.inner()));
 
   Ok(())
 }

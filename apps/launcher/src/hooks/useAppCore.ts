@@ -8,12 +8,8 @@ import type { SyncPlan } from "@minerelay/shared";
 const SERVER_ID = import.meta.env.VITE_SERVER_ID ?? "mvl";
 const APP_NAME = import.meta.env.VITE_APP_NAME ?? "MineRelay";
 const BUNDLED_APP_VERSION = __APP_VERSION__;
-const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
-const AUTO_SYNC_INTERVAL_SLOW_MS = 60 * 60 * 1000;
 const LAUNCHER_STREAM_RETRY_DELAY_MS = 30_000;
 const LAUNCHER_STREAM_MAX_RETRIES = 3;
-const AUTO_UPDATE_DEFER_MS = 3_000;
-const AUTO_UPDATE_DEFER_SLOW_MS = 12_000;
 const AUTO_UPDATE_SLOW_MIN_INTERVAL_MS = 2 * 60 * 60 * 1000;
 const SLOW_SYNC_AVG_THRESHOLD_MS = 20_000;
 
@@ -41,7 +37,6 @@ import {
   type VersionReadiness,
   type OpenLauncherResponse,
   type GameSessionStatus,
-  type GameRunningProbe,
   type ToastMessage,
   type MinecraftRootStatus,
   type FabricRuntimeStatus,
@@ -304,7 +299,7 @@ export function useAppCore() {
     catalog?.fancyMenuCustomBundlePresent ?? false;
   const sessionActive = sessionStatus.phase !== "idle";
   const isPlaying = sessionStatus.phase === "playing";
-  const compactPlaying = isPlaying || probePlaying;
+  const compactPlaying = sessionActive;
   const serverInitial =
     (catalog?.serverName ?? SERVER_ID).trim().charAt(0).toUpperCase() || "S";
 
@@ -802,7 +797,7 @@ export function useAppCore() {
 
     const now = new Date();
     setLastCheckAt(now);
-    setNextCheckAt(new Date(now.getTime() + AUTO_SYNC_INTERVAL_MS));
+    setNextCheckAt(null);
 
     return snapshot;
   }, []);
@@ -1108,25 +1103,16 @@ export function useAppCore() {
       }
 
       setWizardActive(false);
-      await runSyncCycle(true);
-      const autoUpdateDelayMs = adaptiveSlowMode
-        ? AUTO_UPDATE_DEFER_SLOW_MS
-        : AUTO_UPDATE_DEFER_MS;
-      window.setTimeout(() => {
-        void checkLauncherUpdate(true, true);
-      }, autoUpdateDelayMs);
+      setScreen("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setScreen("ready");
     }
   }, [
-    checkLauncherUpdate,
-    adaptiveSlowMode,
     isCompactWindow,
     loadSettingsAndLaunchers,
     refreshPerformanceProfile,
     refreshSessionStatus,
-    runSyncCycle,
   ]);
 
   useEffect(() => {
@@ -1239,7 +1225,6 @@ export function useAppCore() {
     resetLauncherStreamConnectionState,
   ]);
 
-  const isMacOS = /Mac|iPhone|iPad/.test(navigator.userAgent);
   const isWindows = /Windows/.test(navigator.userAgent);
 
   const handleContextMenuRefresh = useCallback(() => {
@@ -1330,13 +1315,8 @@ export function useAppCore() {
   }, []);
 
   const requestSystemCloseModal = useCallback(async () => {
-    if (isMacOS) {
-      await invoke("app_keep_running_in_background");
-      return;
-    }
-
-    showCloseModal(isPlayingRef.current ? "playing" : "normal");
-  }, [isMacOS, showCloseModal]);
+    await invoke("app_keep_running_in_background");
+  }, []);
 
   useEffect(() => {
     let unlistenCloseRequested: UnlistenFn | undefined;
@@ -1376,67 +1356,8 @@ export function useAppCore() {
   }, [showCloseModal]);
 
   useEffect(() => {
-    if (!isCompactWindow || wizardActive || !settings || sessionActive) {
-      return;
-    }
-
-    const syncIntervalMs = adaptiveSlowMode
-      ? AUTO_SYNC_INTERVAL_SLOW_MS
-      : AUTO_SYNC_INTERVAL_MS;
-
-    const timer = window.setInterval(() => {
-      void (async () => {
-        await runSyncCycle(true);
-        if (launcherStreamStatus === "connected") {
-          await checkLauncherUpdate(true, true);
-        }
-      })();
-    }, syncIntervalMs);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [
-    adaptiveSlowMode,
-    checkLauncherUpdate,
-    isCompactWindow,
-    launcherStreamStatus,
-    runSyncCycle,
-    sessionActive,
-    settings,
-    wizardActive,
-  ]);
-
-  useEffect(() => {
-    if (!isCompactWindow || wizardActive) {
-      setProbePlaying(false);
-      return;
-    }
-
-    let cancelled = false;
-    const checkProbe = async () => {
-      try {
-        const status = await invoke<GameRunningProbe>("game_running_probe");
-        if (!cancelled) {
-          setProbePlaying(status.running);
-        }
-      } catch {
-        if (!cancelled) {
-          setProbePlaying(false);
-        }
-      }
-    };
-
-    void checkProbe();
-    const timer = window.setInterval(() => {
-      void checkProbe();
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [isCompactWindow, wizardActive]);
+    setProbePlaying(false);
+  }, [wizardActive]);
 
   useEffect(() => {
     if (wizardActive) {
@@ -1694,9 +1615,7 @@ export function useAppCore() {
 
         await saveSettings(next);
         setWizardActive(false);
-        setHint(
-          "Setup complete. Auto-sync every 30 minutes is active while the app is open.",
-        );
+        setHint("Setup complete. Use Sync to apply updates when needed.");
         setScreen("ready");
 
         if (isSetupWindow) {

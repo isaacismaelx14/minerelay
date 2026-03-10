@@ -6,7 +6,8 @@ use std::time::Duration;
 use std::collections::HashMap;
 
 use parking_lot::Mutex;
-use tokio::task::JoinHandle;
+use tauri::async_runtime::JoinHandle as TauriJoinHandle;
+use tokio::task::JoinHandle as TokioJoinHandle;
 
 use crate::{
   config::LauncherConfig,
@@ -31,9 +32,12 @@ pub struct AppState {
   pub settings: Mutex<AppSettings>,
   pub remote_lock_cache: Mutex<HashMap<String, ProfileLock>>,
   pub session_status: Mutex<GameSessionStatus>,
-  pub session_monitor: Mutex<Option<JoinHandle<()>>>,
+  pub session_monitor: Mutex<Option<TokioJoinHandle<()>>>,
+  pub ui_open: AtomicBool,
+  pub hourly_mod_update_worker: Mutex<Option<TauriJoinHandle<()>>>,
+  pub minecraft_process_watcher: Mutex<Option<TauriJoinHandle<()>>>,
   pub launcher_auth: Mutex<Option<LauncherAuthState>>,
-  pub launcher_server_stream: Mutex<Option<JoinHandle<()>>>,
+  pub launcher_server_stream: Mutex<Option<TokioJoinHandle<()>>>,
 }
 
 impl AppState {
@@ -64,6 +68,9 @@ impl AppState {
       remote_lock_cache: Mutex::new(HashMap::new()),
       session_status: Mutex::new(GameSessionStatus::default()),
       session_monitor: Mutex::new(None),
+      ui_open: AtomicBool::new(true),
+      hourly_mod_update_worker: Mutex::new(None),
+      minecraft_process_watcher: Mutex::new(None),
       launcher_auth: Mutex::new(None),
       launcher_server_stream: Mutex::new(None),
     }

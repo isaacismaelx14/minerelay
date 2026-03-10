@@ -120,7 +120,7 @@ export function OverviewPage({
         {sessionActive
           ? `Live session active in ${sessionStatus.liveMinecraftDir ?? "Minecraft directory"}.`
           : catalog?.hasUpdates
-            ? "New server changes were detected. Auto-sync runs every 30 minutes while this app is open."
+            ? "New server changes were detected. Run Sync to apply updates now."
             : "All mods/resourcepacks/shaders/configs match server profile."}
       </p>
       {catalog?.fancyMenuEnabled && !hasFancyMenuMod ? (

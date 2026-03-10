@@ -86,7 +86,7 @@ export function ActivityPage({
                 className={subtitleClass}
                 style={{ margin: 0, fontSize: "0.8rem" }}
               >
-                Auto-apply every 30 minutes while the app is open.
+                No automatic sync runs while the UI is open.
               </p>
             </div>
             <div className={dataItemClass}>
@@ -139,7 +139,7 @@ export function ActivityPage({
               style={{ fontSize: "0.75rem", marginTop: "4px" }}
             >
               {launcherUpdateNotice ??
-                "Updater checks run at startup and every 30 minutes."}
+                "Launcher updates are checked only when you click Check Updates."}
             </p>
             <div className={actionsRowClass}>
               <Button

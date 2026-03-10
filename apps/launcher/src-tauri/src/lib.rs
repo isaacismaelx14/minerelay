@@ -1,3 +1,4 @@
+mod background_runtime;
 mod commands;
 mod config;
 mod error;
@@ -94,12 +95,6 @@ pub fn run() {
       }
 
       show_primary_window(app.handle());
-
-      let app_handle = app.handle().clone();
-      let app_state = app.state::<Arc<state::AppState>>().inner().clone();
-      tauri::async_runtime::spawn(async move {
-        let _ = session::recover_on_startup(&app_handle, app_state).await;
-      });
 
       Ok(())
     })
@@ -264,6 +259,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 fn show_primary_window(app: &tauri::AppHandle) {
   let app_state = app.state::<Arc<state::AppState>>();
+  background_runtime::on_ui_started(app_state.as_ref());
   let settings = app_state.settings.lock().clone();
   let target = if onboarding_required(&settings) {
     "setup"

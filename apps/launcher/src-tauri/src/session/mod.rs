@@ -4,7 +4,7 @@ use std::{
   path::{Path, PathBuf},
   process::Command,
   sync::Arc,
-  time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+  time::{SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(target_os = "windows")]
@@ -13,7 +13,6 @@ use std::os::windows::process::CommandExt;
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
 use tauri::AppHandle;
-use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::{
@@ -25,9 +24,6 @@ use crate::{
   types::{AppSettings, GameSessionPhase, GameSessionStatus, ProfileLock},
 };
 
-const SESSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
-const RESTORE_GRACE: Duration = Duration::from_secs(10);
-const POLL_INTERVAL: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SessionEntry {
   relative_path: String,
@@ -192,81 +188,11 @@ pub async fn start_or_get_session(
   };
   set_status(app, state.as_ref(), status.clone());
 
-  spawn_monitor(app, state, journal.session_id, journal.live_minecraft_dir, journal.launcher_id);
-
   Ok(status)
 }
 
 pub async fn restore_active_session(app: &AppHandle, state: Arc<AppState>) -> LauncherResult<GameSessionStatus> {
   restore_internal(app, state, None, true).await
-}
-
-fn spawn_monitor(
-  app: &AppHandle,
-  state: Arc<AppState>,
-  session_id: String,
-  live_minecraft_dir: String,
-  launcher_id: String,
-) {
-  stop_monitor(state.as_ref());
-
-  let app_handle = app.clone();
-  let state_for_task = Arc::clone(&state);
-  let task = tokio::spawn(async move {
-    let mut sys = System::new_all();
-    let started = Instant::now();
-    let mut seen_running = false;
-    let mut missing_since: Option<Instant> = None;
-
-    loop {
-      if !session_matches(state_for_task.as_ref(), &session_id) {
-        break;
-      }
-
-      sys.refresh_processes();
-      let running = game_running(&sys, &live_minecraft_dir, &launcher_id);
-
-      if running {
-        missing_since = None;
-        if !seen_running {
-          seen_running = true;
-          let next = GameSessionStatus {
-            phase: GameSessionPhase::Playing,
-            live_minecraft_dir: Some(live_minecraft_dir.clone()),
-            launcher_id: Some(launcher_id.clone()),
-            session_id: Some(session_id.clone()),
-            started_at: Some(now_unix_ms()),
-          };
-          set_status(&app_handle, state_for_task.as_ref(), next);
-        }
-      } else if seen_running {
-        let since = missing_since.get_or_insert_with(Instant::now);
-        if since.elapsed() >= RESTORE_GRACE {
-          let _ = restore_internal(
-            &app_handle,
-            Arc::clone(&state_for_task),
-            Some(session_id.as_str()),
-            false,
-          )
-          .await;
-          break;
-        }
-      } else if started.elapsed() >= SESSION_TIMEOUT {
-        let _ = restore_internal(
-          &app_handle,
-          Arc::clone(&state_for_task),
-          Some(session_id.as_str()),
-          false,
-        )
-        .await;
-        break;
-      }
-
-      sleep(POLL_INTERVAL).await;
-    }
-  });
-
-  *state.session_monitor.lock() = Some(task);
 }
 
 async fn restore_internal(
@@ -622,15 +548,6 @@ fn stop_monitor(state: &AppState) {
   if let Some(task) = state.session_monitor.lock().take() {
     task.abort();
   }
-}
-
-fn session_matches(state: &AppState, session_id: &str) -> bool {
-  state
-    .session_status
-    .lock()
-    .session_id
-    .as_deref()
-    .is_some_and(|value| value == session_id)
 }
 
 fn set_status(app: &AppHandle, state: &AppState, status: GameSessionStatus) {
