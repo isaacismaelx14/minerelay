@@ -1,5 +1,45 @@
 # Changelog
 
+## [@minerelay/launcher/v0.6.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.0) (2026-03-10)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.5.0...%40minerelay%2Flauncher%2Fv0.6.0)
+
+## Chores
+
+- **launcher:** add lint-staged script for launcher ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## Refactoring
+
+- **launcher:** enhance ServerControlBar with status tone handling and styling ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** improve code formatting and readability across setup components ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **desktop:** split launcher_apps and launcher_control into sub-modules ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** isolate background workers from UI lifecycle ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** simplify modal structure and integrate UI components ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## Features
+
+- **launcher:** implement Setup Wizard with multi-step components for enhanced user onboarding ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** integrate ToastProvider for enhanced toast notifications and update UI components ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** lazy-load desktop workspace pages ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** refine desktop workspace header ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** improve the desktop workspace header with richer status and version presentation ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** improve desktop workspace header ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** improve desktop workspace header presentation and status details ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** enhance sync progress visualization with ProgressBar component ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** enhance instance configuration and icon handling in bootstrap process ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** enhance filename extraction and handle phantom file entries during sync ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** add conflict repair and compact sync flow ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## Build
+
+- **launcher:** add Tailwind CSS linting for launcher sources ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** add Tailwind CSS linting and launcher lint fixes ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## Bug Fixes
+
+- **launcher:** update dev command to use tauri and correct beforeDevCommand in tauri config ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+- **launcher:** use fluid width for close modal to fit viewport ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
 ## [@minerelay/launcher/v0.5.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.5.0) (2026-03-08)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.4.0...%40minerelay%2Flauncher%2Fv0.5.0)
