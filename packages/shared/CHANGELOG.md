@@ -1,5 +1,21 @@
 # Changelog
 
+## [@minerelay/shared/v0.2.3](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.3) (2026-03-10)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.2...%40minerelay%2Fshared%2Fv0.2.3)
+
+## Chores
+
+- **core:** add commit message guidelines for repository ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## Refactoring
+
+- **core:** improve file handling in check-staged-format and lint-staged scripts ([e9ddbf6](https://github.com/isaacismaelx14/minerelay/commit/e9ddbf6d869fd4475b2da2477aee297b85b12f81))
+
+## CI
+
+- **core:** disable incompatible react rules to stabilize CI ([449b956](https://github.com/isaacismaelx14/minerelay/commit/449b956c4b53363224136d1c537ddb276ee2a330))
+
 ## [@minerelay/shared/v0.2.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fshared%2Fv0.2.2) (2026-03-08)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fshared%2Fv0.2.1...%40minerelay%2Fshared%2Fv0.2.2)
