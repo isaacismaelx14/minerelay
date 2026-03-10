@@ -85,32 +85,47 @@ type TargetEvaluation = TargetAnalysis & {
   errors: string[];
 };
 
+type ParsedTargetSelection = {
+  isAuto: boolean;
+  requestedTargets: string[];
+  explicitTargets: string[];
+  displayName: string;
+};
+
 const AUTO_TARGET = "auto";
 const USAGE =
-  "Usage: pnpm --filter @minerelay/infra-scripts release:target -- --target <api|admin|launcher|shared|auto> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--ai-scope-infer] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
+  "Usage: pnpm --filter @minerelay/infra-scripts release:target -- --target <api|admin|launcher|shared|ui|auto|api,admin,...> [--channel beta|alpha|release] [--bump major|minor|patch] [--next-version <semver>] [--notes-mode raw|ai] [--notes-model <model>] [--notes-max-input-chars <n>] [--notes-max-output-tokens <n>] [--notes-ai-strict] [--ai-scope-infer] [--dry-run] [--skip-github] [--skip-push] [--from-tag <tag>]";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const repoRoot = resolve(process.cwd(), "../..");
   const config = loadConfig(resolve(repoRoot, "release.config.json"));
   const allowedTargets = Object.keys(config.targets);
+  const targetSelection = parseRequestedTargets(args.target, allowedTargets);
+  const isAutoTargetRequest = targetSelection.isAuto;
+  const fromTagTarget =
+    targetSelection.explicitTargets.length === 1
+      ? (targetSelection.explicitTargets[0] ?? null)
+      : null;
 
-  if (args.target !== AUTO_TARGET && !config.targets[args.target]) {
+  if (isAutoTargetRequest && args.fromTag) {
     throw new Error(
-      `Unknown target \"${args.target}\". Allowed: ${[...allowedTargets, AUTO_TARGET].join(", ")}`,
+      "--from-tag is only supported with a single explicit target.",
     );
   }
 
-  if (args.target === AUTO_TARGET && args.fromTag) {
+  if (
+    !isAutoTargetRequest &&
+    targetSelection.explicitTargets.length !== 1 &&
+    args.fromTag
+  ) {
     throw new Error(
-      "--from-tag is only supported with an explicit target (api|admin|launcher|shared).",
+      "--from-tag is only supported with a single explicit target.",
     );
   }
 
-  if (args.target === AUTO_TARGET && args.nextVersion) {
-    throw new Error(
-      "--next-version is only supported with an explicit target (api|admin|launcher|shared).",
-    );
+  if (isAutoTargetRequest && args.nextVersion) {
+    throw new Error("--next-version is only supported with explicit targets.");
   }
 
   if (!args.dryRun) {
@@ -146,7 +161,7 @@ async function main(): Promise<void> {
   }));
   const reverseDependencyGraph = buildReverseDependencyGraph(manifests);
 
-  if (args.target === AUTO_TARGET && !args.aiScopeInfer) {
+  if (isAutoTargetRequest && !args.aiScopeInfer) {
     const missingBootstrapTags: string[] = [];
     for (const target of targetsToEvaluate) {
       const existingTag = getLatestTargetTag(config.releaseNamespace, target);
@@ -182,6 +197,7 @@ async function main(): Promise<void> {
     args,
     config,
     releaseHead,
+    fromTagTarget,
     targets: targetsToEvaluate,
     targetContexts,
   });
@@ -190,7 +206,7 @@ async function main(): Promise<void> {
     targetOrder: targetsToEvaluate,
     analyses: evaluations,
     reverseDependencyGraph,
-    requestedTarget: args.target,
+    requestedTargets: targetSelection.requestedTargets,
     autoTarget: AUTO_TARGET,
     dependencyRootTargets,
   });
@@ -221,7 +237,7 @@ async function main(): Promise<void> {
       plannedRelease,
       evaluations,
       targetContexts,
-      showTargetHeader: args.target === AUTO_TARGET || orderedPlan.length > 1,
+      showTargetHeader: isAutoTargetRequest || orderedPlan.length > 1,
       sharedReleaseBodyByTarget,
     });
     if (released) {
@@ -230,10 +246,12 @@ async function main(): Promise<void> {
   }
 
   if (releasedTargets === 0) {
-    if (args.target === AUTO_TARGET) {
+    if (isAutoTargetRequest) {
       console.log("No releaseable changes detected for any target.");
     } else {
-      console.log(`No releaseable changes detected for target ${args.target}.`);
+      console.log(
+        `No releaseable changes detected for target selection ${targetSelection.displayName}.`,
+      );
     }
     return;
   }
@@ -663,6 +681,55 @@ function parseArgs(argv: string[]): CliArgs {
   return args;
 }
 
+function parseRequestedTargets(
+  targetArg: string,
+  allowedTargets: string[],
+): ParsedTargetSelection {
+  const requestedTargets = [
+    ...new Set(
+      targetArg
+        .split(",")
+        .map((target) => target.trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  if (requestedTargets.length === 0) {
+    throw new Error(`Missing --target. ${USAGE}`);
+  }
+
+  if (requestedTargets.includes(AUTO_TARGET)) {
+    if (requestedTargets.length > 1) {
+      throw new Error(
+        `Invalid --target value: ${targetArg}. 'auto' cannot be combined with explicit targets. ${USAGE}`,
+      );
+    }
+
+    return {
+      isAuto: true,
+      requestedTargets: [AUTO_TARGET],
+      explicitTargets: [],
+      displayName: AUTO_TARGET,
+    };
+  }
+
+  const invalidTargets = requestedTargets.filter(
+    (target) => !allowedTargets.includes(target),
+  );
+  if (invalidTargets.length > 0) {
+    throw new Error(
+      `Unknown target${invalidTargets.length > 1 ? "s" : ""} \"${invalidTargets.join(", ")}\". Allowed: ${[...allowedTargets, AUTO_TARGET].join(", ")}`,
+    );
+  }
+
+  return {
+    isAuto: false,
+    requestedTargets,
+    explicitTargets: requestedTargets,
+    displayName: requestedTargets.join(","),
+  };
+}
+
 async function recoverScopedCommitsWithAi(params: {
   args: CliArgs;
   config: ParsedReleaseConfig;
@@ -828,6 +895,7 @@ async function evaluateTargetsForRelease(params: {
   args: CliArgs;
   config: ReleaseConfig;
   releaseHead: string;
+  fromTagTarget: string | null;
   targets: string[];
   targetContexts: Record<string, TargetContext>;
 }): Promise<Record<string, TargetEvaluation>> {
@@ -836,7 +904,7 @@ async function evaluateTargetsForRelease(params: {
   for (const target of params.targets) {
     const context = params.targetContexts[target];
     const previousTag =
-      target === params.args.target && params.args.fromTag
+      target === params.fromTagTarget && params.args.fromTag
         ? params.args.fromTag
         : getLatestTargetTag(params.config.releaseNamespace, target);
     const commits = previousTag

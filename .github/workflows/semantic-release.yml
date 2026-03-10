@@ -3,17 +3,34 @@ name: semantic-release
 on:
   workflow_dispatch:
     inputs:
-      target:
-        description: Release target
+      target_mode:
+        description: Release selection mode
         required: true
         default: auto
         type: choice
         options:
           - auto
-          - api
-          - admin
-          - launcher
-          - shared
+          - selected
+      target_api:
+        description: Include api when using selected mode
+        required: false
+        default: false
+        type: boolean
+      target_admin:
+        description: Include admin when using selected mode
+        required: false
+        default: false
+        type: boolean
+      target_launcher:
+        description: Include launcher when using selected mode
+        required: false
+        default: false
+        type: boolean
+      target_shared:
+        description: Include shared when using selected mode
+        required: false
+        default: false
+        type: boolean
       bump:
         description: Bump override (auto uses semantic commits)
         required: true
@@ -58,7 +75,7 @@ on:
         type: boolean
 
 concurrency:
-  group: semantic-release-${{ github.event.inputs.target }}
+  group: semantic-release-${{ github.event.inputs.target_mode }}-${{ github.event.inputs.target_api }}-${{ github.event.inputs.target_admin }}-${{ github.event.inputs.target_launcher }}-${{ github.event.inputs.target_shared }}
   cancel-in-progress: false
 
 jobs:
@@ -101,6 +118,37 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve release targets
+        id: resolve-targets
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.target_mode }}" = "auto" ]; then
+            echo "target_spec=auto" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SELECTED_TARGETS=()
+          if [ "${{ github.event.inputs.target_api }}" = "true" ]; then
+            SELECTED_TARGETS+=(api)
+          fi
+          if [ "${{ github.event.inputs.target_admin }}" = "true" ]; then
+            SELECTED_TARGETS+=(admin)
+          fi
+          if [ "${{ github.event.inputs.target_launcher }}" = "true" ]; then
+            SELECTED_TARGETS+=(launcher)
+          fi
+          if [ "${{ github.event.inputs.target_shared }}" = "true" ]; then
+            SELECTED_TARGETS+=(shared)
+          fi
+
+          if [ "${#SELECTED_TARGETS[@]}" -eq 0 ]; then
+            echo "Select at least one target when target_mode=selected." >&2
+            exit 1
+          fi
+
+          TARGET_SPEC=$(IFS=,; echo "${SELECTED_TARGETS[*]}")
+          echo "target_spec=$TARGET_SPEC" >> "$GITHUB_OUTPUT"
+
       - name: Run semantic release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_WORKFLOW_TOKEN || secrets.GITHUB_TOKEN }}
@@ -120,7 +168,7 @@ jobs:
           if [ "${{ github.event.inputs.ai_scope_infer }}" = "true" ]; then
             EXTRA_ARGS+=(--ai-scope-infer)
           fi
-          pnpm release:target -- --target "${{ github.event.inputs.target }}" --channel release "${EXTRA_ARGS[@]}"
+          pnpm release:target -- --target "${{ steps.resolve-targets.outputs.target_spec }}" --channel release "${EXTRA_ARGS[@]}"
 
   build-api-after-release:
     if: ${{ needs.release.result == 'success' }}

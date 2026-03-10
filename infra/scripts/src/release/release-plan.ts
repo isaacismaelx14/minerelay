@@ -101,11 +101,14 @@ export function buildReleasePlan(params: {
   targetOrder: string[];
   analyses: Record<string, TargetAnalysis>;
   reverseDependencyGraph: Map<string, string[]>;
-  requestedTarget: string;
+  requestedTargets: string[];
   autoTarget: string;
   dependencyRootTargets?: string[];
 }): PlannedRelease[] {
   const configuredTargets = new Set(params.targetOrder);
+  const isAutoTargetRequest =
+    params.requestedTargets.length === 1 &&
+    params.requestedTargets[0] === params.autoTarget;
   const directTargets = new Set(
     Object.values(params.analyses)
       .filter(
@@ -115,20 +118,26 @@ export function buildReleasePlan(params: {
       )
       .map((analysis) => analysis.target),
   );
+  const requestedTargets = new Set(
+    params.requestedTargets.filter((target) => target !== params.autoTarget),
+  );
 
   const dependencyRootTargets = new Set(params.dependencyRootTargets ?? []);
-  const shouldOverrideRequestedTarget =
-    params.requestedTarget !== params.autoTarget &&
-    [...dependencyRootTargets].some((target) => directTargets.has(target));
+  const forcedDependencyRootTargets = isAutoTargetRequest
+    ? []
+    : [...dependencyRootTargets].filter((target) => directTargets.has(target));
 
   const planned = new Map<string, PlannedRelease>();
-  const directSourceTargets =
-    params.requestedTarget === params.autoTarget ||
-    shouldOverrideRequestedTarget
-      ? [...directTargets]
-      : directTargets.has(params.requestedTarget)
-        ? [params.requestedTarget]
-        : [];
+  const directSourceTargets = isAutoTargetRequest
+    ? [...directTargets]
+    : [
+        ...new Set([
+          ...forcedDependencyRootTargets,
+          ...[...requestedTargets].filter((target) =>
+            directTargets.has(target),
+          ),
+        ]),
+      ];
 
   for (const target of directSourceTargets) {
     planned.set(target, {
@@ -138,28 +147,34 @@ export function buildReleasePlan(params: {
     });
   }
 
-  if (
-    params.requestedTarget === params.autoTarget ||
-    shouldOverrideRequestedTarget
-  ) {
-    for (const sourceTarget of directSourceTargets) {
-      for (const dependentTarget of collectTransitiveDependents(
-        params.reverseDependencyGraph,
-        sourceTarget,
-      )) {
-        if (!configuredTargets.has(dependentTarget)) {
-          continue;
-        }
-        if (planned.has(dependentTarget)) {
-          continue;
-        }
-        planned.set(dependentTarget, {
-          target: dependentTarget,
-          reason: "dependency",
-          dependencySourceTarget: sourceTarget,
-          releaseNotesSourceTarget: sourceTarget,
-        });
+  const dependencyFanoutSources = isAutoTargetRequest
+    ? directSourceTargets
+    : [
+        ...new Set([
+          ...forcedDependencyRootTargets,
+          ...directSourceTargets.filter((target) =>
+            dependencyRootTargets.has(target),
+          ),
+        ]),
+      ];
+
+  for (const sourceTarget of dependencyFanoutSources) {
+    for (const dependentTarget of collectTransitiveDependents(
+      params.reverseDependencyGraph,
+      sourceTarget,
+    )) {
+      if (!configuredTargets.has(dependentTarget)) {
+        continue;
       }
+      if (planned.has(dependentTarget)) {
+        continue;
+      }
+      planned.set(dependentTarget, {
+        target: dependentTarget,
+        reason: "dependency",
+        dependencySourceTarget: sourceTarget,
+        releaseNotesSourceTarget: sourceTarget,
+      });
     }
   }
 

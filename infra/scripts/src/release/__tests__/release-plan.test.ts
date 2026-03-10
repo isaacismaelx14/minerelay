@@ -108,7 +108,7 @@ describe("release-plan", () => {
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ shared: [change("feat")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -149,7 +149,7 @@ describe("release-plan", () => {
         launcher: [change("fix")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -189,7 +189,7 @@ describe("release-plan", () => {
         api: [change("fix")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -225,7 +225,7 @@ describe("release-plan", () => {
         admin: [change("perf")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -266,7 +266,7 @@ describe("release-plan", () => {
         admin: [change("perf")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -303,7 +303,7 @@ describe("release-plan", () => {
         launcher: [change("feat")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -347,7 +347,7 @@ describe("release-plan", () => {
         launcher: [change("refactor")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -355,12 +355,12 @@ describe("release-plan", () => {
     expect(plan).toEqual([]);
   });
 
-  it("overrides explicit target when shared changed", () => {
+  it("overrides explicit selections when shared changed", () => {
     const plan = buildReleasePlan({
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ shared: [change("fix")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "launcher",
+      requestedTargets: ["launcher"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -393,12 +393,12 @@ describe("release-plan", () => {
     expectUniqueTargets(plan);
   });
 
-  it("respects explicit target when shared did not change", () => {
+  it("respects explicit selections when shared did not change", () => {
     const plan = buildReleasePlan({
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ launcher: [change("fix")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "launcher",
+      requestedTargets: ["launcher"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -412,12 +412,37 @@ describe("release-plan", () => {
     ]);
   });
 
+  it("releases multiple explicit targets without unrelated fan-out", () => {
+    const plan = buildReleasePlan({
+      targetOrder: releaseTargetOrder,
+      analyses: baseAnalyses({
+        api: [change("fix")],
+        admin: [change("feat")],
+        launcher: [change("perf")],
+      }),
+      reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
+      requestedTargets: ["api", "admin"],
+      autoTarget: "auto",
+      dependencyRootTargets,
+    });
+
+    expect(plan).toEqual([
+      { target: "api", reason: "direct", releaseNotesSourceTarget: "api" },
+      {
+        target: "admin",
+        reason: "direct",
+        releaseNotesSourceTarget: "admin",
+      },
+    ]);
+    expectUniqueTargets(plan);
+  });
+
   it("releases only api when api changed directly", () => {
     const plan = buildReleasePlan({
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ api: [change("fix")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -432,7 +457,7 @@ describe("release-plan", () => {
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ admin: [change("feat")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -451,7 +476,7 @@ describe("release-plan", () => {
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ launcher: [change("perf")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -482,7 +507,7 @@ describe("release-plan", () => {
         "docs-site": analysis("docs-site", []),
       },
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -531,7 +556,7 @@ describe("release-plan", () => {
         ui: analysis("ui", []),
       },
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -588,7 +613,7 @@ describe("release-plan", () => {
       targetOrder: releaseTargetOrder,
       analyses,
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -626,7 +651,7 @@ describe("release-plan", () => {
       targetOrder: releaseTargetOrder,
       analyses: baseAnalyses({ shared: [change("feat")] }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -652,7 +677,7 @@ describe("release-plan", () => {
         launcher: [change("fix")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -678,7 +703,7 @@ describe("release-plan", () => {
         launcher: [change("feat")],
       }),
       reverseDependencyGraph: buildReverseDependencyGraph(releaseableManifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -721,7 +746,7 @@ describe("release-plan", () => {
         launcher: analysis("launcher", []),
       },
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
-      requestedTarget: "auto",
+      requestedTargets: ["auto"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
@@ -748,7 +773,7 @@ describe("release-plan", () => {
     expectUniqueTargets(plan);
   });
 
-  it("overrides explicit target when ui changed", () => {
+  it("overrides explicit selections when ui changed", () => {
     const manifests: TargetManifest[] = [
       {
         target: "ui",
@@ -775,7 +800,7 @@ describe("release-plan", () => {
         launcher: analysis("launcher", []),
       },
       reverseDependencyGraph: buildReverseDependencyGraph(manifests),
-      requestedTarget: "launcher",
+      requestedTargets: ["launcher"],
       autoTarget: "auto",
       dependencyRootTargets,
     });
