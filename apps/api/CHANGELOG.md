@@ -1,5 +1,13 @@
 # Changelog
 
+## [@minerelay/api/v0.2.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.2.2) (2026-03-10)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.2.1...%40minerelay%2Fapi%2Fv0.2.2)
+
+## Bug Fixes
+
+- **api:** remove useless assignment lint violations ([5b9c1ca](https://github.com/isaacismaelx14/minerelay/commit/5b9c1ca4545c9dc4f47e3a9d08f28bc72dee8216))
+
 ## [@minerelay/api/v0.2.1](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.2.1) (2026-03-08)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.2.0...%40minerelay%2Fapi%2Fv0.2.1)
