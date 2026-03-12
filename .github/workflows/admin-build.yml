@@ -19,10 +19,11 @@ on:
 jobs:
   build-admin:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 20
     env:
-      RUN_FROM_MAIN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' }}
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
-      NEXT_PUBLIC_ADMIN_API_ORIGIN: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN || 'https://api.example.com' }}
+      NEXT_PUBLIC_ADMIN_API_ORIGIN: ${{ vars.NEXT_PUBLIC_ADMIN_API_ORIGIN }}
 
     steps:
       - name: Checkout
@@ -34,15 +35,41 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
-          if [ "${{ github.event.inputs.run_from_main }}" != "true" ] && [ -z "${{ github.event.inputs.tag }}" ]; then
+          RUN_FROM_MAIN="${{ github.event.inputs.run_from_main }}"
+          TAG="${{ github.event.inputs.tag }}"
+
+          if [ "$RUN_FROM_MAIN" = "true" ] && [ -n "$TAG" ]; then
+            echo "Choose exactly one source: set 'run_from_main' OR provide an admin tag." >&2
+            exit 1
+          fi
+
+          if [ "$RUN_FROM_MAIN" != "true" ] && [ -z "$TAG" ]; then
             echo "Provide an admin tag or enable 'run_from_main'." >&2
             exit 1
           fi
+
+          if [ -n "$TAG" ]; then
+            case "$TAG" in
+              @minerelay/admin/v*)
+                ;;
+              *)
+                echo "Invalid tag '$TAG'. Expected format: @minerelay/admin/v*." >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+      - name: Validate admin API origin
+        shell: bash
+        run: |
+          node -e 'const value=(process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN||"").trim(); if(!value){console.error("Missing repository variable NEXT_PUBLIC_ADMIN_API_ORIGIN."); process.exit(1)}; let parsed; try { parsed = new URL(value); } catch { console.error(`Invalid NEXT_PUBLIC_ADMIN_API_ORIGIN: ${value}`); process.exit(1) } if(parsed.protocol!=="http:"&&parsed.protocol!=="https:"){console.error(`NEXT_PUBLIC_ADMIN_API_ORIGIN must use http/https: ${value}`); process.exit(1)}'
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -50,7 +77,7 @@ jobs:
           version: 9.12.3
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile=false
+        run: pnpm install --frozen-lockfile
 
       - name: Lint admin app
         run: pnpm --filter @minerelay/admin lint
@@ -68,6 +95,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/@minerelay/admin/v') || github.event_name == 'workflow_dispatch'
     needs: build-admin
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: admin-production-deploy
+      cancel-in-progress: false
     permissions:
       contents: read
     env:
@@ -79,7 +110,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_from_main == 'true' && 'main' || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -88,6 +119,19 @@ jobs:
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+
+      - name: Validate deploy configuration
+        shell: bash
+        run: |
+          if [ -z "${RAILWAY_TOKEN:-}" ]; then
+            echo "Missing RAILWAY_TOKEN secret." >&2
+            exit 1
+          fi
+
+          PROJECT_ID="${RAILWAY_PROJECT_ID:-2e1199e7-8617-445e-a258-0e17212cadfc}"
+          node -e 'const projectId=(process.env.PROJECT_ID||"").trim(); if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)){console.error(`Invalid RAILWAY_PROJECT_ID: ${projectId}`); process.exit(1)}'
+        env:
+          PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID || '2e1199e7-8617-445e-a258-0e17212cadfc' }}
 
       - name: Deploy admin app to Railway
         run: |

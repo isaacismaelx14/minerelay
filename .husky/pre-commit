@@ -1,3 +1,5 @@
 #!/usr/bin/env sh
+set -eu
+
 pnpm format:check-staged
 pnpm lint:staged
