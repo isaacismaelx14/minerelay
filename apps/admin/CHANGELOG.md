@@ -2,6 +2,32 @@
 
 All notable changes to this package will be documented in this file.
 
+## [@minerelay/admin/v0.2.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.2.0) (2026-03-12)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.4...%40minerelay%2Fadmin%2Fv0.2.0)
+
+## Features
+
+- **admin:** add onboarding flow and exaroton setup fixes ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **admin:** add onboarding wizard route with version, identity, and completion steps ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Bug Fixes
+
+- **admin:** keep Exaroton integration selectable and show backend setup errors clearly ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **admin:** shim localStorage in vitest setup ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **admin:** avoid login loop on bootstrap failures ([e1ca707](https://github.com/isaacismaelx14/minerelay/commit/e1ca707cdf0af081da5e8a14e25d208515447b47))
+- **admin:** build deploy image from workspace root ([e7bab97](https://github.com/isaacismaelx14/minerelay/commit/e7bab97df31e1e4ced35490c3e903fc4d1a89a08))
+- **admin:** resolve ui css imports in build ([82cb92b](https://github.com/isaacismaelx14/minerelay/commit/82cb92bd7eaf0d7f1bf7562efb1c0f2ead6979db))
+- **admin:** run admin tests before release builds ([5f84581](https://github.com/isaacismaelx14/minerelay/commit/5f8458119383ce9823550332de6490429c05ea55))
+
+## Refactoring
+
+- **admin:** update bootstrap and status handling for onboarding and integration flows ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Styles
+
+- **admin:** normalize admin layout formatting ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
 ## [@minerelay/admin/v0.1.4](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fadmin%2Fv0.1.4) (2026-03-10)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fadmin%2Fv0.1.3...%40minerelay%2Fadmin%2Fv0.1.4)
