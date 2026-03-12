@@ -113,6 +113,7 @@ export type ExarotonSettingsPayload = {
 };
 
 export type BootstrapPayload = {
+  needsOnboarding?: boolean;
   server: {
     id: string;
     name: string;

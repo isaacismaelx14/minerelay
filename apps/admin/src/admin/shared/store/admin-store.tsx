@@ -228,7 +228,7 @@ function normalizeCoreModPolicy(
 }
 
 function buildInitialState(initialBootstrap: BootstrapPayload | null) {
-  if (!initialBootstrap) {
+  if (!initialBootstrap || initialBootstrap.needsOnboarding) {
     return {
       form: DEFAULT_FORM,
       selectedMods: [] as AdminMod[],
@@ -243,10 +243,12 @@ function buildInitialState(initialBootstrap: BootstrapPayload | null) {
         minecraftVersion: "",
         loaderVersion: "",
       },
-      sessionState: "pending" as const,
+      sessionState: (initialBootstrap?.needsOnboarding
+        ? "active"
+        : "pending") as "pending" | "active",
       hasSavedDraft: false,
       loaderOptions: [] as LoaderOption[],
-      hasBootstrapped: false,
+      hasBootstrapped: initialBootstrap?.needsOnboarding === true,
       lastPublishedSnapshot: null as PublishSnapshot | null,
     };
   }
@@ -790,6 +792,19 @@ export function AdminStoreProvider({
 
       try {
         const payload = await readBootstrapPayload(force);
+
+        if (payload.needsOnboarding) {
+          setSessionState("active");
+          setStatus("bootstrap", "Setup required.", "idle");
+          if (
+            typeof window !== "undefined" &&
+            window.location.pathname !== "/onboarding"
+          ) {
+            router.replace("/onboarding");
+          }
+          return;
+        }
+
         const nextForm = mapBootstrapToForm(payload);
         setForm(nextForm);
         setExaroton((current) =>

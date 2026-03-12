@@ -34,7 +34,19 @@ export function useServersPageModel() {
         busy: false,
         error: payload.error ?? "",
       }));
-      store.setStatus("exaroton", "Exaroton status updated.", "ok");
+      if (payload.error) {
+        store.setStatus("exaroton", payload.error, "error");
+      } else if (!payload.connected) {
+        store.setStatus(
+          "exaroton",
+          payload.configured
+            ? "Optional integration is available."
+            : "Exaroton integration needs backend setup.",
+          payload.configured ? "idle" : "error",
+        );
+      } else {
+        store.setStatus("exaroton", "Exaroton status updated.", "ok");
+      }
     } catch (error) {
       store.setExaroton((current) => ({
         ...current,

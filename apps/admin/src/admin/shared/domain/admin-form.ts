@@ -142,7 +142,7 @@ export const DEFAULT_FORM: FormState = {
   brandingLogoUrl: "",
   brandingBackgroundUrl: "",
   brandingNewsUrl: "",
-  fancyMenuEnabled: "true",
+  fancyMenuEnabled: "false",
   fancyMenuMode: "simple",
   playButtonLabel: "Play",
   hideSingleplayer: "true",
@@ -198,7 +198,7 @@ export function mapBootstrapToForm(payload: BootstrapPayload): FormState {
     brandingLogoUrl: branding?.logoUrl ?? "",
     brandingBackgroundUrl: branding?.backgroundUrl ?? "",
     brandingNewsUrl: branding?.newsUrl ?? "",
-    fancyMenuEnabled: fancy?.enabled === false ? "false" : "true",
+    fancyMenuEnabled: fancy?.enabled === true ? "true" : "false",
     fancyMenuMode: fancy?.mode === "custom" ? "custom" : "simple",
     playButtonLabel: fancy?.playButtonLabel?.trim() || "Play",
     hideSingleplayer: fancy?.hideSingleplayer === false ? "false" : "true",
@@ -213,7 +213,7 @@ function normalizeFancyMenuPayload(
   value: Partial<FancyMenuPayload> | undefined,
 ): FancyMenuPayload {
   return {
-    enabled: value?.enabled !== false,
+    enabled: value?.enabled === true,
     mode: value?.mode === "custom" ? "custom" : "simple",
     playButtonLabel: value?.playButtonLabel?.trim() || "Play",
     hideSingleplayer: value?.hideSingleplayer !== false,

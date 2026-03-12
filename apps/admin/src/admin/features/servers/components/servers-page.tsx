@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import type { ExarotonServerPayload } from "@/admin/client/types";
 import {
@@ -26,9 +26,11 @@ import { useServersPageModel } from "../hooks/use-servers-page-model";
 function IntegrationLanding({
   onSelect,
   connectedIntegration,
+  exarotonAvailable,
 }: {
   onSelect: (id: string) => void;
   connectedIntegration?: string | null;
+  exarotonAvailable: boolean;
 }) {
   return (
     <div className="flex flex-col gap-8 max-w-7xl mx-auto w-full">
@@ -45,7 +47,7 @@ function IntegrationLanding({
           selected={connectedIntegration === "exaroton"}
           onClick={() => onSelect("exaroton")}
           icon={
-            <div className="w-10 h-10 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/30 grid place-items-center shrink-0">
+            <div className="w-10 h-10 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-black/30 grid place-items-center">
               <ExarotonLogo iconOnly style={{ height: 22, width: 22 }} />
             </div>
           }
@@ -54,13 +56,19 @@ function IntegrationLanding({
               <span className="text-[0.7rem] uppercase tracking-widest font-bold bg-emerald-500/10 text-emerald-400 py-1 px-2.5 rounded-full border border-emerald-500/20">
                 Connected
               </span>
+            ) : !exarotonAvailable ? (
+              <span className="text-[0.7rem] uppercase tracking-widest font-bold bg-amber-500/10 text-amber-400 py-1 px-2.5 rounded-full border border-amber-500/20">
+                Setup Needed
+              </span>
             ) : null
           }
           title="Exaroton"
           description={
-            connectedIntegration === "exaroton"
-              ? "Account connected. Click to manage."
-              : "Connect your Exaroton account to manage servers directly."
+            exarotonAvailable
+              ? connectedIntegration === "exaroton"
+                ? "Account connected. Click to manage."
+                : "Connect your Exaroton account to manage servers directly."
+              : "Integration is available after backend setup. Click to open the connection flow."
           }
           className="gap-4 p-5"
         />
@@ -608,11 +616,17 @@ export function ServersPage() {
     selectExarotonServer,
     exarotonAction,
     updateExarotonSettings,
+    refreshExarotonStatus,
   } = useServersPageModel();
   const [confirmDisconnect, setConfirmDisconnect] = useState("");
   const [selectedIntegration, setSelectedIntegration] = useState<string | null>(
     null,
   );
+
+  useEffect(() => {
+    void refreshExarotonStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isSetupFlow = selectedIntegration === "exaroton" && !exaroton.connected;
   const isServerPick =
@@ -625,30 +639,6 @@ export function ServersPage() {
     exaroton.selectedServer &&
     !isServerPick &&
     !isSuccessStep;
-
-  /* Not configured error */
-  if (!exaroton.configured) {
-    return (
-      <Card className="max-w-7xl mx-auto w-full">
-        <SectionHeader
-          icon={
-            <span className="material-symbols-outlined text-[18px] text-red-400">
-              error
-            </span>
-          }
-          title="Integration Not Configured"
-          description="Server hosting integration cannot be used yet."
-        />
-        <div className="rounded-[var(--radius-sm)] bg-red-500/5 border border-red-500/15 p-3 text-xs text-red-300/90 leading-relaxed mt-1">
-          Set{" "}
-          <code className="bg-white/5 px-1 py-0.5 rounded text-[0.7rem]">
-            EXAROTON_ENCRYPTION_KEY
-          </code>{" "}
-          on the API server to enable this feature.
-        </div>
-      </Card>
-    );
-  }
 
   /* Landing — pick integration */
   if (!exaroton.connected && !selectedIntegration) {
@@ -664,6 +654,7 @@ export function ServersPage() {
             }
           }}
           connectedIntegration={exaroton.connected ? "exaroton" : null}
+          exarotonAvailable={exaroton.configured}
         />
         <div className={statusClass(statuses.exaroton.tone)}>
           {statuses.exaroton.text}

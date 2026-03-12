@@ -574,13 +574,6 @@ function AddModsModal({
           </div>
         ) : null}
 
-        {!exaroton.connected ? (
-          <div className="bg-[var(--color-danger)]/10 text-[var(--color-danger)] border border-[var(--color-danger)]/25 p-3 rounded-xl text-sm font-semibold flex items-center gap-2">
-            <UiIcon className="w-[18px] h-[18px]" name="info" />
-            No server integration connected. Installs are client-only.
-          </div>
-        ) : null}
-
         {displayResults.length === 0 && !isLoadingPopular && !isBusy.search ? (
           <p className="text-[0.9rem] text-[var(--color-text-muted)] leading-[1.5] m-0">
             {localQuery
@@ -690,43 +683,46 @@ function AddModsModal({
                         ) : null}
                       </div>
                     ) : null}
-                    {(() => {
-                      const cs = sideBadgeStyle(clientSide);
-                      const ss = sideBadgeStyle(serverSide);
-                      return (
-                        <div className="flex items-center gap-2 mt-2.5">
-                          <Tooltip
-                            content={sideTooltipText("Client", clientSide)}
-                          >
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border cursor-default ${cs.bg}`}
+                    {exaroton.connected ? (
+                      (() => {
+                        const cs = sideBadgeStyle(clientSide);
+                        const ss = sideBadgeStyle(serverSide);
+                        return (
+                          <div className="flex items-center gap-2 mt-2.5">
+                            <Tooltip
+                              content={sideTooltipText("Client", clientSide)}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${cs.dot} shrink-0`}
-                              />
-                              <span className={cs.label}>Client</span>
-                            </span>
-                          </Tooltip>
-                          <Tooltip
-                            content={sideTooltipText("Server", serverSide)}
-                          >
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border cursor-default ${ss.bg}`}
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border cursor-default ${cs.bg}`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${cs.dot} shrink-0`}
+                                />
+                                <span className={cs.label}>Client</span>
+                              </span>
+                            </Tooltip>
+                            <Tooltip
+                              content={sideTooltipText("Server", serverSide)}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${ss.dot} shrink-0`}
-                              />
-                              <span className={ss.label}>Server</span>
-                            </span>
-                          </Tooltip>
-                          {!exaroton.connected && serverHint ? (
-                            <span className="text-[10px] text-[#f87171] font-medium ml-0.5">
-                              {serverHint}
-                            </span>
-                          ) : null}
-                        </div>
-                      );
-                    })()}
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border cursor-default ${ss.bg}`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${ss.dot} shrink-0`}
+                                />
+                                <span className={ss.label}>Server</span>
+                              </span>
+                            </Tooltip>
+                          </div>
+                        );
+                      })()
+                    ) : serverHint ? (
+                      <div className="mt-2.5">
+                        <span className="inline-flex items-center rounded-md border border-[var(--color-line)] bg-black/20 px-2 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)]">
+                          {serverHint}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center justify-between mt-2 pt-4 border-t border-[var(--color-line)]">
