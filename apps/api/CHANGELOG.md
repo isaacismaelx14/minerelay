@@ -1,5 +1,25 @@
 # Changelog
 
+## [@minerelay/api/v0.3.0](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.3.0) (2026-03-12)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.2.3...%40minerelay%2Fapi%2Fv0.3.0)
+
+## Bug Fixes
+
+- **api:** build shared package before api lint ([d5154b2](https://github.com/isaacismaelx14/minerelay/commit/d5154b2c8baca45f5cce025b120ba501330dd9b8))
+- **api:** generate prisma client before lint ([96af0bc](https://github.com/isaacismaelx14/minerelay/commit/96af0bca854116d40836ee8b77bc87009011579c))
+- **api:** remove import.meta usage from prisma config ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Features
+
+- **api:** add onboarding endpoints and version services ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **api:** add admin onboarding module and completion workflow endpoints ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **api:** expose minecraft version lookup service for onboarding ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Refactoring
+
+- **api:** wire onboarding and mods services into admin bootstrap and module setup ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
 ## [@minerelay/api/v0.2.3](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Fapi%2Fv0.2.3) (2026-03-10)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Fapi%2Fv0.2.2...%40minerelay%2Fapi%2Fv0.2.3)
