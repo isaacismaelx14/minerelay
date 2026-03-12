@@ -69,17 +69,17 @@ jobs:
           fi
           node -e 'const value=(process.env.NEXT_PUBLIC_ADMIN_API_ORIGIN||"").trim(); if(!value){console.error("NEXT_PUBLIC_ADMIN_API_ORIGIN resolved to an empty value."); process.exit(1)}; let parsed; try { parsed = new URL(value); } catch { console.error(`Invalid NEXT_PUBLIC_ADMIN_API_ORIGIN: ${value}`); process.exit(1) } if(parsed.protocol!=="http:"&&parsed.protocol!=="https:"){console.error(`NEXT_PUBLIC_ADMIN_API_ORIGIN must use http/https: ${value}`); process.exit(1)}'
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
