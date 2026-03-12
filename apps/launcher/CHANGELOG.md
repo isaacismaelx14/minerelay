@@ -1,5 +1,35 @@
 # Changelog
 
+## [@minerelay/launcher/v0.6.3](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.3) (2026-03-12)
+
+[Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.6.2...%40minerelay%2Flauncher%2Fv0.6.3)
+
+## Bug Fixes
+
+- **launcher:** preserve json formatting in version stamping ([474ce0d](https://github.com/isaacismaelx14/minerelay/commit/474ce0d0b6e3ec8ba6a71e8cfa414108e025640c))
+- **launcher:** adjust layout and styling for onboarding setup ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+- **launcher:** correct globals.css import path for @minerelay/ui ([fd9117b](https://github.com/isaacismaelx14/minerelay/commit/fd9117b67a17f530777e7335e43481b55935f14b))
+- **platform:** allow manual admin deploys from main ([966fa49](https://github.com/isaacismaelx14/minerelay/commit/966fa490d5ca312346fb416091907f296157df5b))
+- **platform:** add manual admin build dispatch ([967eccc](https://github.com/isaacismaelx14/minerelay/commit/967eccc3c9bf5c8ddb36b6ec5ae790946654fa97))
+- **platform:** restore admin release pipeline ([c0c5160](https://github.com/isaacismaelx14/minerelay/commit/c0c5160d917eadc05b3761c439e96f14b6f62cfa))
+
+## Styles
+
+- **launcher:** normalize launcher config formatting ([28582f6](https://github.com/isaacismaelx14/minerelay/commit/28582f61f7127bb720761c21613fc736b01c8c2a))
+
+## Chores
+
+- **desktop:** update Cargo.lock ([802625f](https://github.com/isaacismaelx14/minerelay/commit/802625f0a8e9aedca3753bb6179b53aeaa5c6398))
+
+## Performance
+
+- **desktop:** exclude tauri target dirs from turbo cache ([c057323](https://github.com/isaacismaelx14/minerelay/commit/c057323dfb4fe66619bf758a6954cd5c7e7c6a78))
+  - fix(launcher): use correct @minerelay/ui globals.css import path
+
+## Build
+
+- **platform:** add root start script for railpack deploy ([c78fe2c](https://github.com/isaacismaelx14/minerelay/commit/c78fe2caa0fbe8d88b557e4887d3abf65e982ccc))
+
 ## [@minerelay/launcher/v0.6.2](https://github.com/isaacismaelx14/minerelay/releases/tag/%40minerelay%2Flauncher%2Fv0.6.2) (2026-03-10)
 
 [Full Changelog](https://github.com/isaacismaelx14/minerelay/compare/%40minerelay%2Flauncher%2Fv0.6.1...%40minerelay%2Flauncher%2Fv0.6.2)
