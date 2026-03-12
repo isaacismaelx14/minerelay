@@ -35,13 +35,16 @@ console.log(`Stamped launcher version to ${version}`);
 
 function updateJsonVersionField(filePath, nextVersion) {
   const raw = fs.readFileSync(filePath, "utf8");
+  if (!/"version"\s*:\s*"[^"]+"/u.test(raw)) {
+    throw new Error(`Failed to find version field in ${filePath}`);
+  }
   const next = raw.replace(
     /("version"\s*:\s*")([^"]+)(")/u,
     `$1${nextVersion}$3`,
   );
 
   if (next === raw) {
-    throw new Error(`Failed to update version field in ${filePath}`);
+    return;
   }
 
   fs.writeFileSync(filePath, next, "utf8");
